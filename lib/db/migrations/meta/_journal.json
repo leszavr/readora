@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779952348736,
+      "tag": "0000_sleepy_jack_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779953065720,
+      "tag": "0001_certain_captain_cross",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779955800000,
+      "tag": "0002_reader_settings_device_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779958200000,
+      "tag": "0003_book_upload_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779960600000,
+      "tag": "0004_indexes_and_genre_seeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780315639542,
+      "tag": "0005_email_and_smtp_settings",
+      "breakpoints": true
+    }
+  ]
+}

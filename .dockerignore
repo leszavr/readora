@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+out-tsc/
+.vite/
+.cache/
+*.tsbuildinfo
+
+# Runtime data (не нужны в образе)
+.env
+.env.*
+!.env.example
+logs/
+*.log
+uploads/
+storage/
+tmp/
+.tmp/
+
+# Dev-only files
+*.md
+*.sh
+.gitignore
+.git/
+.github/
+
+# IDEs
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Docker itself
+Dockerfile*
+docker-compose*.yml
+captain-definition

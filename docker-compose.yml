@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: readora
+      POSTGRES_USER: readora
+      POSTGRES_PASSWORD: readora
+    ports:
+      - "5432:5432"
+    volumes:
+      - readora_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U readora -d readora"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  readora_postgres_data:
+

@@ -1,0 +1,1309 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Readora API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: books
+    description: Book management
+  - name: reader
+    description: Reader operations
+  - name: genres
+    description: Genre management
+  - name: admin
+    description: Admin panel
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me/settings:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # GENRES
+  /genres:
+    get:
+      operationId: listGenres
+      tags: [genres]
+      summary: List all genres
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Genre"
+    post:
+      operationId: createGenre
+      tags: [genres]
+      summary: Create genre (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenreInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Genre"
+
+  /genres/{id}:
+    patch:
+      operationId: updateGenre
+      tags: [genres]
+      summary: Update genre (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenreUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Genre"
+    delete:
+      operationId: deleteGenre
+      tags: [genres]
+      summary: Delete genre (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # CYCLES
+  /cycles:
+    get:
+      operationId: listCycles
+      tags: [books]
+      summary: List user cycles/series
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cycle"
+    post:
+      operationId: createCycle
+      tags: [books]
+      summary: Create cycle/series
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CycleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+
+  # BOOKS
+  /books:
+    get:
+      operationId: listBooks
+      tags: [books]
+      summary: List user books
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: genreId
+          in: query
+          schema:
+            type: integer
+        - name: author
+          in: query
+          schema:
+            type: string
+        - name: cycleId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [not_started, reading, finished]
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [title, author, uploadedAt, lastReadAt, progress]
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [author, genre, cycle, status, none]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Book"
+
+  /books/upload:
+    post:
+      operationId: uploadBook
+      tags: [books]
+      summary: Upload a book file (FB2 or EPUB)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/BookUploadInput"
+      responses:
+        "201":
+          description: Uploaded and parsed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /books/{id}:
+    get:
+      operationId: getBook
+      tags: [books]
+      summary: Get book details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateBook
+      tags: [books]
+      summary: Update book metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+    delete:
+      operationId: deleteBook
+      tags: [books]
+      summary: Delete a book
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /books/delete-bulk:
+    post:
+      operationId: deleteBulkBooks
+      tags: [books]
+      summary: Delete multiple books
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeleteInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeleteResult"
+
+  # READER
+  /books/{id}/chapters:
+    get:
+      operationId: listChapters
+      tags: [reader]
+      summary: Get book table of contents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Chapter"
+
+  /books/{id}/chapters/{chapterId}:
+    get:
+      operationId: getChapter
+      tags: [reader]
+      summary: Get chapter content
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: chapterId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChapterContent"
+
+  /books/{id}/progress:
+    get:
+      operationId: getProgress
+      tags: [reader]
+      summary: Get reading progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingProgress"
+    put:
+      operationId: saveProgress
+      tags: [reader]
+      summary: Save reading progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProgressInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingProgress"
+
+  /reader/settings:
+    get:
+      operationId: getReaderSettings
+      tags: [reader]
+      summary: Get reader settings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReaderSettings"
+    put:
+      operationId: saveReaderSettings
+      tags: [reader]
+      summary: Save reader settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReaderSettingsInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReaderSettings"
+    delete:
+      operationId: resetReaderSettings
+      tags: [reader]
+      summary: Reset reader settings to defaults
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReaderSettings"
+
+  # PUBLIC
+  /public/popular-books:
+    get:
+      operationId: getPopularBooks
+      tags: [books]
+      summary: Get popular books for home page (public metadata only)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicBook"
+
+  # ADMIN
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Admin dashboard stats
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users (admin)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+    post:
+      operationId: createAdminUser
+      tags: [admin]
+      summary: Create user (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}:
+    get:
+      operationId: getAdminUser
+      tags: [admin]
+      summary: Get user (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+    patch:
+      operationId: updateAdminUser
+      tags: [admin]
+      summary: Update user (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: Delete user (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/users/{id}/toggle-block:
+    post:
+      operationId: toggleBlockUser
+      tags: [admin]
+      summary: Block/unblock user (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/books:
+    get:
+      operationId: listAdminBooks
+      tags: [admin]
+      summary: List all books (admin)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminBook"
+
+  /admin/books/{id}:
+    get:
+      operationId: getAdminBook
+      tags: [admin]
+      summary: Get book details (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBook"
+    delete:
+      operationId: deleteAdminBook
+      tags: [admin]
+      summary: Delete book (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/books/{id}/toggle-block:
+    post:
+      operationId: toggleBlockBook
+      tags: [admin]
+      summary: Block/unblock book (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBook"
+
+  /admin/settings:
+    get:
+      operationId: getAppSettings
+      tags: [admin]
+      summary: Get app settings (admin)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+    patch:
+      operationId: updateAppSettings
+      tags: [admin]
+      summary: Update app settings (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppSettingsUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # AUTH SCHEMAS
+    RegisterInput:
+      type: object
+      required: [email, password, username]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        username:
+          type: string
+          minLength: 2
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    AuthResult:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    ProfileUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        avatar:
+          type: ["string", "null"]
+
+    User:
+      type: object
+      required: [id, email, username, role, status, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [user, moderator, admin]
+        status:
+          type: string
+          enum: [active, blocked]
+        avatar:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: ["string", "null"]
+          format: date-time
+
+    # GENRES
+    Genre:
+      type: object
+      required: [id, code, name, isActive]
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    GenreInput:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    GenreUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    # CYCLES
+    Cycle:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    CycleInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    # BOOKS
+    Book:
+      type: object
+      required: [id, title, format, status, uploadedAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+        format:
+          type: string
+          enum: [fb2, epub]
+        language:
+          type: ["string", "null"]
+        publicationYear:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [active, blocked]
+        cycleId:
+          type: ["integer", "null"]
+        cycleName:
+          type: ["string", "null"]
+        cycleNumber:
+          type: ["number", "null"]
+        fileSize:
+          type: integer
+        wordCount:
+          type: ["integer", "null"]
+        chapterCount:
+          type: ["integer", "null"]
+        genres:
+          type: array
+          items:
+            $ref: "#/components/schemas/Genre"
+        readingStatus:
+          type: ["string", "null"]
+          enum: [not_started, reading, finished, null]
+        progressPercent:
+          type: ["number", "null"]
+        lastReadAt:
+          type: ["string", "null"]
+          format: date-time
+        uploadedAt:
+          type: string
+          format: date-time
+
+    BookUploadInput:
+      type: object
+      properties:
+        cycleId:
+          type: integer
+        cycleName:
+          type: string
+        cycleNumber:
+          type: number
+
+    BookUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        language:
+          type: ["string", "null"]
+        publicationYear:
+          type: ["integer", "null"]
+        cycleId:
+          type: ["integer", "null"]
+        cycleNumber:
+          type: ["number", "null"]
+        genreIds:
+          type: array
+          items:
+            type: integer
+
+    BulkDeleteInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+
+    BulkDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+
+    PublicBook:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+        openCount:
+          type: integer
+
+    # READER
+    Chapter:
+      type: object
+      required: [id, bookId, index, title]
+      properties:
+        id:
+          type: integer
+        bookId:
+          type: integer
+        index:
+          type: integer
+        title:
+          type: string
+        wordCount:
+          type: ["integer", "null"]
+
+    ChapterContent:
+      type: object
+      required: [id, bookId, index, title, htmlContent]
+      properties:
+        id:
+          type: integer
+        bookId:
+          type: integer
+        index:
+          type: integer
+        title:
+          type: string
+        htmlContent:
+          type: string
+        wordCount:
+          type: ["integer", "null"]
+
+    ReadingProgress:
+      type: object
+      required: [bookId, userId]
+      properties:
+        bookId:
+          type: integer
+        userId:
+          type: integer
+        currentChapterId:
+          type: ["integer", "null"]
+        currentPosition:
+          type: ["number", "null"]
+        progressPercent:
+          type: ["number", "null"]
+        readingStatus:
+          type: string
+          enum: [not_started, reading, finished]
+        lastReadAt:
+          type: ["string", "null"]
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    ProgressInput:
+      type: object
+      properties:
+        currentChapterId:
+          type: integer
+        currentPosition:
+          type: number
+        progressPercent:
+          type: number
+        readingStatus:
+          type: string
+          enum: [not_started, reading, finished]
+
+    ReaderSettings:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: integer
+        fontSize:
+          type: integer
+        fontFamily:
+          type: string
+        lineHeight:
+          type: number
+        theme:
+          type: string
+          enum: [light, dark, sepia]
+        contentWidth:
+          type: integer
+
+    ReaderSettingsInput:
+      type: object
+      properties:
+        fontSize:
+          type: integer
+        fontFamily:
+          type: string
+        lineHeight:
+          type: number
+        theme:
+          type: string
+          enum: [light, dark, sepia]
+        contentWidth:
+          type: integer
+
+    # ADMIN
+    AdminStats:
+      type: object
+      required: [totalUsers, totalBooks, activeReaders, recentBooks, recentUsers]
+      properties:
+        totalUsers:
+          type: integer
+        totalBooks:
+          type: integer
+        activeReaders:
+          type: integer
+        openCount7d:
+          type: integer
+        recentBooks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminBook"
+        recentUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+
+    AdminUser:
+      type: object
+      required: [id, email, username, role, status, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [user, moderator, admin]
+        status:
+          type: string
+          enum: [active, blocked]
+        avatar:
+          type: ["string", "null"]
+        bookCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: ["string", "null"]
+          format: date-time
+
+    AdminUserCreate:
+      type: object
+      required: [email, password, username]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [user, moderator, admin]
+
+    AdminUserUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [user, moderator, admin]
+        status:
+          type: string
+          enum: [active, blocked]
+
+    AdminBook:
+      type: object
+      required: [id, title, format, status, uploadedAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        format:
+          type: string
+          enum: [fb2, epub]
+        status:
+          type: string
+          enum: [active, blocked]
+        ownerUsername:
+          type: ["string", "null"]
+        ownerId:
+          type: integer
+        fileSize:
+          type: integer
+        uploadedAt:
+          type: string
+          format: date-time
+
+    AppSettings:
+      type: object
+      properties:
+        siteName:
+          type: string
+        allowRegistration:
+          type: boolean
+        maxFileSizeMb:
+          type: integer
+        smtpHost:
+          type: ["string", "null"]
+        smtpPort:
+          type: ["integer", "null"]
+        smtpUser:
+          type: ["string", "null"]
+        smtpFrom:
+          type: ["string", "null"]
+        feedbackEmail:
+          type: ["string", "null"]
+        maintenanceMode:
+          type: boolean
+
+    AppSettingsUpdate:
+      type: object
+      properties:
+        siteName:
+          type: string
+        allowRegistration:
+          type: boolean
+        maxFileSizeMb:
+          type: integer
+        smtpHost:
+          type: ["string", "null"]
+        smtpPort:
+          type: ["integer", "null"]
+        smtpUser:
+          type: ["string", "null"]
+        smtpPassword:
+          type: ["string", "null"]
+        smtpFrom:
+          type: ["string", "null"]
+        feedbackEmail:
+          type: ["string", "null"]
+        maintenanceMode:
+          type: boolean
