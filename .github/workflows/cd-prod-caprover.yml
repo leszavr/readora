@@ -39,9 +39,16 @@ jobs:
     needs: quality
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy app to CapRover
-        uses: caprover/deploy-from-github@v1.1.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          server: ${{ secrets.CAPROVER_SERVER }}
-          app: ${{ secrets.CAPROVER_APP }}
-          token: ${{ secrets.CAPROVER_APP_TOKEN }}
+          node-version: "22"
+      - name: Install CapRover CLI
+        run: npm install -g caprover
+      - name: Deploy app to CapRover
+        run: |
+          caprover deploy \
+            --caproverUrl "${{ secrets.CAPROVER_SERVER }}" \
+            --caproverApp "${{ secrets.CAPROVER_APP }}" \
+            --branch "${{ github.ref_name }}" \
+            --appToken "${{ secrets.CAPROVER_APP_TOKEN }}"
