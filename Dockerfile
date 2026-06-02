@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 # ─── Stage 1: builder ───────────────────────────────────────────────────────
-FROM node:24-alpine AS builder
+FROM node:24-bookworm-slim AS builder
 
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 # Нативные зависимости (bcrypt, sharp)
-RUN apk add --no-cache make g++ gcc python3
+RUN apt-get update && apt-get install -y --no-install-recommends make g++ python3 ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -16,21 +16,18 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
-# Rollup in Alpine may miss optional linux-musl binary in CI locks generated on other platforms.
-RUN pnpm --filter @workspace/readora exec npm i @rollup/rollup-linux-x64-musl --no-save
-
 # Собираем все workspace-пакеты (typecheck пропускаем — за это CI)
 RUN pnpm -r --if-present run build
 
 # Выделяем prod-зависимости api-server в отдельную директорию
-RUN pnpm --filter @workspace/api-server deploy --prod /deploy
+RUN pnpm --filter @workspace/api-server deploy --legacy --prod /deploy
 
 # ─── Stage 2: production ────────────────────────────────────────────────────
-FROM node:24-alpine AS production
+FROM node:24-bookworm-slim AS production
 
-RUN apk add --no-cache libstdc++ libc6-compat && \
-    addgroup -g 1001 nodejs && \
-    adduser -S -u 1001 -G nodejs nodejs
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --create-home --shell /usr/sbin/nologin nodejs
 
 WORKDIR /app
 
