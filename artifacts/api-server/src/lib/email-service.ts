@@ -243,8 +243,29 @@ class EmailService {
   private async loadTemplate(templateName: string, vars: Record<string, string>): Promise<string> {
     try {
       const __dirname = dirname(fileURLToPath(import.meta.url));
-      const templatePath = join(__dirname, "..", "..", "email-templates", `${templateName}.html`);
-      let html = await readFile(templatePath, "utf-8");
+      const fileName = `${templateName}.html`;
+      const cwd = process.cwd();
+      const candidatePaths = [
+        join(cwd, "email-templates", fileName),
+        join(cwd, "dist", "email-templates", fileName),
+        join(cwd, "..", "email-templates", fileName),
+        join(__dirname, "..", "..", "email-templates", fileName),
+        join(__dirname, "..", "..", "..", "email-templates", fileName),
+      ];
+
+      let html: string | null = null;
+      for (const candidate of candidatePaths) {
+        try {
+          html = await readFile(candidate, "utf-8");
+          break;
+        } catch {
+          // try next candidate path
+        }
+      }
+
+      if (!html) {
+        throw new Error(`Template not found: ${fileName}`);
+      }
 
       // Simple variable replacement
       for (const [key, value] of Object.entries(vars)) {
