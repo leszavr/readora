@@ -21,7 +21,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "9.0.0"
+          version: "10.24.0"
       - name: Использовать npm registry
         run: |
           if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
@@ -50,7 +50,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "9.0.0"
+          version: "10.24.0"
       - name: Использовать npm registry
         run: |
           if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
@@ -74,7 +74,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "9.0.0"
+          version: "10.24.0"
       - name: Использовать npm registry
         run: |
           if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
@@ -97,7 +97,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "9.0.0"
+          version: "10.24.0"
       - name: Сдвинуть registry к npm (CI)
         run: |
           if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
