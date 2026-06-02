@@ -97,14 +97,20 @@ pnpm run dev:client   # Frontend → http://localhost:3000
 
 Откройте <http://localhost:3000>, зарегистрируйтесь, загрузите первую книгу.
 
-### Создать администратора
+### Создать/обновить суперадмина
 
-Первый зарегистрированный пользователь получает роль `user`. Чтобы повысить до `admin`:
+В проекте максимальная роль — `admin`.
+
+Скрипт создаёт пользователя-администратора или обновляет существующего по email (роль, пароль и статус):
 
 ```bash
-docker exec -it readora-postgres-1 psql -U readora -d readora \
-  -c "UPDATE users SET role='admin' WHERE email='your@email.com';"
+ADMIN_EMAIL=admin@example.com \
+ADMIN_USERNAME=AdminUser \
+ADMIN_PASSWORD='ChangeMe123!' \
+pnpm --filter @workspace/scripts run superadmin
 ```
+
+Для production (CapRover) запускайте с реальными значениями переменных и production `DATABASE_URL`.
 
 ## Скрипты
 
@@ -117,6 +123,7 @@ docker exec -it readora-postgres-1 psql -U readora -d readora \
 | `pnpm run db:generate` | Сгенерировать миграцию из изменений схемы |
 | `pnpm run db:migrate` | Применить миграции к БД |
 | `pnpm run db:sync` | `drizzle-kit push` для быстрых dev-итераций |
+| `pnpm --filter @workspace/scripts run superadmin` | Создать/обновить администратора по `ADMIN_*` переменным |
 
 ## Переменные окружения
 
