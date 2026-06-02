@@ -16,6 +16,9 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
+# Rollup in Alpine may miss optional linux-musl binary in CI locks generated on other platforms.
+RUN pnpm --filter @workspace/readora exec npm i @rollup/rollup-linux-x64-musl --no-save
+
 # Собираем все workspace-пакеты (typecheck пропускаем — за это CI)
 RUN pnpm -r --if-present run build
 
