@@ -120,7 +120,9 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   });
 }
 
-buildAll().catch((err) => {
+try {
+  await buildAll();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}

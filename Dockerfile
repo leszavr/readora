@@ -4,27 +4,17 @@ FROM node:24-alpine AS builder
 
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 # Нативные зависимости (bcrypt, sharp)
 RUN apk add --no-cache make g++ gcc python3
 
 WORKDIR /app
 
-# Копируем только манифесты для кеша слоёв
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json tsconfig.json ./
-COPY lib/db/package.json                 lib/db/
-COPY lib/api-zod/package.json            lib/api-zod/
-COPY lib/api-client-react/package.json   lib/api-client-react/
-COPY lib/api-spec/package.json           lib/api-spec/
-COPY artifacts/api-server/package.json  artifacts/api-server/
-COPY artifacts/readora/package.json     artifacts/readora/
-COPY scripts/package.json               scripts/
+# Полный контекст монорепо (так надежнее для pnpm workspaces в CI)
+COPY . .
 
 RUN pnpm install --frozen-lockfile
-
-# Исходный код
-COPY . .
 
 # Собираем все workspace-пакеты (typecheck пропускаем — за это CI)
 RUN pnpm -r --if-present run build

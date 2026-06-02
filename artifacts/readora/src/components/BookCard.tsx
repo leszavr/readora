@@ -1,8 +1,16 @@
 import { Link } from "wouter";
+import {
+  getGetBookQueryKey,
+  getGetProgressQueryKey,
+  getListBooksQueryKey,
+  useSaveProgress,
+} from "@workspace/api-client-react";
 import type { Book } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, FileText, Clock } from "lucide-react";
+import { BookOpen } from "lucide-react";
 
 interface Props {
   book: Book;
@@ -15,8 +23,35 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
   abandoned: { label: "Заброшено", variant: "destructive" },
 };
 
-export function BookCard({ book }: Props) {
+export function BookCard({ book }: Readonly<Props>) {
+  const qc = useQueryClient();
+  const { mutate: saveProgress, isPending: isUpdatingStatus } = useSaveProgress({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListBooksQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetBookQueryKey(book.id) });
+        qc.invalidateQueries({ queryKey: getGetProgressQueryKey(book.id) });
+      },
+    },
+  });
+
   const status = book.readingStatus ? STATUS_LABELS[book.readingStatus] : STATUS_LABELS.not_started;
+  const hasCycleNumber = typeof book.cycleNumber === "number";
+
+  const setQuickStatus = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    readingStatus: "finished" | "not_started",
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    saveProgress({
+      id: book.id,
+      data: {
+        readingStatus,
+        progressPercent: readingStatus === "finished" ? 100 : 0,
+      },
+    });
+  };
 
   return (
     <Link href={`/book/${book.id}`}>
@@ -50,6 +85,12 @@ export function BookCard({ book }: Props) {
           {book.author && (
             <p className="text-xs text-muted-foreground line-clamp-1">{book.author}</p>
           )}
+          {book.cycleName && (
+            <p className="text-xs text-muted-foreground line-clamp-1">
+              {book.cycleName}
+              {hasCycleNumber ? ` • #${book.cycleNumber}` : ""}
+            </p>
+          )}
 
           <div className="mt-auto pt-2 flex items-center justify-between gap-2">
             <Badge variant={status.variant} className="text-xs">
@@ -63,6 +104,29 @@ export function BookCard({ book }: Props) {
           {book.progressPercent != null && book.progressPercent > 0 && (
             <Progress value={book.progressPercent} className="h-1" />
           )}
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={book.readingStatus === "finished" ? "secondary" : "outline"}
+              className="h-7 text-[11px]"
+              disabled={isUpdatingStatus}
+              onClick={(event) => setQuickStatus(event, "finished")}
+            >
+              Прочитано
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={book.readingStatus === "not_started" || !book.readingStatus ? "secondary" : "outline"}
+              className="h-7 text-[11px]"
+              disabled={isUpdatingStatus}
+              onClick={(event) => setQuickStatus(event, "not_started")}
+            >
+              Не читал
+            </Button>
+          </div>
         </div>
       </div>
     </Link>

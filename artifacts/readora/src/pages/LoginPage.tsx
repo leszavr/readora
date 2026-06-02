@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -43,10 +43,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 mb-4">
-            <BookOpen className="w-7 h-7 text-primary" />
+          <div className="inline-flex items-center justify-center rounded-2xl bg-primary/10 px-4 py-3 mb-4">
+            <img src="/readora-wordmark.webp" alt="Readora" className="h-8 w-auto" loading="eager" decoding="async" />
           </div>
-          <h1 className="text-2xl font-bold">Readora</h1>
           <p className="text-muted-foreground text-sm mt-1">Войдите в свою библиотеку</p>
         </div>
 

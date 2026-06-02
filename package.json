@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent $npm_execpath\" in *pnpm*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "dev:server": "pnpm --filter @workspace/api-server run dev",
     "dev:client": "PORT=3000 pnpm --filter @workspace/readora run dev",
     "db:sync": "pnpm --filter @workspace/db run push",

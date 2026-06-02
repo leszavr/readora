@@ -13,6 +13,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BookOpen, Library, LogOut, User as UserIcon, ShieldCheck, Shield, Sparkles } from "lucide-react";
 
+function BrandWordmark({ className }: Readonly<{ className?: string }>) {
+  return (
+    <img
+      src="/readora-wordmark.webp"
+      alt="Readora"
+      className={className ?? "h-6 w-auto"}
+      loading="eager"
+      decoding="async"
+    />
+  );
+}
+
 export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { user, isAuthenticated, isModerator } = useAuth();
   const [location, navigate] = useLocation();
@@ -31,9 +43,15 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border shadow-xs">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-primary text-lg">
-            <BookOpen className="w-5 h-5" />
-            Readora
+          <Link href="/" className="flex items-center gap-2">
+            <img
+              src="/readora-mark.webp"
+              alt="Readora"
+              className="h-8 w-auto"
+              loading="eager"
+              decoding="async"
+            />
+            <BrandWordmark className="h-5 w-auto" />
           </Link>
 
           {isAuthenticated && (
@@ -115,9 +133,15 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             {/* Brand */}
             <div className="md:col-span-2">
-              <div className="flex items-center gap-2 font-bold text-primary text-lg mb-3">
-                <BookOpen className="w-5 h-5" />
-                Readora
+              <div className="flex items-center gap-2 text-primary mb-3">
+                <img
+                  src="/readora-mark.webp"
+                  alt="Readora"
+                  className="h-8 w-auto"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <BrandWordmark className="h-6 w-auto" />
               </div>
               <p className="text-sm text-muted-foreground mb-4">
                 Личная библиотека для чтения книг в форматах FB2 и EPUB. 

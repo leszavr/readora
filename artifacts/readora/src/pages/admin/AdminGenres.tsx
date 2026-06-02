@@ -79,12 +79,12 @@ export default function AdminGenres() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex gap-3 items-center justify-between">
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs sm:flex-1 sm:min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Поиск жанров..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
+        <Button size="sm" className="gap-2 w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
           <Plus className="w-4 h-4" /> Добавить жанр
         </Button>
       </div>

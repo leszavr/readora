@@ -95,7 +95,10 @@ export default function ResetPasswordPage() {
       <div className="flex min-h-[70vh] items-center justify-center">
         <div className="w-full max-w-md space-y-6 rounded-xl border bg-card p-8 shadow-lg">
           <div className="space-y-2 text-center">
-            <Lock className="mx-auto h-12 w-12 text-primary" />
+            <div className="inline-flex items-center justify-center rounded-2xl bg-primary/10 px-4 py-3 mb-2">
+              <img src="/readora-wordmark.webp" alt="Readora" className="h-8 w-auto" loading="eager" decoding="async" />
+            </div>
+            <Lock className="mx-auto h-9 w-9 text-primary/80" />
             <h1 className="text-2xl font-bold">Новый пароль</h1>
             <p className="text-muted-foreground">
               Введите новый пароль для вашего аккаунта

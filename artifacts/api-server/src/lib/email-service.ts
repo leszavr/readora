@@ -12,6 +12,7 @@ interface SMTPSettings {
   user: string;
   password: string;
   from: string;
+  appBaseUrl: string | null;
   enabled: boolean;
 }
 
@@ -67,6 +68,30 @@ class EmailService {
   private transporter: Transporter | null = null;
   private settings: SMTPSettings | null = null;
 
+  private normalizeBaseUrl(value: string | null | undefined): string | null {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return trimmed.replace(/\/+$/, "");
+  }
+
+  private async resolvePublicBaseUrl(fallbackBaseUrl?: string): Promise<string> {
+    if (!this.settings) {
+      await this.initialize();
+    }
+
+    const fromSettings = this.normalizeBaseUrl(this.settings?.appBaseUrl);
+    if (fromSettings) return fromSettings;
+
+    const fromFallback = this.normalizeBaseUrl(fallbackBaseUrl);
+    if (fromFallback) return fromFallback;
+
+    const fromEnv = this.normalizeBaseUrl(process.env.APP_BASE_URL)
+      ?? this.normalizeBaseUrl(process.env.APP_ORIGIN)
+      ?? "http://localhost:3000";
+    return fromEnv;
+  }
+
   resetTransporter(): void {
     this.transporter = null;
     this.settings = null;
@@ -91,6 +116,7 @@ class EmailService {
       const user = settingsMap.get("smtp_user");
       const password = settingsMap.get("smtp_password");
       const from = settingsMap.get("smtp_from");
+      const appBaseUrl = settingsMap.get("app_base_url") ?? null;
 
       if (!host || !port || !from) {
         console.warn("[EmailService] SMTP settings incomplete, email disabled");
@@ -113,6 +139,7 @@ class EmailService {
         user: user ?? "",
         password: password ?? "",
         from,
+        appBaseUrl,
         enabled: true,
       };
 
@@ -163,10 +190,12 @@ class EmailService {
   }
 
   async sendEmailVerification(email: string, username: string, token: string, baseUrl: string): Promise<boolean> {
-    const verifyUrl = `${baseUrl}/verify/${token}`;
+    const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
+    const verifyUrl = `${normalizedBaseUrl}/verify/${token}`;
     const html = await this.loadTemplate("email-verification", {
       username,
       verifyUrl,
+      logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
     });
 
     return this.sendEmail({
@@ -178,10 +207,12 @@ class EmailService {
   }
 
   async sendPasswordReset(email: string, username: string, token: string, baseUrl: string): Promise<boolean> {
-    const resetUrl = `${baseUrl}/reset-password/${token}`;
+    const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
+    const resetUrl = `${normalizedBaseUrl}/reset-password/${token}`;
     const html = await this.loadTemplate("password-reset", {
       username,
       resetUrl,
+      logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
     });
 
     return this.sendEmail({
@@ -225,12 +256,17 @@ class EmailService {
         return { success: false, error: "SMTP не настроен или отключен" };
       }
 
+      const publicBaseUrl = await this.resolvePublicBaseUrl();
+      const logoHtml = publicBaseUrl
+        ? `<p><img src="${publicBaseUrl}/readora-wordmark.webp" alt="Readora" style="height:28px;width:auto"></p>`
+        : "";
+
       const info = await this.transporter.sendMail({
         from: this.settings.from,
         to,
         subject: "Тестовое письмо — Readora",
         text: "Это тестовое письмо от Readora. Если вы его получили — SMTP настроен корректно.",
-        html: "<p>Это тестовое письмо от <strong>Readora</strong>.</p><p>Если вы его получили — SMTP настроен корректно.</p>",
+        html: `${logoHtml}<p>Это тестовое письмо от <strong>Readora</strong>.</p><p>Если вы его получили — SMTP настроен корректно.</p>`,
       });
 
       return { success: true, messageId: info.messageId };

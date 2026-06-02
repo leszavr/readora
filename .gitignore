@@ -19,6 +19,7 @@ coverage/
 !.env.example
 logs/
 *.log
+*.bak
 uploads/
 storage/
 tmp/
@@ -45,6 +46,7 @@ docker-data/
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+.gigacode/
 .project
 .classpath
 .c9/
@@ -66,3 +68,4 @@ attached_assets/
 # Harvi/local assistant state
 .harvimodes
 .cursor/
+.gigacode

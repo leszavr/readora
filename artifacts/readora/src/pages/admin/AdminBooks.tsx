@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { useListAdminBooks, useDeleteAdminBook, useToggleBlockBook } from "@workspace/api-client-react";
+import {
+  useListAdminBooks,
+  useDeleteAdminBook,
+  useToggleBlockBook,
+  getListAdminBooksQueryKey,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +15,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListAdminBooksQueryKey } from "@workspace/api-client-react";
 
 export default function AdminBooks() {
   const qc = useQueryClient();
@@ -30,9 +34,11 @@ export default function AdminBooks() {
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input className="pl-9" placeholder="Поиск книг..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs sm:flex-1 sm:min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Поиск книг..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
       </div>
 
       <div className="border rounded-xl overflow-hidden bg-card">

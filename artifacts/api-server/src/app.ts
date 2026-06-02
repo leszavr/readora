@@ -27,6 +27,8 @@ if (isProduction && !sessionSecret) {
 }
 
 const PgSessionStore = pgSession(session);
+const clientDist = resolve("client");
+const hasClientDist = isProduction && existsSync(clientDist);
 
 app.set("trust proxy", 1);
 
@@ -66,6 +68,10 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+if (hasClientDist) {
+  app.use(express.static(clientDist));
+}
+
 app.use(
   session({
     store: new PgSessionStore({
@@ -93,6 +99,12 @@ await emailService.initialize().catch((error) => {
 
 app.use("/api", router);
 
+if (hasClientDist) {
+  app.get("*", (_req, res) => {
+    res.sendFile(resolve(clientDist, "index.html"));
+  });
+}
+
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (res.headersSent) return;
   const message = err instanceof Error ? err.message : "Ошибка сервера";
@@ -109,16 +121,5 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 
 app.use(errorHandler);
-
-// В production — Express сервирует SPA поверх API
-if (isProduction) {
-  const clientDist = resolve("client");
-  if (existsSync(clientDist)) {
-    app.use(express.static(clientDist));
-    app.get("*", (_req, res) => {
-      res.sendFile(resolve(clientDist, "index.html"));
-    });
-  }
-}
 
 export default app;

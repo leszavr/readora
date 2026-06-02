@@ -8,7 +8,7 @@ import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgr
 import { requireAuth } from "../middlewares/auth";
 import { parseBook } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
-import { coversDir, ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
+import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
@@ -23,8 +23,22 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (ext === ".fb2" || ext === ".epub") cb(null, true);
-    else cb(new Error("Поддерживаются только FB2 и EPUB файлы"));
+    if (file.fieldname === "file") {
+      if (ext === ".fb2" || ext === ".epub") cb(null, true);
+      else cb(new Error("Поддерживаются только FB2 и EPUB файлы"));
+      return;
+    }
+
+    if (file.fieldname === "cover") {
+      if (file.mimetype.startsWith("image/") || [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"].includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Обложка должна быть изображением"));
+      }
+      return;
+    }
+
+    cb(new Error("Неподдерживаемый тип файла"));
   },
 });
 
@@ -71,6 +85,126 @@ async function deleteStoredFilesIfUnreferenced(book: typeof booksTable.$inferSel
   }
 }
 
+async function deleteCoverIfUnreferenced(coverPath: string, excludingBookIds: number[]): Promise<void> {
+  const [{ count: sameCoverCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(booksTable)
+    .where(and(eq(booksTable.coverPath, coverPath), notInArray(booksTable.id, excludingBookIds)));
+
+  if (sameCoverCount === 0) {
+    fs.rmSync(resolveUploadPath(coverPath), { force: true });
+  }
+}
+
+function buildCoverUrl(bookId: number, coverPath: string, isPublic = false): string {
+  const route = isPublic ? "cover-public" : "cover";
+  // coverPath contains hashed filename, so this query param busts browser cache after replacement.
+  return `/api/books/${bookId}/${route}?v=${encodeURIComponent(coverPath)}`;
+}
+
+async function storeOptimizedCover(inputBuffer: Buffer, filePrefix: string): Promise<string> {
+  const optimized = await optimizeImage(inputBuffer, "cover");
+  const coverHash = crypto.createHash("sha256").update(optimized.buffer).digest("hex");
+  const coverStorageKey = `covers/${filePrefix}-${coverHash}.webp`;
+  fs.writeFileSync(resolveUploadPath(coverStorageKey), optimized.buffer);
+  return coverStorageKey;
+}
+
+function parseOptionalNumber(value: unknown): number | undefined {
+  if (value == null || value === "") return undefined;
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint") return undefined;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function coerceText(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") return String(value);
+  return undefined;
+}
+
+function parseNullableInt(value: unknown): number | null | undefined {
+  if (value === null || value === "null" || value === "") return null;
+  return parseOptionalNumber(value);
+}
+
+function parseNullableFloat(value: unknown): number | null | undefined {
+  if (value === null || value === "null" || value === "") return null;
+  const text = coerceText(value);
+  if (text === undefined) return undefined;
+  const parsed = Number.parseFloat(text);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseGenreIds(value: unknown): number[] | undefined {
+  if (value == null || value === "") return undefined;
+
+  if (Array.isArray(value)) {
+    const ids = value.map((item) => Number.parseInt(String(item), 10)).filter(Number.isFinite);
+    return ids.length > 0 ? ids : [];
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        const ids = parsed.map((item) => Number.parseInt(String(item), 10)).filter(Number.isFinite);
+        return ids.length > 0 ? ids : [];
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+async function applyBookUpdates(params: {
+  book: typeof booksTable.$inferSelect;
+  body: Record<string, unknown>;
+  file?: Express.Multer.File;
+}): Promise<void> {
+  const { book, body, file } = params;
+  const updates: Partial<typeof booksTable.$inferSelect> = {};
+
+  const title = coerceText(body.title);
+  const author = coerceText(body.author);
+  const description = coerceText(body.description);
+  const language = coerceText(body.language);
+
+  if (title !== undefined) updates.title = title;
+  if (body.author !== undefined) updates.author = author ?? null;
+  if (body.description !== undefined) updates.description = description ?? null;
+  if (body.language !== undefined) updates.language = language ?? null;
+
+  const publicationYear = parseOptionalNumber(body.publicationYear);
+  const cycleId = parseNullableInt(body.cycleId);
+  const cycleNumber = parseNullableFloat(body.cycleNumber);
+  const genreIds = parseGenreIds(body.genreIds);
+
+  if (publicationYear !== undefined) updates.publicationYear = publicationYear;
+  if (cycleId !== undefined) updates.cycleId = cycleId;
+  if (cycleNumber !== undefined) updates.cycleNumber = cycleNumber;
+
+  if (file) {
+    updates.coverPath = await storeOptimizedCover(file.buffer, `book-${book.id}`);
+  }
+
+  await db.update(booksTable).set(updates).where(eq(booksTable.id, book.id));
+
+  if (genreIds !== undefined) {
+    await db.delete(bookGenresTable).where(eq(bookGenresTable.bookId, book.id));
+    if (genreIds.length > 0) {
+      await db.insert(bookGenresTable).values(genreIds.map((gId: number) => ({ bookId: book.id, genreId: gId }))).onConflictDoNothing();
+    }
+  }
+
+  if (file && book.coverPath && book.coverPath !== updates.coverPath) {
+    await deleteCoverIfUnreferenced(book.coverPath, [book.id]);
+  }
+}
+
 // Helper: get book with genres and progress
 async function getBookWithDetails(bookId: number, userId: number) {
   const [book] = await db.select().from(booksTable).where(eq(booksTable.id, bookId));
@@ -102,7 +236,7 @@ async function getBookWithDetails(bookId: number, userId: number) {
     title: book.title,
     author: book.author ?? null,
     description: book.description ?? null,
-    coverUrl: book.coverPath ? `/api/books/${book.id}/cover` : null,
+    coverUrl: book.coverPath ? buildCoverUrl(book.id, book.coverPath) : null,
     format: book.format,
     language: book.language ?? null,
     publicationYear: book.publicationYear ?? null,
@@ -161,11 +295,7 @@ async function processBookUploadJob(jobId: number): Promise<void> {
 
     let coverPath: string | null = null;
     if (parsed.coverBase64) {
-      const coverFileName = `${fileHash}_cover.webp`;
-      const coverFilePath = path.join(coversDir, coverFileName);
-      const optimizedCover = await optimizeImage(Buffer.from(parsed.coverBase64, "base64"), "cover");
-      fs.writeFileSync(coverFilePath, optimizedCover.buffer);
-      coverPath = `covers/${coverFileName}`;
+      coverPath = await storeOptimizedCover(Buffer.from(parsed.coverBase64, "base64"), fileHash);
     }
 
     const [book] = await db.insert(booksTable).values({
@@ -461,7 +591,7 @@ router.get("/books/:id/cover", requireAuth, async (req, res): Promise<void> => {
   if (ext === ".webp") mime = "image/webp";
   else if (ext === ".png") mime = "image/png";
   res.setHeader("Content-Type", mime);
-  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.setHeader("Cache-Control", "private, no-cache");
   fs.createReadStream(coverFilePath).pipe(res);
 });
 
@@ -479,30 +609,13 @@ router.get("/books/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 // PATCH /books/:id
-router.patch("/books/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/books/:id", requireAuth, upload.single("cover"), async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const id = Number.parseInt(String(req.params.id), 10);
   const [book] = await db.select().from(booksTable).where(and(eq(booksTable.id, id), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
 
-  const { title, author, description, language, publicationYear, cycleId, cycleNumber, genreIds } = req.body ?? {};
-  const updates: Partial<typeof booksTable.$inferSelect> = {};
-  if (title != null) updates.title = title;
-  if (author !== undefined) updates.author = author;
-  if (description !== undefined) updates.description = description;
-  if (language !== undefined) updates.language = language;
-  if (publicationYear !== undefined) updates.publicationYear = publicationYear;
-  if (cycleId !== undefined) updates.cycleId = cycleId;
-  if (cycleNumber !== undefined) updates.cycleNumber = cycleNumber;
-
-  await db.update(booksTable).set(updates).where(eq(booksTable.id, id));
-
-  if (Array.isArray(genreIds)) {
-    await db.delete(bookGenresTable).where(eq(bookGenresTable.bookId, id));
-    if (genreIds.length > 0) {
-      await db.insert(bookGenresTable).values(genreIds.map((gId: number) => ({ bookId: id, genreId: gId }))).onConflictDoNothing();
-    }
-  }
+  await applyBookUpdates({ book, body: (req.body ?? {}) as Record<string, unknown>, file: req.file ?? undefined });
 
   const result = await getBookWithDetails(id, user.id);
   res.json(result);
@@ -561,7 +674,7 @@ router.get("/public/popular-books", async (req, res): Promise<void> => {
     title: b.title,
     author: b.author ?? null,
     description: b.description ? b.description.slice(0, 200) : null,
-    coverUrl: b.coverPath ? `/api/books/${b.id}/cover-public` : null,
+    coverUrl: b.coverPath ? buildCoverUrl(b.id, b.coverPath, true) : null,
     openCount: b.openCount ?? 0,
   })));
 });

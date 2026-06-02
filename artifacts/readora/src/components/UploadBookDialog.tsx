@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2, Layers } from "lucide-react";
+import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2, Layers, Plus, List } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -365,8 +365,14 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
                 <div className="space-y-3 ml-6">
                   <Tabs value={cycleMode} onValueChange={(v) => setCycleMode(v as "existing" | "new")}>
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="existing">Существующий</TabsTrigger>
-                      <TabsTrigger value="new">Новый цикл</TabsTrigger>
+                      <TabsTrigger value="existing" aria-label="Существующий цикл" title="Существующий цикл">
+                        <List className="w-4 h-4" />
+                        <span className="sr-only">Существующий</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="new" aria-label="Новый цикл" title="Новый цикл">
+                        <Plus className="w-4 h-4" />
+                        <span className="sr-only">Новый цикл</span>
+                      </TabsTrigger>
                     </TabsList>
                     <TabsContent value="existing" className="space-y-2">
                       <Select value={selectedCycleId} onValueChange={setSelectedCycleId} disabled={hasActive}>

@@ -173,6 +173,7 @@ router.get("/admin/settings", requireAdmin, async (_req, res): Promise<void> => 
     smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
     smtpUser: map.smtpUser ?? null,
     smtpFrom: map.smtpFrom ?? null,
+    appBaseUrl: map.app_base_url ?? null,
     feedbackEmail: map.feedbackEmail ?? null,
     maintenanceMode: map.maintenanceMode === "true",
   });
@@ -221,6 +222,7 @@ router.patch("/admin/settings", requireAdmin, async (req, res): Promise<void> =>
     smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
     smtpUser: map.smtpUser ?? null,
     smtpFrom: map.smtpFrom ?? null,
+    appBaseUrl: map.app_base_url ?? null,
     feedbackEmail: map.feedbackEmail ?? null,
     maintenanceMode: map.maintenanceMode === "true",
   });

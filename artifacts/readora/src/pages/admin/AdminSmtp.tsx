@@ -23,6 +23,7 @@ interface SmtpLocal {
   user: string;
   password: string;
   from: string;
+  appBaseUrl: string;
   secure: boolean;
   enabled: boolean;
 }
@@ -32,6 +33,7 @@ interface SmtpResponse {
   smtp_port?: string | null;
   smtp_user?: string | null;
   smtp_from?: string | null;
+  app_base_url?: string | null;
   smtp_secure?: string | null;
   smtp_enabled?: string | null;
 }
@@ -42,6 +44,7 @@ const DEFAULTS: SmtpLocal = {
   user: "",
   password: "",
   from: "",
+  appBaseUrl: "",
   secure: false,
   enabled: false,
 };
@@ -73,6 +76,7 @@ export function AdminSmtp() {
       user: data.smtp_user ?? "",
       password: "",
       from: data.smtp_from ?? "",
+      appBaseUrl: data.app_base_url ?? "",
       secure: data.smtp_secure === "true",
       enabled: data.smtp_enabled === "true",
     });
@@ -80,11 +84,12 @@ export function AdminSmtp() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | null> = {
         smtp_host: local.host,
         smtp_port: local.port,
         smtp_user: local.user,
         smtp_from: local.from,
+        app_base_url: local.appBaseUrl.trim() || null,
         smtp_secure: local.secure ? "true" : "false",
         smtp_enabled: local.enabled ? "true" : "false",
       };
@@ -115,6 +120,7 @@ export function AdminSmtp() {
             smtp_port: local.port,
             smtp_user: local.user,
             smtp_from: local.from,
+            app_base_url: local.appBaseUrl.trim() || null,
             smtp_secure: local.secure ? "true" : "false",
             smtp_enabled: local.enabled ? "true" : "false",
           };
@@ -124,6 +130,7 @@ export function AdminSmtp() {
           smtp_port: local.port,
           smtp_user: local.user,
           smtp_from: local.from,
+          app_base_url: local.appBaseUrl.trim() || null,
           smtp_secure: local.secure ? "true" : "false",
           smtp_enabled: local.enabled ? "true" : "false",
         };
@@ -303,6 +310,21 @@ export function AdminSmtp() {
             />
             <p className="text-xs text-muted-foreground">
               Адрес отправителя для всех системных писем
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="app-base-url">Публичный URL приложения (APP_BASE_URL)</Label>
+            <Input
+              id="app-base-url"
+              placeholder="https://readora.example.com"
+              value={local.appBaseUrl}
+              onChange={(e) =>
+                setLocal((prev) => ({ ...prev, appBaseUrl: e.target.value }))
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Используется в email-ссылках (подтверждение, сброс пароля) и для логотипа в письмах.
             </p>
           </div>
 

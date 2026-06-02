@@ -1,9 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Layout } from "@/components/Layout";
-import { BookOpen, Library, Upload, BookMarked, Sparkles, Settings, Shield } from "lucide-react";
+import { BookOpen, Library, Upload, BookMarked, Sparkles, Settings, Shield, Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 type PopularBook = {
@@ -15,8 +16,58 @@ type PopularBook = {
   openCount: number;
 };
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const inStandalone = globalThis.matchMedia("(display-mode: standalone)").matches;
+    const iosStandalone = (globalThis.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setIsInstalled(inStandalone || iosStandalone);
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const onAppInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    };
+
+    globalThis.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    globalThis.addEventListener("appinstalled", onAppInstalled);
+
+    return () => {
+      globalThis.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      globalThis.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  async function handleInstallClick() {
+    if (!installPrompt) {
+      const userAgent = globalThis.navigator.userAgent.toLowerCase();
+      const isIOS = /iphone|ipad|ipod/.test(userAgent);
+      if (isIOS) {
+        globalThis.alert("Для установки откройте меню Поделиться и выберите На экран Домой.");
+      } else {
+        globalThis.alert("Установка доступна через меню браузера: выберите Установить приложение.");
+      }
+      return;
+    }
+
+    await installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === "accepted") {
+      setInstallPrompt(null);
+    }
+  }
 
   const { data: popularBooks = [] } = useQuery<PopularBook[]>({
     queryKey: ["popular-books"],
@@ -32,8 +83,8 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="relative bg-gradient-to-b from-primary/5 via-background to-background border-b border-border">
         <div className="max-w-5xl mx-auto px-4 py-20 md:py-28 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-primary/15 mb-6 shadow-lg">
-            <BookOpen className="w-10 h-10 text-primary" />
+          <div className="inline-flex items-center justify-center rounded-3xl bg-primary/15 px-6 py-4 mb-6 shadow-lg">
+            <img src="/readora-wordmark.webp" alt="Readora" className="h-10 w-auto" loading="eager" decoding="async" />
           </div>
           <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
             Ваша личная библиотека
@@ -56,6 +107,11 @@ export default function HomePage() {
                     <Upload className="w-5 h-5" /> Загрузить книгу
                   </Button>
                 </Link>
+                {!isInstalled && (
+                  <Button size="lg" variant="outline" className="gap-2" onClick={handleInstallClick}>
+                    <Download className="w-5 h-5" /> Установить приложение
+                  </Button>
+                )}
               </>
             ) : (
               <>
@@ -69,6 +125,11 @@ export default function HomePage() {
                     Войти
                   </Button>
                 </Link>
+                {!isInstalled && (
+                  <Button size="lg" variant="outline" className="gap-2" onClick={handleInstallClick}>
+                    <Download className="w-5 h-5" /> Установить приложение
+                  </Button>
+                )}
               </>
             )}
           </div>
