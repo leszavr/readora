@@ -147,6 +147,28 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                 Личная библиотека для чтения книг в форматах FB2 и EPUB. 
                 Удобно, безопасно, бесплатно.
               </p>
+
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <p className="text-xs text-muted-foreground mb-2">
+                  Readora — дочерний проект Voxlibris для социальных книжных клубов с живыми чтецами.
+                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <a
+                    href="https://voxlibris.ru"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary/90 hover:text-primary hover:underline"
+                  >
+                    voxlibris.ru
+                  </a>
+                  <a
+                    href="mailto:admin@voxli.ru"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    admin@voxli.ru
+                  </a>
+                </div>
+              </div>
             </div>
 
             {/* Navigation */}

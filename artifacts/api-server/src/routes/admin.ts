@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { eq, sql, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import os from "node:os";
+import { statfs } from "node:fs/promises";
 import { db, usersTable, booksTable, genresTable, readEventsTable, appSettingsTable } from "@workspace/db";
 import { requireAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
@@ -8,6 +10,51 @@ import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+// GET /admin/system-metrics
+router.get("/admin/system-metrics", requireAdmin, async (_req, res): Promise<void> => {
+  const cpuCores = os.cpus().length;
+  const [load1m, load5m, load15m] = os.loadavg();
+
+  const memoryTotalBytes = os.totalmem();
+  const memoryFreeBytes = os.freemem();
+  const memoryUsedBytes = memoryTotalBytes - memoryFreeBytes;
+
+  const diskPath = process.env.UPLOADS_DIR ?? "/";
+
+  let diskTotalBytes = 0;
+  let diskFreeBytes = 0;
+  let diskUsedBytes = 0;
+
+  try {
+    const fsStats = await statfs(diskPath);
+    diskTotalBytes = fsStats.blocks * fsStats.bsize;
+    diskFreeBytes = fsStats.bavail * fsStats.bsize;
+    diskUsedBytes = diskTotalBytes - diskFreeBytes;
+  } catch (error) {
+    logger.warn({ error, diskPath }, "Failed to read filesystem stats");
+  }
+
+  res.json({
+    cpuCores,
+    loadAvg1m: load1m,
+    loadAvg5m: load5m,
+    loadAvg15m: load15m,
+    memoryTotalBytes,
+    memoryFreeBytes,
+    memoryUsedBytes,
+    diskPath,
+    diskTotalBytes,
+    diskFreeBytes,
+    diskUsedBytes,
+    processUptimeSec: process.uptime(),
+    systemUptimeSec: os.uptime(),
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // GET /admin/stats
 router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {

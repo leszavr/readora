@@ -151,6 +151,16 @@ docker exec -it readora-postgres-1 psql -U readora -d readora \
 - Lazy-loading глав в ридере для крупных книг
 - Тёмная тема ридера с пользовательскими палитрами
 
+## Readora и Voxlibris
+
+Readora развивается как дочерний проект Voxlibris и распространяется бесплатно.
+
+Для коммерческого использования, внедрения в бизнес-сценарии и расширенных командных форматов используйте Voxlibris:
+
+- Сайт: [https://voxlibris.ru](https://voxlibris.ru)
+- Подробное описание платформы: [VOXLIBRIS.md](./VOXLIBRIS.md)
+- Контакт для заинтересованных лиц: [admin@voxli.ru](mailto:admin@voxli.ru)
+
 ## Вклад в проект
 
 См. [CONTRIBUTING.md](./CONTRIBUTING.md). Issues и Pull Requests приветствуются.
