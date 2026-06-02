@@ -15,6 +15,7 @@ import AdminPage from "@/pages/AdminPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import ConfirmPasswordChangePage from "@/pages/ConfirmPasswordChangePage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/verify/:token" component={VerifyEmailPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password/:token" component={ResetPasswordPage} />
+      <Route path="/confirm-password-change/:token" component={ConfirmPasswordChangePage} />
       <Route path="/library" component={LibraryPage} />
       <Route path="/book/:id" component={BookPage} />
       <Route path="/reader/:id" component={ReaderPage} />

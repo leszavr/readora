@@ -108,7 +108,14 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
   const { email, password, username, role } = req.body ?? {};
   if (!email || !password || !username) { res.status(400).json({ error: "Все поля обязательны" }); return; }
   const passwordHash = await bcrypt.hash(password, 10);
-  const [user] = await db.insert(usersTable).values({ email, username, passwordHash, role: role ?? "user" }).returning();
+  const [user] = await db.insert(usersTable).values({
+    email,
+    username,
+    passwordHash,
+    role: role ?? "user",
+    emailVerified: true,
+    emailVerifiedAt: new Date(),
+  }).returning();
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(booksTable).where(eq(booksTable.ownerUserId, user.id));
   res.status(201).json({ ...formatUser(user), bookCount: count });
 });

@@ -223,6 +223,23 @@ class EmailService {
     });
   }
 
+  async sendPasswordChangeConfirmation(email: string, username: string, token: string, baseUrl: string): Promise<boolean> {
+    const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
+    const confirmUrl = `${normalizedBaseUrl}/confirm-password-change/${token}`;
+    const html = await this.loadTemplate("password-change-confirmation", {
+      username,
+      confirmUrl,
+      logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
+    });
+
+    return this.sendEmail({
+      to: email,
+      subject: "Подтверждение смены пароля — Readora",
+      html,
+      text: `Здравствуйте, ${username}!\n\nПодтвердите смену пароля по ссылке: ${confirmUrl}\n\nСсылка действительна 1 час.\n\nЕсли вы не запрашивали смену пароля, проигнорируйте это письмо.`,
+    });
+  }
+
   private async loadTemplate(templateName: string, vars: Record<string, string>): Promise<string> {
     try {
       const __dirname = dirname(fileURLToPath(import.meta.url));

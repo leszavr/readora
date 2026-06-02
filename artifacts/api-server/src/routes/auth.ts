@@ -4,7 +4,13 @@ import bcrypt from "bcryptjs";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import crypto from "node:crypto";
-import { db, usersTable, emailVerificationTokensTable, passwordResetTokensTable } from "@workspace/db";
+import {
+  db,
+  usersTable,
+  emailVerificationTokensTable,
+  passwordResetTokensTable,
+  passwordChangeTokensTable,
+} from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { emailService } from "../lib/email-service";
 import type { Request } from "express";
@@ -89,6 +95,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     return;
   }
 
+  if (!user.emailVerified && emailService.isEnabled()) {
+    res.status(403).json({ error: "Подтвердите email перед входом" });
+    return;
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     res.status(401).json({ error: "Неверный email или пароль" });
@@ -149,11 +160,62 @@ router.post("/auth/me/password", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  if (!emailService.isEnabled()) {
+    res.status(400).json({ error: "Подтверждение смены пароля недоступно: SMTP отключен" });
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
   const passwordHash = await bcrypt.hash(newPassword, 12);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  await db.delete(passwordChangeTokensTable).where(eq(passwordChangeTokensTable.userId, user.id));
+  await db.insert(passwordChangeTokensTable).values({
+    userId: user.id,
+    token,
+    newPasswordHash: passwordHash,
+    expiresAt,
+  });
+
+  const baseUrl = process.env.APP_ORIGIN || "http://localhost:3000";
+  const sent = await emailService.sendPasswordChangeConfirmation(user.email, user.username, token, baseUrl);
+  if (!sent) {
+    await db.delete(passwordChangeTokensTable).where(eq(passwordChangeTokensTable.token, token));
+    res.status(503).json({ error: "Не удалось отправить письмо подтверждения" });
+    return;
+  }
+
+  res.json({ message: "Мы отправили письмо с подтверждением смены пароля" });
+});
+
+router.get("/auth/confirm-password-change/:token", async (req, res): Promise<void> => {
+  const { token } = req.params;
+  if (!token) {
+    res.status(400).json({ error: "Токен подтверждения отсутствует" });
+    return;
+  }
+
+  const [changeToken] = await db
+    .select()
+    .from(passwordChangeTokensTable)
+    .where(
+      and(
+        eq(passwordChangeTokensTable.token, token),
+        gt(passwordChangeTokensTable.expiresAt, new Date()),
+      ),
+    );
+
+  if (!changeToken) {
+    res.status(400).json({ error: "Недействительная или истекшая ссылка подтверждения" });
+    return;
+  }
+
   await db
     .update(usersTable)
-    .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(usersTable.id, user.id));
+    .set({ passwordHash: changeToken.newPasswordHash, updatedAt: new Date() })
+    .where(eq(usersTable.id, changeToken.userId));
+
+  await db.delete(passwordChangeTokensTable).where(eq(passwordChangeTokensTable.userId, changeToken.userId));
 
   res.json({ message: "Пароль успешно изменен" });
 });

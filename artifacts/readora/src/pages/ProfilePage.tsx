@@ -224,7 +224,7 @@ export default function ProfilePage() {
                 </div>
 
                 {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
-                {passwordSaved && <p className="text-sm text-green-600">Пароль успешно изменен</p>}
+                {passwordSaved && <p className="text-sm text-green-600">Письмо подтверждения отправлено на ваш email</p>}
 
                 <Button
                   type="submit"
