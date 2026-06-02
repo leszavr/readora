@@ -51,7 +51,13 @@ app.use(
     },
   }),
 );
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      imgSrc: ["'self'", "data:", "blob:"],
+    },
+  },
+}));
 app.use(cors({
   origin(origin, callback) {
     const allowedOrigin = process.env.APP_ORIGIN;

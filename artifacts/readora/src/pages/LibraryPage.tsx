@@ -884,9 +884,17 @@ function BookListItem({
           onClick={(e) => e.stopPropagation()}
         />
       )}
-      <div className="w-12 h-16 flex-shrink-0 rounded overflow-hidden bg-muted">
+      <div className="relative w-12 h-16 flex-shrink-0 rounded overflow-hidden bg-muted">
         {book.coverUrl && (
           <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+        )}
+        {typeof book.cycleNumber === "number" && (
+          <span
+            className="absolute left-1 top-1 inline-flex items-center rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm backdrop-blur-sm"
+            title={book.cycleName ? `${book.cycleName} • #${book.cycleNumber}` : `#${book.cycleNumber}`}
+          >
+            #{book.cycleNumber}
+          </span>
         )}
       </div>
       <div className="flex-1 min-w-0">
@@ -895,12 +903,6 @@ function BookListItem({
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           {book.genres && book.genres.length > 0 && (
             <span className="truncate">{book.genres[0].name}</span>
-          )}
-          {book.cycleName && (
-            <span className="truncate">
-              {book.cycleName}
-              {typeof book.cycleNumber === "number" ? ` • #${book.cycleNumber}` : ""}
-            </span>
           )}
           {book.progressPercent != null && book.progressPercent > 0 && (
             <span>{Math.round(book.progressPercent)}% прочитано</span>
