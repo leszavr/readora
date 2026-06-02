@@ -9,7 +9,10 @@
   },
   "scripts": {
     "generate": "drizzle-kit generate --config ./drizzle.config.ts",
-    "migrate": "drizzle-kit migrate --config ./drizzle.config.ts",
+    "migrate": "node ./scripts/migrate-unified.mjs apply",
+    "migrate:adopt": "node ./scripts/migrate-unified.mjs adopt",
+    "migrate:status": "node ./scripts/migrate-unified.mjs status",
+    "migrate:drizzle": "drizzle-kit migrate --config ./drizzle.config.ts",
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
   },

@@ -9,6 +9,8 @@
     "db:sync": "pnpm --filter @workspace/db run push",
     "db:generate": "pnpm --filter @workspace/db run generate",
     "db:migrate": "pnpm --filter @workspace/db run migrate",
+    "db:migrate:adopt": "pnpm --filter @workspace/db run migrate:adopt",
+    "db:migrate:status": "pnpm --filter @workspace/db run migrate:status",
     "check": "pnpm run typecheck",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
