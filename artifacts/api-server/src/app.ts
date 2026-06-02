@@ -100,7 +100,7 @@ await emailService.initialize().catch((error) => {
 app.use("/api", router);
 
 if (hasClientDist) {
-  app.get("*", (_req, res) => {
+  app.get(/.*/, (_req, res) => {
     res.sendFile(resolve(clientDist, "index.html"));
   });
 }
