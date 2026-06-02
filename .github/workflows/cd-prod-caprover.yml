@@ -52,3 +52,16 @@ jobs:
             --caproverApp "${{ secrets.CAPROVER_APP }}" \
             --branch "${{ github.ref_name }}" \
             --appToken "${{ secrets.CAPROVER_APP_TOKEN }}"
+      - name: Post-deploy health check
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://readora.ru || true)
+            if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ]; then
+              echo "Health check passed with HTTP $code"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $code, waiting for rollout"
+            sleep 10
+          done
+          echo "Health check failed: readora.ru did not become healthy"
+          exit 1
