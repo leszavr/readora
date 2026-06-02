@@ -43,7 +43,13 @@ COPY --from=builder /app/artifacts/api-server/email-templates ./email-templates
 # Статика фронтенда (сервируется Express в production)
 COPY --from=builder /app/artifacts/readora/dist/public ./client
 
-RUN mkdir -p uploads && chown -R nodejs:nodejs /app
+# Каталоги для загрузок с владельцем nodejs.
+# Создаём оба возможных пути (UPLOADS_DIR в проде = /captain/data/uploads),
+# чтобы non-root процесс не падал на mkdir, а named-volume CapRover
+# (если будет подключён) унаследовал владельца nodejs от образа.
+RUN mkdir -p /app/uploads/covers /app/uploads/tmp \
+             /captain/data/uploads/covers /captain/data/uploads/tmp && \
+    chown -R nodejs:nodejs /app /captain
 
 USER nodejs
 
