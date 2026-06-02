@@ -124,6 +124,40 @@ router.patch("/auth/me/settings", requireAuth, async (req, res): Promise<void> =
   res.json(formatUser(updated));
 });
 
+router.post("/auth/me/password", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as Request & { user: typeof usersTable.$inferSelect }).user;
+  const schema = z.object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8),
+  });
+
+  const parsed = schema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Укажите текущий пароль и новый пароль не короче 8 символов" });
+    return;
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    res.status(400).json({ error: "Текущий пароль неверный" });
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: "Новый пароль должен отличаться от текущего" });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db
+    .update(usersTable)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(usersTable.id, user.id));
+
+  res.json({ message: "Пароль успешно изменен" });
+});
+
 // Email verification
 router.get("/auth/verify/:token", async (req, res): Promise<void> => {
   const { token } = req.params;

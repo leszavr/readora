@@ -137,6 +137,38 @@ router.patch("/admin/users/:id", requireAdmin, async (req, res): Promise<void> =
   res.json({ ...formatUser(user), bookCount: count });
 });
 
+// POST /admin/users/:id/password
+router.post("/admin/users/:id/password", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number.parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "Некорректный идентификатор пользователя" });
+    return;
+  }
+
+  const passwordSchema = {
+    newPassword: typeof req.body?.newPassword === "string" ? req.body.newPassword : "",
+  };
+
+  if (passwordSchema.newPassword.length < 8) {
+    res.status(400).json({ error: "Новый пароль должен быть не короче 8 символов" });
+    return;
+  }
+
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Пользователь не найден" });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(passwordSchema.newPassword, 12);
+  await db
+    .update(usersTable)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(usersTable.id, id));
+
+  res.json({ message: "Пароль пользователя обновлен" });
+});
+
 // DELETE /admin/users/:id
 router.delete("/admin/users/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number.parseInt(String(req.params.id), 10);

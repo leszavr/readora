@@ -20,7 +20,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
@@ -32,6 +32,9 @@ export default function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<null | { id: number; username: string; email: string; role: AdminUserUpdateRole }>(null);
+  const [editPassword, setEditPassword] = useState("");
+  const [editPasswordVisible, setEditPasswordVisible] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Create form
   const [newEmail, setNewEmail] = useState("");
@@ -50,8 +53,8 @@ export default function AdminUsers() {
     mutation: { onSuccess: () => { invalidate(); setCreateOpen(false); setNewEmail(""); setNewUsername(""); setNewPassword(""); setNewRole("user"); } },
   });
 
-  const { mutate: updateUser, isPending: updating } = useUpdateAdminUser({
-    mutation: { onSuccess: () => { invalidate(); setEditUser(null); } },
+  const { mutateAsync: updateUser, isPending: updating } = useUpdateAdminUser({
+    mutation: { onSuccess: () => { invalidate(); } },
   });
 
   const { mutate: deleteUser } = useDeleteAdminUser({
@@ -61,6 +64,41 @@ export default function AdminUsers() {
   const { mutate: toggleBlock } = useToggleBlockUser({
     mutation: { onSuccess: invalidate },
   });
+
+  async function handleEditSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+    e.preventDefault();
+    if (!editUser) return;
+
+    setEditError(null);
+    try {
+      await updateUser({ id: editUser.id, data: { username: editUser.username, role: editUser.role } });
+
+      if (editPassword.trim()) {
+        if (editPassword.length < 8) {
+          setEditError("Новый пароль должен быть не короче 8 символов");
+          return;
+        }
+
+        const res = await fetch(`/api/admin/users/${editUser.id}/password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPassword: editPassword }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setEditError(data.error ?? "Не удалось обновить пароль пользователя");
+          return;
+        }
+      }
+
+      setEditPassword("");
+      setEditPasswordVisible(false);
+      setEditUser(null);
+      invalidate();
+    } catch {
+      setEditError("Не удалось сохранить изменения пользователя");
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -144,7 +182,12 @@ export default function AdminUsers() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2" onClick={() => setEditUser({ id: u.id, username: u.username, email: u.email, role: u.role as AdminUserUpdateRole })}>
+                          <DropdownMenuItem className="gap-2" onClick={() => {
+                            setEditUser({ id: u.id, username: u.username, email: u.email, role: u.role as AdminUserUpdateRole });
+                            setEditPassword("");
+                            setEditPasswordVisible(false);
+                            setEditError(null);
+                          }}>
                             <Pencil className="w-4 h-4" /> Изменить
                           </DropdownMenuItem>
                           <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: u.id })}>
@@ -201,10 +244,7 @@ export default function AdminUsers() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Изменить пользователя</DialogTitle></DialogHeader>
           {editUser && (
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              updateUser({ id: editUser.id, data: { username: editUser.username, role: editUser.role } });
-            }} className="space-y-4">
+            <form onSubmit={handleEditSubmit} className="space-y-4">
               <div className="space-y-2"><Label>Имя</Label><Input value={editUser.username} onChange={(e) => setEditUser({ ...editUser, username: e.target.value })} required /></div>
               <div className="space-y-2">
                 <Label>Роль</Label>
@@ -217,6 +257,28 @@ export default function AdminUsers() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Новый пароль (опционально)</Label>
+                <div className="relative">
+                  <Input
+                    type={editPasswordVisible ? "text" : "password"}
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    minLength={8}
+                    placeholder="Оставьте пустым, чтобы не менять"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    aria-label={editPasswordVisible ? "Скрыть пароль" : "Показать пароль"}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditPasswordVisible((prev) => !prev)}
+                  >
+                    {editPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              {editError ? <p className="text-sm text-destructive">{editError}</p> : null}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Отмена</Button>
                 <Button type="submit" disabled={updating}>{updating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}Сохранить</Button>
