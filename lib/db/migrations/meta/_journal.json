@@ -50,6 +50,13 @@
       "when": 1780380400000,
       "tag": "0006_password_change_confirmation_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780386558054,
+      "tag": "0007_organic_misty_knight",
+      "breakpoints": true
     }
   ]
 }

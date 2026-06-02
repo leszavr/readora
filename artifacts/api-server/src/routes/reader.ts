@@ -109,16 +109,28 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
   const { currentChapterId, currentPosition, progressPercent, readingStatus } = req.body ?? {};
+  const normalizedCurrentChapterId = typeof currentChapterId === "number" && Number.isInteger(currentChapterId)
+    ? currentChapterId
+    : null;
+  const normalizedCurrentPosition = typeof currentPosition === "string"
+    ? currentPosition
+    : null;
+  const normalizedProgressPercent = typeof progressPercent === "number" && Number.isFinite(progressPercent)
+    ? progressPercent
+    : null;
+  const normalizedReadingStatus = readingStatus === "not_started" || readingStatus === "reading" || readingStatus === "finished"
+    ? readingStatus
+    : "reading";
 
   const values: typeof readingProgressTable.$inferInsert = {
     userId: user.id,
     bookId,
-    currentChapterId: currentChapterId ?? null,
-    currentPosition: currentPosition ?? null,
-    progressPercent: progressPercent ?? null,
-    readingStatus: readingStatus ?? "reading",
+    currentChapterId: normalizedCurrentChapterId,
+    currentPosition: normalizedCurrentPosition,
+    progressPercent: normalizedProgressPercent,
+    readingStatus: normalizedReadingStatus,
     lastReadAt: new Date(),
-    completedAt: readingStatus === "finished" ? new Date() : null,
+    completedAt: normalizedReadingStatus === "finished" ? new Date() : null,
   };
 
   await db

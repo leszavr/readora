@@ -1100,7 +1100,7 @@ components:
         currentChapterId:
           type: ["integer", "null"]
         currentPosition:
-          type: ["number", "null"]
+          type: ["string", "null"]
         progressPercent:
           type: ["number", "null"]
         readingStatus:
@@ -1119,7 +1119,7 @@ components:
         currentChapterId:
           type: integer
         currentPosition:
-          type: number
+          type: string
         progressPercent:
           type: number
         readingStatus:

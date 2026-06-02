@@ -67,35 +67,6 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
-type MutationOptionsInput<TReturn, TError, TVariables, TContext> = {
-  mutation?: UseMutationOptions<TReturn, TError, TVariables, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-};
-
-function resolveMutationOptions<TReturn, TError, TVariables, TContext>(
-  options: MutationOptionsInput<TReturn, TError, TVariables, TContext> | undefined,
-  mutationKey: QueryKey,
-): { mutation: UseMutationOptions<TReturn, TError, TVariables, TContext>; request: SecondParameter<typeof customFetch> | undefined } {
-  if (!options) {
-    return {
-      mutation: { mutationKey },
-      request: undefined,
-    };
-  }
-
-  if (options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey) {
-    return {
-      mutation: options.mutation,
-      request: options.request,
-    };
-  }
-
-  return {
-    mutation: { ...options.mutation, mutationKey },
-    request: options.request,
-  };
-}
-
 
 
 export const getHealthCheckUrl = () => {
@@ -206,7 +177,11 @@ export const getRegisterMutationOptions = <TError = ErrorType<ErrorResponse>,
 ): UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext> => {
 
 const mutationKey = ['register'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -273,7 +248,11 @@ export const getLoginMutationOptions = <TError = ErrorType<ErrorResponse>,
 ): UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext> => {
 
 const mutationKey = ['login'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -339,7 +318,11 @@ export const getLogoutMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext> => {
 
 const mutationKey = ['logout'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -483,7 +466,11 @@ export const getUpdateProfileMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof updateProfile>>, TError,{data: BodyType<ProfileUpdate>}, TContext> => {
 
 const mutationKey = ['updateProfile'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -627,7 +614,11 @@ export const getCreateGenreMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof createGenre>>, TError,{data: BodyType<GenreInput>}, TContext> => {
 
 const mutationKey = ['createGenre'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -695,7 +686,11 @@ export const getUpdateGenreMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof updateGenre>>, TError,{id: number;data: BodyType<GenreUpdate>}, TContext> => {
 
 const mutationKey = ['updateGenre'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -761,7 +756,11 @@ export const getDeleteGenreMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteGenre>>, TError,{id: number}, TContext> => {
 
 const mutationKey = ['deleteGenre'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -905,7 +904,11 @@ export const getCreateCycleMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof createCycle>>, TError,{data: BodyType<CycleInput>}, TContext> => {
 
 const mutationKey = ['createCycle'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1066,7 +1069,11 @@ export const getUploadBookMutationOptions = <TError = ErrorType<ErrorResponse>,
 ): UseMutationOptions<Awaited<ReturnType<typeof uploadBook>>, TError,{data: BodyType<BookUploadInput>}, TContext> => {
 
 const mutationKey = ['uploadBook'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1211,7 +1218,11 @@ export const getUpdateBookMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof updateBook>>, TError,{id: number;data: BodyType<BookUpdate>}, TContext> => {
 
 const mutationKey = ['updateBook'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1277,7 +1288,11 @@ export const getDeleteBookMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteBook>>, TError,{id: number}, TContext> => {
 
 const mutationKey = ['deleteBook'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1344,7 +1359,11 @@ export const getDeleteBulkBooksMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteBulkBooks>>, TError,{data: BodyType<BulkDeleteInput>}, TContext> => {
 
 const mutationKey = ['deleteBulkBooks'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1648,7 +1667,11 @@ export const getSaveProgressMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof saveProgress>>, TError,{id: number;data: BodyType<ProgressInput>}, TContext> => {
 
 const mutationKey = ['saveProgress'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1792,7 +1815,11 @@ export const getSaveReaderSettingsMutationOptions = <TError = ErrorType<unknown>
 ): UseMutationOptions<Awaited<ReturnType<typeof saveReaderSettings>>, TError,{data: BodyType<ReaderSettingsInput>}, TContext> => {
 
 const mutationKey = ['saveReaderSettings'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -1858,7 +1885,11 @@ export const getResetReaderSettingsMutationOptions = <TError = ErrorType<unknown
 ): UseMutationOptions<Awaited<ReturnType<typeof resetReaderSettings>>, TError,void, TContext> => {
 
 const mutationKey = ['resetReaderSettings'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2170,7 +2201,11 @@ export const getCreateAdminUserMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof createAdminUser>>, TError,{data: BodyType<AdminUserCreate>}, TContext> => {
 
 const mutationKey = ['createAdminUser'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2315,7 +2350,11 @@ export const getUpdateAdminUserMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof updateAdminUser>>, TError,{id: number;data: BodyType<AdminUserUpdate>}, TContext> => {
 
 const mutationKey = ['updateAdminUser'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2381,7 +2420,11 @@ export const getDeleteAdminUserMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminUser>>, TError,{id: number}, TContext> => {
 
 const mutationKey = ['deleteAdminUser'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2447,7 +2490,11 @@ export const getToggleBlockUserMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof toggleBlockUser>>, TError,{id: number}, TContext> => {
 
 const mutationKey = ['toggleBlockUser'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2674,7 +2721,11 @@ export const getDeleteAdminBookMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminBook>>, TError,{id: number}, TContext> => {
 
 const mutationKey = ['deleteAdminBook'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2740,7 +2791,11 @@ export const getToggleBlockBookMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof toggleBlockBook>>, TError,{id: number}, TContext> => {
 
 const mutationKey = ['toggleBlockBook'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 
@@ -2884,7 +2939,11 @@ export const getUpdateAppSettingsMutationOptions = <TError = ErrorType<unknown>,
 ): UseMutationOptions<Awaited<ReturnType<typeof updateAppSettings>>, TError,{data: BodyType<AppSettingsUpdate>}, TContext> => {
 
 const mutationKey = ['updateAppSettings'];
-const { mutation: mutationOptions, request: requestOptions } = resolveMutationOptions(options, mutationKey);
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
 
 
 

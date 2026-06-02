@@ -370,7 +370,7 @@ export const GetProgressResponse = zod.object({
   "bookId": zod.number(),
   "userId": zod.number(),
   "currentChapterId": zod.number().nullish(),
-  "currentPosition": zod.number().nullish(),
+  "currentPosition": zod.string().nullish(),
   "progressPercent": zod.number().nullish(),
   "readingStatus": zod.enum(['not_started', 'reading', 'finished']).optional(),
   "lastReadAt": zod.coerce.date().nullish(),
@@ -387,7 +387,7 @@ export const SaveProgressParams = zod.object({
 
 export const SaveProgressBody = zod.object({
   "currentChapterId": zod.number().optional(),
-  "currentPosition": zod.number().optional(),
+  "currentPosition": zod.string().optional(),
   "progressPercent": zod.number().optional(),
   "readingStatus": zod.enum(['not_started', 'reading', 'finished']).optional()
 })
@@ -396,7 +396,7 @@ export const SaveProgressResponse = zod.object({
   "bookId": zod.number(),
   "userId": zod.number(),
   "currentChapterId": zod.number().nullish(),
-  "currentPosition": zod.number().nullish(),
+  "currentPosition": zod.string().nullish(),
   "progressPercent": zod.number().nullish(),
   "readingStatus": zod.enum(['not_started', 'reading', 'finished']).optional(),
   "lastReadAt": zod.coerce.date().nullish(),

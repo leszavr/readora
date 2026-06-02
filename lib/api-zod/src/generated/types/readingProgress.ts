@@ -13,7 +13,7 @@ export interface ReadingProgress {
   /** @nullable */
   currentChapterId?: number | null;
   /** @nullable */
-  currentPosition?: number | null;
+  currentPosition?: string | null;
   /** @nullable */
   progressPercent?: number | null;
   readingStatus?: ReadingProgressReadingStatus;

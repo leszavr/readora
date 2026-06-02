@@ -9,7 +9,7 @@ import type { ProgressInputReadingStatus } from './progressInputReadingStatus';
 
 export interface ProgressInput {
   currentChapterId?: number;
-  currentPosition?: number;
+  currentPosition?: string;
   progressPercent?: number;
   readingStatus?: ProgressInputReadingStatus;
 }

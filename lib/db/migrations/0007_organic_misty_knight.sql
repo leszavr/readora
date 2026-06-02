@@ -1,0 +1,1 @@
+ALTER TABLE "reading_progress" ALTER COLUMN "current_position" SET DATA TYPE text;--> statement-breakpoint

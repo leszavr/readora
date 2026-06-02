@@ -243,7 +243,7 @@ export interface ReadingProgress {
   /** @nullable */
   currentChapterId?: number | null;
   /** @nullable */
-  currentPosition?: number | null;
+  currentPosition?: string | null;
   /** @nullable */
   progressPercent?: number | null;
   readingStatus?: ReadingProgressReadingStatus;
@@ -264,7 +264,7 @@ export const ProgressInputReadingStatus = {
 
 export interface ProgressInput {
   currentChapterId?: number;
-  currentPosition?: number;
+  currentPosition?: string;
   progressPercent?: number;
   readingStatus?: ProgressInputReadingStatus;
 }
