@@ -1,6 +1,6 @@
 import { useGetAdminStats } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,21 +93,23 @@ export default function AdminStats() {
   const { data: stats, isLoading } = useGetAdminStats();
   const [loadPoints, setLoadPoints] = useState<number[]>([]);
 
-  const { data: metrics, refetch: refetchMetrics, isFetching: isFetchingMetrics } = useQuery<SystemMetrics>({
+  const { data: metrics, refetch: refetchMetrics, isFetching: isFetchingMetrics } = useQuery({
     queryKey: ["admin-system-metrics"],
-    queryFn: async () => {
+    queryFn: async (): Promise<SystemMetrics> => {
       const response = await fetch("/api/admin/system-metrics", { credentials: "include" });
       if (!response.ok) throw new Error("Не удалось получить метрики сервера");
       return response.json() as Promise<SystemMetrics>;
     },
-    onSuccess: (nextMetrics) => {
-      setLoadPoints((prev) => {
-        const merged = [...prev, nextMetrics.loadAvg1m];
-        return merged.slice(-20);
-      });
-    },
     refetchInterval: 30000,
   });
+
+  useEffect(() => {
+    if (!metrics) return;
+    setLoadPoints((prev) => {
+      const merged = [...prev, metrics.loadAvg1m];
+      return merged.slice(-20);
+    });
+  }, [metrics]);
 
   const ramPercent = metrics ? toPercent(metrics.memoryUsedBytes, metrics.memoryTotalBytes) : 0;
   const diskPercent = metrics ? toPercent(metrics.diskUsedBytes, metrics.diskTotalBytes) : 0;
