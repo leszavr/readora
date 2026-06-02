@@ -41,7 +41,7 @@ COPY --from=builder /app/artifacts/api-server/dist ./dist
 COPY --from=builder /app/artifacts/api-server/email-templates ./email-templates
 
 # Статика фронтенда (сервируется Express в production)
-COPY --from=builder /app/artifacts/readora/dist ./client
+COPY --from=builder /app/artifacts/readora/dist/public ./client
 
 RUN mkdir -p uploads && chown -R nodejs:nodejs /app
 
