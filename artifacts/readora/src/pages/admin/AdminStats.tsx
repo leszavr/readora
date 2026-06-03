@@ -93,6 +93,16 @@ export default function AdminStats() {
   const { data: stats, isLoading } = useGetAdminStats();
   const [loadPoints, setLoadPoints] = useState<number[]>([]);
 
+  const { data: pwaStats } = useQuery({
+    queryKey: ["admin-pwa-stats"],
+    queryFn: async (): Promise<{ acceptedCount: number }> => {
+      const response = await fetch("/api/admin/pwa-stats", { credentials: "include" });
+      if (!response.ok) throw new Error("Не удалось получить PWA-метрики");
+      return response.json() as Promise<{ acceptedCount: number }>;
+    },
+    staleTime: 60_000,
+  });
+
   const { data: metrics, refetch: refetchMetrics, isFetching: isFetchingMetrics } = useQuery({
     queryKey: ["admin-system-metrics"],
     queryFn: async (): Promise<SystemMetrics> => {
@@ -133,6 +143,7 @@ export default function AdminStats() {
     { label: "Всего книг", value: stats.totalBooks, icon: BookCopy, color: "text-green-500" },
     { label: "Активных читателей (7 дней)", value: stats.activeReaders, icon: Activity, color: "text-purple-500" },
     { label: "Открытий книг (7 дней)", value: stats.openCount7d, icon: BookOpen, color: "text-orange-500" },
+    { label: "Установок PWA (accepted)", value: pwaStats?.acceptedCount ?? 0, icon: BookOpen, color: "text-indigo-500" },
   ];
 
   return (

@@ -6,6 +6,7 @@ import readerRouter from "./reader";
 import genresRouter from "./genres";
 import cyclesRouter from "./cycles";
 import adminRouter from "./admin";
+import pwaRouter from "./pwa";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(readerRouter);
 router.use(genresRouter);
 router.use(cyclesRouter);
 router.use(adminRouter);
+router.use(pwaRouter);
 
 export default router;

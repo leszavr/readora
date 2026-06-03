@@ -22,23 +22,41 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export default function HomePage() {
+  const IOS_INSTALL_HINT_DISMISSED_KEY = "readora-ios-install-hint-dismissed";
   const { isAuthenticated } = useAuth();
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIosInstallHint, setShowIosInstallHint] = useState(false);
+  const [showBrowserInstallHint, setShowBrowserInstallHint] = useState(false);
 
   useEffect(() => {
     const inStandalone = globalThis.matchMedia("(display-mode: standalone)").matches;
     const iosStandalone = (globalThis.navigator as Navigator & { standalone?: boolean }).standalone === true;
-    setIsInstalled(inStandalone || iosStandalone);
+    const installed = inStandalone || iosStandalone;
+    setIsInstalled(installed);
+
+    const userAgent = globalThis.navigator.userAgent.toLowerCase();
+    const isIosDevice =
+      /iphone|ipad|ipod/.test(userAgent) ||
+      (globalThis.navigator.platform === "MacIntel" && globalThis.navigator.maxTouchPoints > 1);
+    setIsIOS(isIosDevice);
+
+    if (isIosDevice && !installed) {
+      const dismissed = globalThis.localStorage.getItem(IOS_INSTALL_HINT_DISMISSED_KEY) === "1";
+      setShowIosInstallHint(!dismissed);
+    }
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
+      setShowBrowserInstallHint(false);
     };
 
     const onAppInstalled = () => {
       setIsInstalled(true);
       setInstallPrompt(null);
+      setShowIosInstallHint(false);
     };
 
     globalThis.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -48,16 +66,14 @@ export default function HomePage() {
       globalThis.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       globalThis.removeEventListener("appinstalled", onAppInstalled);
     };
-  }, []);
+  }, [IOS_INSTALL_HINT_DISMISSED_KEY]);
 
   async function handleInstallClick() {
     if (!installPrompt) {
-      const userAgent = globalThis.navigator.userAgent.toLowerCase();
-      const isIOS = /iphone|ipad|ipod/.test(userAgent);
       if (isIOS) {
-        globalThis.alert("Для установки откройте меню Поделиться и выберите На экран Домой.");
+        setShowIosInstallHint(true);
       } else {
-        globalThis.alert("Установка доступна через меню браузера: выберите Установить приложение.");
+        setShowBrowserInstallHint(true);
       }
       return;
     }
@@ -65,8 +81,18 @@ export default function HomePage() {
     await installPrompt.prompt();
     const result = await installPrompt.userChoice;
     if (result.outcome === "accepted") {
+      void fetch("/api/pwa/install-accepted", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => undefined);
       setInstallPrompt(null);
+      setShowBrowserInstallHint(false);
     }
+  }
+
+  function dismissIosInstallHint() {
+    setShowIosInstallHint(false);
+    globalThis.localStorage.setItem(IOS_INSTALL_HINT_DISMISSED_KEY, "1");
   }
 
   const { data: popularBooks = [] } = useQuery<PopularBook[]>({
@@ -133,6 +159,38 @@ export default function HomePage() {
               </>
             )}
           </div>
+
+          {!isInstalled && isIOS && showIosInstallHint && (
+            <div className="mx-auto mb-8 max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-4 text-left">
+              <p className="text-sm leading-relaxed text-foreground">
+                Чтобы установить Readora на iPhone или iPad: откройте меню <b>Поделиться</b> в Safari
+                и выберите <b>На экран Домой</b>.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" variant="outline" onClick={dismissIosInstallHint}>
+                  Понятно
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!isInstalled && !isIOS && showBrowserInstallHint && !installPrompt && (
+            <div className="mx-auto mb-8 max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-4 text-left">
+              <p className="text-sm leading-relaxed text-foreground">
+                Браузер пока не выдал системное окно установки. Принудительно открыть его нельзя: это ограничение
+                безопасности самого браузера.
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground">
+                Попробуйте открыть Readora в Chrome или Edge и выбрать в меню браузера пункт <b>Установить приложение</b>
+                (или значок установки в адресной строке).
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => setShowBrowserInstallHint(false)}>
+                  Понятно
+                </Button>
+              </div>
+            </div>
+          )}
 
           <p className="text-sm text-muted-foreground">
             Бесплатно • Без рекламы • Личные данные остаются вашими
