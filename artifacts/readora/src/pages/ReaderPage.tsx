@@ -269,6 +269,22 @@ export default function ReaderPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pendingScrollRestore, setPendingScrollRestore] =
     useState<PendingScrollRestore | null>(null);
+  
+  // Scroll position tracking for smart navigation
+  const [isAtChapterStart, setIsAtChapterStart] = useState(true);
+  const [isAtChapterEnd, setIsAtChapterEnd] = useState(false);
+
+  // Debug: log button states
+  useEffect(() => {
+    console.log('[Reader] Button states:', {
+      currentChapterIdx,
+      totalChapters: chapters.length,
+      isAtChapterStart,
+      isAtChapterEnd,
+      prevDisabled: currentChapterIdx === null || currentChapterIdx <= 0 || !isAtChapterStart,
+      nextDisabled: currentChapterIdx === null || currentChapterIdx >= chapters.length - 1 || !isAtChapterEnd,
+    });
+  }, [currentChapterIdx, chapters.length, isAtChapterStart, isAtChapterEnd]);
 
   // Local reader settings (initialised from server settings below)
   const [fontSize, setFontSize] = useState(18);
@@ -512,6 +528,52 @@ export default function ReaderPage() {
   });
 
   // ---------------------------------------------------------------------------
+  // Scroll position tracking for smart navigation
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const SCROLL_THRESHOLD = 50; // pixels from top/bottom to consider at start/end
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const scrollBottom = scrollHeight - scrollTop - clientHeight;
+
+      // User is at start only if scrolled to the very top
+      const atStart = scrollTop <= SCROLL_THRESHOLD;
+      // User is at end only if scrolled to the very bottom
+      const atEnd = scrollBottom <= SCROLL_THRESHOLD;
+
+      // Make states mutually exclusive: if not at start and not at end, both should be false
+      // This prevents accidental navigation from the middle of the chapter
+      const isStart = atStart && !atEnd;
+      const isEnd = atEnd && !atStart;
+
+      console.log('[Reader] Scroll position:', {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        scrollBottom,
+        atStart,
+        atEnd,
+        isStart,
+        isEnd,
+        currentChapterId,
+      });
+
+      setIsAtChapterStart(isStart);
+      setIsAtChapterEnd(isEnd);
+    };
+
+    // Initial check
+    handleScroll();
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [currentChapterId]); // Re-check when chapter changes
+
+  // ---------------------------------------------------------------------------
   // Keyboard navigation (← → chapter switch)
   // ---------------------------------------------------------------------------
   useEffect(() => {
@@ -526,7 +588,7 @@ export default function ReaderPage() {
 
       if (event.key === "ArrowLeft" && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
-        if (currentChapterIdx !== null && currentChapterIdx > 0) {
+        if (currentChapterIdx !== null && currentChapterIdx > 0 && isAtChapterStart) {
           navigateToChapterIndex(currentChapterIdx - 1);
         }
         return;
@@ -534,7 +596,7 @@ export default function ReaderPage() {
 
       if (event.key === "ArrowRight" && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
-        if (currentChapterIdx !== null && currentChapterIdx < chapters.length - 1) {
+        if (currentChapterIdx !== null && currentChapterIdx < chapters.length - 1 && isAtChapterEnd) {
           navigateToChapterIndex(currentChapterIdx + 1);
         }
       }
@@ -542,7 +604,7 @@ export default function ReaderPage() {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [chapters.length, currentChapterIdx, navigateToChapterIndex]);
+  }, [chapters.length, currentChapterIdx, navigateToChapterIndex, isAtChapterStart, isAtChapterEnd]);
 
   // ---------------------------------------------------------------------------
   // Get effective progress (compare local and remote, pick freshest)
@@ -975,7 +1037,7 @@ export default function ReaderPage() {
         >
           <div
             ref={contentAreaRef}
-            className="mx-auto px-4 py-8 sm:px-6 sm:py-10 md:px-8"
+            className="reader-content-area mx-auto px-4 py-8 sm:px-6 sm:py-10 md:px-8"
             style={{ width: `${contentWidth}%` }}
           >
             {currentChapterIdx === null || progressQuery.isLoading ? (
@@ -1026,7 +1088,7 @@ export default function ReaderPage() {
             size="sm"
             className="gap-2"
             onClick={() => navigateToChapterIndex(currentChapterIdx - 1)}
-            disabled={currentChapterIdx <= 0}
+            disabled={currentChapterIdx <= 0 || !isAtChapterStart}
           >
             <ChevronLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Предыдущая</span>
@@ -1041,7 +1103,7 @@ export default function ReaderPage() {
             size="sm"
             className="gap-2"
             onClick={() => navigateToChapterIndex(currentChapterIdx + 1)}
-            disabled={currentChapterIdx >= chapters.length - 1}
+            disabled={currentChapterIdx >= chapters.length - 1 || !isAtChapterEnd}
           >
             <span className="hidden sm:inline">Следующая</span>
             <ChevronRight className="w-4 h-4" />
