@@ -150,24 +150,32 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
 
               <div className="mt-3 pt-3 border-t border-border/60">
                 <p className="text-xs text-muted-foreground mb-2">
-                  Readora — дочерний проект Voxlibris для социальных книжных клубов с живыми чтецами.
+                  Readora — бесплатная личная библиотека.
                 </p>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <p className="text-xs text-muted-foreground mb-2">
+                  Нужна платформа для книжного клуба или издательства?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Коммерческая версия
+                  {" "}
                   <a
                     href="https://voxlibris.ru"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-primary/90 hover:text-primary hover:underline"
                   >
-                    voxlibris.ru
+                    Voxlibris
                   </a>
+                  {" "}
+                  доступна для лицензирования:
+                  {" "}
                   <a
                     href="mailto:admin@voxli.ru"
-                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    className="font-medium text-primary/90 hover:text-primary hover:underline"
                   >
                     admin@voxli.ru
                   </a>
-                </div>
+                </p>
               </div>
             </div>
 
