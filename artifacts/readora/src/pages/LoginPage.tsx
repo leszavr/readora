@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
+import { EmailVerificationModal } from "@/components/EmailVerificationModal";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -16,6 +18,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState<number | null>(null);
+
+  // Check for success messages in URL
+  const params = new URLSearchParams(window.location.search);
+  const justRegistered = params.get("registered") === "true";
+  const emailVerified = params.get("verified") === "true";
 
   useEffect(() => {
     if (isAuthenticated) navigate("/library");
@@ -27,6 +36,18 @@ export default function LoginPage() {
         qc.setQueryData(getGetMeQueryKey(), data.user);
         qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
         navigate("/library");
+      },
+      onError: (err) => {
+        const errorData = err.data as { error?: string; userId?: number } | null;
+        const errorMsg = errorData?.error ?? "";
+        
+        if (errorMsg.includes("Подтвердите email") || errorMsg.includes("email")) {
+          // Try to extract userId from session or error response
+          if (errorData?.userId) {
+            setPendingUserId(errorData.userId);
+          }
+          setShowEmailVerificationModal(true);
+        }
       },
     },
   });
@@ -56,6 +77,24 @@ export default function LoginPage() {
             <CardDescription>Введите ваши данные для входа</CardDescription>
           </CardHeader>
           <CardContent>
+            {justRegistered && (
+              <Alert className="mb-4">
+                <Mail className="h-4 w-4" />
+                <AlertDescription>
+                  Регистрация успешна! Проверьте вашу почту и перейдите по ссылке для подтверждения email, затем войдите в систему.
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {emailVerified && (
+              <Alert className="mb-4">
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Email успешно подтверждён! Теперь вы можете войти в систему.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -118,6 +157,15 @@ export default function LoginPage() {
           </CardContent>
         </Card>
       </div>
+
+      <EmailVerificationModal
+        isOpen={showEmailVerificationModal}
+        onClose={() => {
+          setShowEmailVerificationModal(false);
+          setPendingUserId(null);
+        }}
+        userId={pendingUserId}
+      />
     </div>
   );
 }

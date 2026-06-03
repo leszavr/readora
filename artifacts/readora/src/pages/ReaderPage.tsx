@@ -1,5 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useRoute, Link } from "wouter";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  type RefObject,
+} from "react";
+import { useRoute, useLocation, Link } from "wouter";
 import {
   useGetBook,
   useListChapters,
@@ -8,56 +15,71 @@ import {
   useSaveProgress,
   useSaveReaderSettings,
   ReaderSettingsInputTheme,
-  type ReadingProgress,
+  getGetProgressQueryKey,
 } from "@workspace/api-client-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-  ArrowLeft, List, Settings, ChevronLeft, ChevronRight, BookOpen, Loader2, Maximize2, Minimize2, X,
+  ArrowLeft,
+  List,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  BookOpen,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  X,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getGetChapterQueryKey, getGetProgressQueryKey } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 
+import {
+  createReaderProgressPayload,
+  type ReaderProgressPayload,
+} from "@/components/reader/core/reader-progress-core";
+import {
+  restoreReaderScrollPosition,
+  useDebouncedReaderProgressSave,
+  useRestoreReaderScroll,
+  usePeriodicProgressSave,
+} from "@/components/reader/core/use-reader-progress-sync";
+import { useReaderSyncState } from "@/components/reader/core/use-reader-sync-state";
+import { useReaderPanelsAutoclose } from "@/components/reader/core/use-reader-panels-autoclose";
+import { useSmoothReaderSpaceScroll } from "@/components/reader/core/use-smooth-reader-space-scroll";
+import { usePreserveReaderVisualAnchor } from "@/components/reader/core/use-preserve-reader-visual-anchor";
+import { ReaderProgressIndicators } from "@/components/reader/ReaderProgressIndicators";
+import {
+  loadReaderProgressFromStorage,
+  saveReaderProgressToStorage,
+  getFreshestReaderProgress,
+} from "@/lib/reader-local-progress";
+
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
-const SAVE_DEBOUNCE_MS = 1000;
-const RESTORE_DELAY_MS = 160;
-const RESTORE_RETRY_ATTEMPTS = 5;
-const RESTORE_RETRY_DELAY_MS = 130;
 
 type DeviceMode = "desktop" | "mobile";
 
-interface ReaderPositionPayload {
-  chapterId?: number;
-  scrollTop: number;
-  scrollHeight?: number;
-  clientHeight?: number;
-  timestamp?: number;
-  textOffset?: number;
-}
-
-interface ReaderProgressSnapshot {
-  currentChapterId: number | null;
-  currentPosition: string | null;
-  progressPercent: number | null;
-}
-
-type CaretDocument = Document & {
-  caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
-  caretRangeFromPoint?: (x: number, y: number) => Range | null;
-};
-
 function getDeviceMode(): DeviceMode {
   if (typeof window === "undefined") return "desktop";
-  return window.matchMedia("(pointer: coarse), (max-width: 767px)").matches ? "mobile" : "desktop";
+  return window.matchMedia("(pointer: coarse), (max-width: 767px)").matches
+    ? "mobile"
+    : "desktop";
 }
 
 async function fetchReaderSettings(deviceMode: DeviceMode) {
-  const res = await fetch(`/api/reader/settings?deviceMode=${deviceMode}`, { credentials: "include" });
+  const res = await fetch(`/api/reader/settings?deviceMode=${deviceMode}`, {
+    credentials: "include",
+  });
   if (!res.ok) throw new Error("Не удалось загрузить настройки ридера");
   return res.json() as Promise<{
     fontSize: number;
@@ -68,276 +90,168 @@ async function fetchReaderSettings(deviceMode: DeviceMode) {
   }>;
 }
 
-function isInteractiveElement(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest(
-    "input, textarea, select, button, a, [role='button'], [contenteditable='true']"
-  ));
-}
-
-function getLocalProgressKey(bookId: number): string {
-  return `readora:reader-progress:${bookId}`;
-}
-
-function parseReaderPosition(raw: string | null | undefined): ReaderPositionPayload | null {
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<ReaderPositionPayload>;
-    if (!parsed || typeof parsed !== "object" || typeof parsed.scrollTop !== "number") {
-      return null;
-    }
-
-    return {
-      chapterId: typeof parsed.chapterId === "number" ? parsed.chapterId : undefined,
-      scrollTop: parsed.scrollTop,
-      scrollHeight: typeof parsed.scrollHeight === "number" ? parsed.scrollHeight : undefined,
-      clientHeight: typeof parsed.clientHeight === "number" ? parsed.clientHeight : undefined,
-      timestamp: typeof parsed.timestamp === "number" ? parsed.timestamp : undefined,
-      textOffset: typeof parsed.textOffset === "number" ? parsed.textOffset : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function getPositionTimestamp(raw: string | null | undefined): number | null {
-  const position = parseReaderPosition(raw);
-  return typeof position?.timestamp === "number" ? position.timestamp : null;
-}
-
-function normalizeProgressSnapshot(progress: ReadingProgress | null | undefined): ReaderProgressSnapshot | null {
-  if (!progress) {
-    return null;
-  }
-
-  return {
-    currentChapterId: typeof progress.currentChapterId === "number" ? progress.currentChapterId : null,
-    currentPosition: typeof progress.currentPosition === "string" ? progress.currentPosition : null,
-    progressPercent: typeof progress.progressPercent === "number" ? progress.progressPercent : null,
-  };
-}
-
-function isProgressNewer(candidate: ReaderProgressSnapshot, baseline: ReaderProgressSnapshot): boolean {
-  const candidateTimestamp = getPositionTimestamp(candidate.currentPosition);
-  const baselineTimestamp = getPositionTimestamp(baseline.currentPosition);
-
-  if (candidateTimestamp !== null || baselineTimestamp !== null) {
-    if (candidateTimestamp === null) return false;
-    if (baselineTimestamp === null) return true;
-    if (candidateTimestamp !== baselineTimestamp) {
-      return candidateTimestamp > baselineTimestamp;
-    }
-  }
-
-  if (candidate.currentChapterId !== baseline.currentChapterId) {
-    return (candidate.currentChapterId ?? -1) > (baseline.currentChapterId ?? -1);
-  }
-
-  if (candidate.progressPercent !== baseline.progressPercent) {
-    return (candidate.progressPercent ?? -1) > (baseline.progressPercent ?? -1);
-  }
-
-  return candidate.currentPosition !== baseline.currentPosition;
-}
-
-function getFreshestProgress(
-  remoteProgress: ReaderProgressSnapshot | null,
-  localProgress: ReaderProgressSnapshot | null,
-): ReaderProgressSnapshot | null {
-  if (!remoteProgress) return localProgress;
-  if (!localProgress) return remoteProgress;
-  return isProgressNewer(localProgress, remoteProgress) ? localProgress : remoteProgress;
-}
-
-function loadLocalProgress(bookId: number): ReaderProgressSnapshot | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(getLocalProgressKey(bookId));
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw) as Partial<ReaderProgressSnapshot>;
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-
-    return {
-      currentChapterId: typeof parsed.currentChapterId === "number" ? parsed.currentChapterId : null,
-      currentPosition: typeof parsed.currentPosition === "string" ? parsed.currentPosition : null,
-      progressPercent: typeof parsed.progressPercent === "number" ? parsed.progressPercent : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalProgress(bookId: number, snapshot: ReaderProgressSnapshot): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(getLocalProgressKey(bookId), JSON.stringify(snapshot));
-  } catch {
-    // Ignore quota and private mode failures.
-  }
-}
-
-function calculateReadingProgress(
-  chapterIndex: number,
-  totalChapters: number,
-  scrollTop: number,
-  scrollHeight: number,
-  clientHeight: number,
-): number {
-  const safeTotal = Math.max(1, totalChapters);
-  const maxScrollable = Math.max(1, scrollHeight - clientHeight);
-  const scrollProgress = Math.min(100, Math.round((Math.max(0, scrollTop) / maxScrollable) * 100));
-
-  let totalProgress = Math.round(((chapterIndex / safeTotal) + (scrollProgress / 100 / safeTotal)) * 100);
-
-  if (chapterIndex === safeTotal - 1) {
-    const fitsWithoutScroll = scrollHeight > 0 && scrollHeight <= clientHeight + 1;
-    if (fitsWithoutScroll || scrollProgress >= 98) {
-      totalProgress = 100;
-    }
-  }
-
-  return Math.max(0, Math.min(100, totalProgress));
-}
-
-function createReaderProgressPayload(input: {
+interface PendingScrollRestore {
   chapterId: number;
-  chapterIndex: number;
-  totalChapters: number;
-  scrollTop: number;
-  scrollHeight: number;
-  clientHeight: number;
-  textOffset?: number;
-  timestamp?: number;
+  positionRaw: string;
+}
+
+// ---------------------------------------------------------------------------
+// usePersistProgressOnUnmount — saves to localStorage + keepalive fetch on exit
+// ---------------------------------------------------------------------------
+function usePersistProgressOnUnmount({
+  scrollContainerRef,
+  chapters,
+  currentChapterId,
+  currentChapterIdx,
+  contentLoading,
+  bookId,
+}: {
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
+  chapters: Array<{ id: number }>;
+  currentChapterId: number | null;
+  currentChapterIdx: number | null;
+  contentLoading: boolean;
+  bookId: number;
 }) {
-  const timestamp = input.timestamp ?? Date.now();
-  const progressPercent = calculateReadingProgress(
-    input.chapterIndex,
-    input.totalChapters,
-    input.scrollTop,
-    input.scrollHeight,
-    input.clientHeight,
-  );
+  const contentLoadingRef = useRef(contentLoading);
+  useEffect(() => {
+    contentLoadingRef.current = contentLoading;
+  }, [contentLoading]);
 
-  const position: ReaderPositionPayload = {
-    chapterId: input.chapterId,
-    scrollTop: input.scrollTop,
-    scrollHeight: input.scrollHeight,
-    clientHeight: input.clientHeight,
-    timestamp,
-    textOffset: input.textOffset,
-  };
+  const chaptersRef = useRef(chapters);
+  useEffect(() => {
+    chaptersRef.current = chapters;
+  }, [chapters]);
 
-  return {
-    currentChapterId: input.chapterId,
-    currentPosition: JSON.stringify(position),
-    progressPercent,
-  };
+  const currentChapterIdRef = useRef(currentChapterId);
+  useEffect(() => {
+    currentChapterIdRef.current = currentChapterId;
+  }, [currentChapterId]);
+
+  const currentChapterIdxRef = useRef(currentChapterIdx);
+  useEffect(() => {
+    currentChapterIdxRef.current = currentChapterIdx;
+  }, [currentChapterIdx]);
+
+  useEffect(() => {
+    return () => {
+      const container = scrollContainerRef.current;
+      const chs = chaptersRef.current;
+      const chId = currentChapterIdRef.current;
+      const chIdx = currentChapterIdxRef.current;
+      if (!container || !chs.length || chId === null || chIdx === null) return;
+      if (contentLoadingRef.current) return;
+
+      const payload = createReaderProgressPayload({
+        chapterId: chId,
+        chapterIndex: chIdx,
+        totalChapters: chs.length,
+        scrollTop: container.scrollTop,
+        scrollHeight: container.scrollHeight,
+        clientHeight: container.clientHeight,
+      });
+
+      // Save to localStorage for instant restore on next visit
+      saveReaderProgressToStorage(
+        { bookId },
+        {
+          currentChapterId: payload.currentChapterId,
+          currentPosition: payload.currentPosition,
+          progressPercent: payload.progressPercent,
+        }
+      );
+
+      fetch(`/api/books/${bookId}/progress`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentChapterId: payload.currentChapterId,
+          currentPosition: payload.currentPosition,
+          progressPercent: payload.progressPercent,
+          readingStatus: payload.progressPercent >= 99 ? "finished" : "reading",
+        }),
+        credentials: "include",
+        keepalive: true,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookId, scrollContainerRef]);
 }
 
-function getTopLeftTextOffset(scrollContainer: HTMLElement, contentArea: HTMLElement): number | null {
-  const scrollRect = scrollContainer.getBoundingClientRect();
-  const contentRect = contentArea.getBoundingClientRect();
-  const x = Math.max(contentRect.left + 8, scrollRect.left + 8);
-  const y = scrollRect.top + 8;
-  const caretDocument = document as CaretDocument;
+// ---------------------------------------------------------------------------
+// usePendingScrollRestore — fires a manual restore after chapter navigation
+// ---------------------------------------------------------------------------
+function usePendingScrollRestore({
+  pendingScrollRestore,
+  contentLoading,
+  currentChapterId,
+  scrollContainerRef,
+  contentAreaRef,
+  manualRestoreCleanupRef,
+  setPendingScrollRestore,
+}: {
+  pendingScrollRestore: PendingScrollRestore | null;
+  contentLoading: boolean;
+  currentChapterId: number | null;
+  scrollContainerRef: RefObject<HTMLElement | null>;
+  contentAreaRef: RefObject<HTMLElement | null>;
+  manualRestoreCleanupRef: RefObject<(() => void) | null>;
+  setPendingScrollRestore: (restore: PendingScrollRestore | null) => void;
+}) {
+  useEffect(() => {
+    return () => {
+      manualRestoreCleanupRef.current?.();
+    };
+  }, [manualRestoreCleanupRef]);
 
-  let node: Node | null = null;
-  let offset = 0;
-
-  if (typeof caretDocument.caretPositionFromPoint === "function") {
-    const position = caretDocument.caretPositionFromPoint(x, y);
-    if (position) {
-      node = position.offsetNode;
-      offset = position.offset;
+  useEffect(() => {
+    if (
+      !pendingScrollRestore ||
+      contentLoading ||
+      currentChapterId !== pendingScrollRestore.chapterId
+    ) {
+      return;
     }
-  } else if (typeof caretDocument.caretRangeFromPoint === "function") {
-    const range = caretDocument.caretRangeFromPoint(x, y);
-    if (range) {
-      node = range.startContainer;
-      offset = range.startOffset;
-    }
-  }
 
-  if (!node || !contentArea.contains(node instanceof HTMLElement ? node : node.parentElement)) {
-    return null;
-  }
-
-  const range = document.createRange();
-  range.setStart(contentArea, 0);
-  range.setEnd(node, offset);
-  return range.toString().length;
+    manualRestoreCleanupRef.current?.();
+    manualRestoreCleanupRef.current = restoreReaderScrollPosition({
+      scrollContainerRef,
+      contentAreaRef,
+      currentChapterId,
+      currentPositionRaw: pendingScrollRestore.positionRaw,
+      delayMs: 120,
+      retryAttempts: 5,
+      retryDelayMs: 120,
+    });
+    setPendingScrollRestore(null);
+  }, [
+    contentLoading,
+    currentChapterId,
+    manualRestoreCleanupRef,
+    pendingScrollRestore,
+    scrollContainerRef,
+    contentAreaRef,
+    setPendingScrollRestore,
+  ]);
 }
 
-function findTextNodeByOffset(root: HTMLElement, textOffset: number): { node: Text; offset: number } | null {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let remaining = Math.max(0, textOffset);
-  let current = walker.nextNode();
-
-  while (current) {
-    if (current.nodeType === Node.TEXT_NODE) {
-      const textNode = current as Text;
-      const len = textNode.data.length;
-      if (remaining <= len) {
-        return { node: textNode, offset: Math.min(remaining, len) };
-      }
-      remaining -= len;
-    }
-    current = walker.nextNode();
-  }
-
-  return null;
-}
-
-function restoreByTextOffset(
-  scrollContainer: HTMLElement,
-  contentArea: HTMLElement,
-  textOffset: number,
-): boolean {
-  const target = findTextNodeByOffset(contentArea, textOffset);
-  if (!target) {
-    return false;
-  }
-
-  const range = document.createRange();
-  range.setStart(target.node, target.offset);
-  range.setEnd(target.node, target.offset);
-  const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
-  if (!rect || rect.height <= 0) {
-    return false;
-  }
-
-  const scrollRect = scrollContainer.getBoundingClientRect();
-  const desiredTop = scrollRect.top + 8;
-  const delta = rect.top - desiredTop;
-  if (!Number.isFinite(delta)) {
-    return false;
-  }
-
-  scrollContainer.scrollTop += delta;
-  return true;
-}
-
+// ---------------------------------------------------------------------------
+// Main reader component
+// ---------------------------------------------------------------------------
 export default function ReaderPage() {
+  const [location] = useLocation();
   const [, params] = useRoute("/reader/:id");
-  const bookId = parseInt(params?.id ?? "0", 10);
+  const routeBookId = parseInt(params?.id ?? "0", 10);
+  const locationBookIdMatch = location.match(/^\/reader\/(\d+)/);
+  const locationBookId = locationBookIdMatch ? parseInt(locationBookIdMatch[1], 10) : 0;
+  const bookId = Number.isFinite(routeBookId) && routeBookId > 0 ? routeBookId : locationBookId;
   const qc = useQueryClient();
 
   const { data: book } = useGetBook(bookId);
   const { data: chapters = [] } = useListChapters(bookId);
-  const { data: progress } = useGetProgress(bookId);
+  const progressQuery = useGetProgress(bookId);
+  const { data: remoteProgress } = progressQuery;
+
   const [deviceMode, setDeviceMode] = useState<DeviceMode>(() => getDeviceMode());
   const { data: settings } = useQuery({
     queryKey: ["reader-settings", deviceMode],
@@ -345,50 +259,55 @@ export default function ReaderPage() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { mutate: saveSettings } = useSaveReaderSettings();
-  const { mutate: saveProgress } = useSaveProgress();
+  const { mutate: saveSettingsMutate } = useSaveReaderSettings();
+  const { mutate: saveProgressMutate } = useSaveProgress();
 
-  const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
+  // Chapter navigation state — null while progress is loading
+  const [currentChapterIdx, setCurrentChapterIdx] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [localProgressSnapshot, setLocalProgressSnapshot] = useState<ReaderProgressSnapshot | null>(null);
+  const [pendingScrollRestore, setPendingScrollRestore] =
+    useState<PendingScrollRestore | null>(null);
 
-  // Local reader settings
+  // Local reader settings (initialised from server settings below)
   const [fontSize, setFontSize] = useState(18);
   const [fontFamily, setFontFamily] = useState("Georgia");
   const [lineHeight, setLineHeight] = useState(1.7);
   const [theme, setTheme] = useState<"light" | "sepia" | "dark">("light");
   const [contentWidth, setContentWidth] = useState(80);
 
-  const contentRef = useRef<HTMLDivElement>(null);
+  // Refs
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const readerRootRef = useRef<HTMLDivElement>(null);
   const tocPanelRef = useRef<HTMLDivElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const tocActiveChapterRef = useRef<HTMLButtonElement | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const panelsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const restoreRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
   const programmaticScrollUntilRef = useRef(0);
-  const restoredChapterIdsRef = useRef<Set<number>>(new Set());
-  const interactedChapterIdsRef = useRef<Set<number>>(new Set());
-  const hasInitializedChapterRef = useRef(false);
-  const pendingRestoreChapterIdRef = useRef<number | null>(null);
-  const lastSpaceScrollAtRef = useRef(0);
+  // Note: removed hasInitializedChapterRef - using currentChapterIdx !== null as initialization check (voxlibris pattern)
 
-  const freshestProgress = useMemo(() => {
-    return getFreshestProgress(normalizeProgressSnapshot(progress), localProgressSnapshot);
-  }, [progress, localProgressSnapshot]);
+  const scrollElementRef = scrollContainerRef as RefObject<HTMLElement | null>;
 
-  const currentChapter = chapters[currentChapterIdx];
+  // ---------------------------------------------------------------------------
+  // Derived chapter values
+  // ---------------------------------------------------------------------------
+  const currentChapter = currentChapterIdx !== null ? chapters[currentChapterIdx] : undefined;
+  const currentChapterId = currentChapter?.id ?? null;
+
   const { data: chapterContent, isLoading: chapterLoading } = useGetChapter(
     bookId,
-    currentChapter?.id ?? 0,
-    { query: { queryKey: getGetChapterQueryKey(bookId, currentChapter?.id ?? 0), enabled: !!currentChapter } }
+    currentChapter?.id ?? 0
   );
 
+  // ---------------------------------------------------------------------------
+  // Use server-side progress as single source of truth (no localStorage)
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // Programmatic scroll guard
+  // ---------------------------------------------------------------------------
   const setProgrammaticScroll = useCallback((holdMs: number) => {
     programmaticScrollUntilRef.current = Date.now() + holdMs;
   }, []);
@@ -397,138 +316,308 @@ export default function ReaderPage() {
     return Date.now() < programmaticScrollUntilRef.current;
   }, []);
 
-  const persistSnapshotLocally = useCallback((snapshot: ReaderProgressSnapshot) => {
-    setLocalProgressSnapshot(snapshot);
-    saveLocalProgress(bookId, snapshot);
-  }, [bookId]);
+  // ---------------------------------------------------------------------------
+  // saveProgress adapter: ReaderProgressPayload → useSaveProgress mutation
+  // ---------------------------------------------------------------------------
+  const saveProgress = useCallback(
+    (
+      payload: ReaderProgressPayload,
+      callbacks?: {
+        onSuccess?: () => void;
+        onError?: (error: unknown) => void;
+      }
+    ) => {
+      console.log('[ReaderPage] Saving progress:', {
+        chapterId: payload.currentChapterId,
+        progressPercent: payload.progressPercent,
+        positionLength: payload.currentPosition.length,
+      });
+      
+      // Save to localStorage immediately for fast restore on next visit
+      saveReaderProgressToStorage(
+        { bookId },
+        {
+          currentChapterId: payload.currentChapterId,
+          currentPosition: payload.currentPosition,
+          progressPercent: payload.progressPercent,
+        }
+      );
+      
+      const readingStatus = payload.progressPercent >= 99 ? "finished" : "reading";
+      saveProgressMutate(
+        {
+          id: bookId,
+          data: {
+            currentChapterId: payload.currentChapterId,
+            currentPosition: payload.currentPosition,
+            progressPercent: payload.progressPercent,
+            readingStatus: readingStatus as "reading" | "finished",
+          },
+        },
+        {
+          onSuccess: (saved) => {
+            console.log('[ReaderPage] Progress saved successfully:', {
+              chapterId: saved?.currentChapterId,
+              progressPercent: saved?.progressPercent,
+            });
+            if (saved) {
+              qc.setQueryData(getGetProgressQueryKey(bookId), saved);
+            }
+            callbacks?.onSuccess?.();
+          },
+          onError: (err) => {
+            console.error('[ReaderPage] Progress save error:', err);
+            callbacks?.onError?.(err);
+          },
+        }
+      );
+    },
+    [bookId, qc, saveProgressMutate]
+  );
 
-  const saveNow = useCallback((options?: { chapterId?: number; chapterIndex?: number; keepalive?: boolean }) => {
-    const container = contentRef.current;
-    if (!container || !chapters.length) {
-      return;
-    }
+  // ---------------------------------------------------------------------------
+  // Sync state tracking
+  // ---------------------------------------------------------------------------
+  const { saveWithSync, isLocalSessionProgress, isSyncing, syncError, lastSyncTime } =
+    useReaderSyncState({ saveProgress });
 
-    const chapterId = options?.chapterId ?? currentChapter?.id;
-    const chapterIndex = options?.chapterIndex ?? currentChapterIdx;
-    if (typeof chapterId !== "number") {
-      return;
-    }
-
-    const payload = createReaderProgressPayload({
-      chapterId,
-      chapterIndex,
+  // ---------------------------------------------------------------------------
+  // Debounced save on scroll
+  // ---------------------------------------------------------------------------
+  const { scheduleSave: scheduleProgressSave, saveNow: saveProgressNow } =
+    useDebouncedReaderProgressSave({
+      scrollContainerRef: scrollElementRef,
+      contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
+      currentChapterId,
+      currentChapterIdx,
       totalChapters: chapters.length,
-      scrollTop: container.scrollTop,
-      scrollHeight: container.scrollHeight,
-      clientHeight: container.clientHeight,
-      textOffset: contentAreaRef.current ? getTopLeftTextOffset(container, contentAreaRef.current) ?? undefined : undefined,
+      onSave: saveWithSync,
+      debounceMs: 1500,
+      enabled: currentChapterId !== null && chapters.length > 0,
     });
 
-    const readingStatus = payload.progressPercent >= 99 ? "finished" : "reading";
-    const snapshot: ReaderProgressSnapshot = {
-      currentChapterId: payload.currentChapterId,
-      currentPosition: payload.currentPosition,
-      progressPercent: payload.progressPercent,
+  // Periodic auto-save disabled - debounced save on scroll is enough
+  // usePeriodicProgressSave({
+  //   saveNow: saveProgressNow,
+  //   intervalMs: 5000,
+  //   enabled: currentChapterId !== null && chapters.length > 0,
+  // });
+
+  // ---------------------------------------------------------------------------
+  // Restore scroll position when chapter content loads
+  // ---------------------------------------------------------------------------
+  useRestoreReaderScroll({
+    scrollContainerRef: scrollElementRef,
+    contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
+    currentChapterId,
+    currentPositionRaw: remoteProgress?.currentPosition ?? null,
+    contentReady: !chapterLoading,
+    onProgrammaticScroll: setProgrammaticScroll,
+    isProgrammaticScroll,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Chapter navigation
+  // ---------------------------------------------------------------------------
+  const navigateToChapterIndex = useCallback(
+    (nextIdx: number, options?: { positionRaw?: string }) => {
+      if (!chapters.length) return;
+
+      const bounded = Math.max(0, Math.min(chapters.length - 1, nextIdx));
+      if (currentChapterIdx !== null && bounded === currentChapterIdx) return;
+
+      // Save current chapter progress before navigating
+      if (currentChapterIdx !== null) {
+        saveProgressNow({
+          chapterId: chapters[currentChapterIdx]?.id,
+          chapterIdx: currentChapterIdx,
+        });
+      }
+
+      setPendingScrollRestore(null);
+      setCurrentChapterIdx(bounded);
+      setProgrammaticScroll(220);
+
+      if (options?.positionRaw) {
+        const boundedChapterId = chapters[bounded]?.id;
+        if (boundedChapterId) {
+          setPendingScrollRestore({
+            chapterId: boundedChapterId,
+            positionRaw: options.positionRaw,
+          });
+        }
+      } else {
+        setTimeout(() => {
+          scrollContainerRef.current?.scrollTo({ top: 0, behavior: "auto" });
+        }, 100);
+      }
+    },
+    [chapters, currentChapterIdx, saveProgressNow, setProgrammaticScroll]
+  );
+
+  // ---------------------------------------------------------------------------
+  // Visual anchor for settings changes (font/size etc.)
+  // ---------------------------------------------------------------------------
+  const preserveReaderVisualAnchor = usePreserveReaderVisualAnchor({
+    scrollContainerRef: scrollElementRef,
+    contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Panels autoclose
+  // ---------------------------------------------------------------------------
+  const closeAllPanels = useCallback(() => {
+    setTocOpen(false);
+    setSettingsOpen(false);
+  }, []);
+
+  useReaderPanelsAutoclose({
+    isOpen: tocOpen || settingsOpen,
+    onClose: closeAllPanels,
+    contentRef: scrollElementRef,
+    protectedRefs: [tocPanelRef, settingsPanelRef],
+  });
+
+  // ---------------------------------------------------------------------------
+  // Smooth space scroll
+  // ---------------------------------------------------------------------------
+  useSmoothReaderSpaceScroll({
+    scrollContainerRef: scrollElementRef,
+    enabled: currentChapterId !== null,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Persist on unmount (localStorage + keepalive)
+  // ---------------------------------------------------------------------------
+  usePersistProgressOnUnmount({
+    scrollContainerRef,
+    chapters,
+    currentChapterId,
+    currentChapterIdx,
+    contentLoading: chapterLoading,
+    bookId,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Pending scroll restore (after chapter navigation with a saved position)
+  // ---------------------------------------------------------------------------
+  usePendingScrollRestore({
+    pendingScrollRestore,
+    contentLoading: chapterLoading,
+    currentChapterId,
+    scrollContainerRef: scrollElementRef,
+    contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
+    manualRestoreCleanupRef,
+    setPendingScrollRestore,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Keyboard navigation (← → chapter switch)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest(
+          "input, textarea, select, button, a, [role='button'], [contenteditable='true']"
+        )
+      )
+        return;
+
+      if (event.key === "ArrowLeft" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        if (currentChapterIdx !== null && currentChapterIdx > 0) {
+          navigateToChapterIndex(currentChapterIdx - 1);
+        }
+        return;
+      }
+
+      if (event.key === "ArrowRight" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        if (currentChapterIdx !== null && currentChapterIdx < chapters.length - 1) {
+          navigateToChapterIndex(currentChapterIdx + 1);
+        }
+      }
     };
 
-    persistSnapshotLocally(snapshot);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [chapters.length, currentChapterIdx, navigateToChapterIndex]);
 
-    if (options?.keepalive) {
-      fetch(`/api/books/${bookId}/progress`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        keepalive: true,
-        body: JSON.stringify({
-          ...payload,
-          readingStatus,
-        }),
-      }).catch(() => undefined);
-      return;
-    }
-
-    saveProgress({
-      id: bookId,
-      data: {
-        ...payload,
-        readingStatus,
-      },
-    }, {
-      onSuccess: (saved) => {
-        const normalized = normalizeProgressSnapshot(saved);
-        if (normalized) {
-          persistSnapshotLocally(normalized);
+  // ---------------------------------------------------------------------------
+  // Get effective progress (compare local and remote, pick freshest)
+  // ---------------------------------------------------------------------------
+  const effectiveProgress = useMemo(() => {
+    if (progressQuery.isLoading) return null;
+    
+    const localProgress = loadReaderProgressFromStorage({ bookId });
+    
+    const normalizedRemote = remoteProgress?.currentChapterId
+      ? {
+          currentChapterId: remoteProgress.currentChapterId,
+          currentPosition: remoteProgress.currentPosition ?? "",
+          progressPercent: remoteProgress.progressPercent ?? 0,
         }
-        qc.setQueryData(getGetProgressQueryKey(bookId), saved);
-      },
-    });
-  }, [bookId, chapters, currentChapter, currentChapterIdx, persistSnapshotLocally, qc, saveProgress]);
+      : null;
+    
+    return getFreshestReaderProgress(normalizedRemote, localProgress);
+  }, [bookId, remoteProgress, progressQuery.isLoading]);
 
-  const scheduleSave = useCallback(() => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-    }
-
-    saveTimerRef.current = setTimeout(() => {
-      saveNow();
-    }, SAVE_DEBOUNCE_MS);
-  }, [saveNow]);
-
-  const navigateToChapterIndex = useCallback((nextIndex: number) => {
-    if (!chapters.length) {
-      return;
-    }
-
-    const boundedIndex = Math.max(0, Math.min(chapters.length - 1, nextIndex));
-    if (boundedIndex === currentChapterIdx) {
-      return;
-    }
-
-    const prevChapter = chapters[currentChapterIdx];
-    if (prevChapter) {
-      saveNow({
-        chapterId: prevChapter.id,
-        chapterIndex: currentChapterIdx,
-      });
-    }
-
-    pendingRestoreChapterIdRef.current = null;
-    setCurrentChapterIdx(boundedIndex);
-    setProgrammaticScroll(220);
-
-    requestAnimationFrame(() => {
-      contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
-    });
-  }, [chapters, currentChapterIdx, saveNow, setProgrammaticScroll]);
-
-  const goToPrevChapter = useCallback(() => {
-    navigateToChapterIndex(currentChapterIdx - 1);
-  }, [currentChapterIdx, navigateToChapterIndex]);
-
-  const goToNextChapter = useCallback(() => {
-    navigateToChapterIndex(currentChapterIdx + 1);
-  }, [currentChapterIdx, navigateToChapterIndex]);
-
+  // ---------------------------------------------------------------------------
+  // Initialise chapter from progress (voxlibris pattern: check currentChapterIdx !== null)
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const updateDeviceMode = () => setDeviceMode(getDeviceMode());
-    window.addEventListener("resize", updateDeviceMode);
-    window.addEventListener("orientationchange", updateDeviceMode);
+    // Skip if already initialized
+    if (currentChapterIdx !== null) return;
+    // Wait for chapters to load
+    if (!chapters.length) return;
+    // Wait for progress to be determined
+    if (progressQuery.isLoading) return;
+
+    let targetIdx = 0;
+    if (effectiveProgress?.currentChapterId) {
+      const idx = chapters.findIndex((c) => c.id === effectiveProgress.currentChapterId);
+      if (idx >= 0) {
+        targetIdx = idx;
+      }
+    }
+
+    setCurrentChapterIdx(targetIdx);
+  }, [chapters, effectiveProgress, progressQuery.isLoading, currentChapterIdx]);
+
+  // ---------------------------------------------------------------------------
+  // Reset on bookId change
+  // ---------------------------------------------------------------------------
+  const prevBookIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevBookIdRef.current === null) {
+      prevBookIdRef.current = bookId;
+      return;
+    }
+
+    if (prevBookIdRef.current !== bookId) {
+      setCurrentChapterIdx(null);
+      setPendingScrollRestore(null);
+      prevBookIdRef.current = bookId;
+    }
+  }, [bookId]);
+
+  // ---------------------------------------------------------------------------
+  // Sync deviceMode on resize
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const update = () => setDeviceMode(getDeviceMode());
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
     return () => {
-      window.removeEventListener("resize", updateDeviceMode);
-      window.removeEventListener("orientationchange", updateDeviceMode);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
     };
   }, []);
 
-  useEffect(() => {
-    setLocalProgressSnapshot(loadLocalProgress(bookId));
-    hasInitializedChapterRef.current = false;
-    pendingRestoreChapterIdRef.current = null;
-    restoredChapterIdsRef.current.clear();
-    interactedChapterIdsRef.current.clear();
-  }, [bookId]);
-
+  // ---------------------------------------------------------------------------
+  // Apply server settings to local state
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (settings) {
       setFontSize(settings.fontSize ?? 18);
@@ -539,157 +628,20 @@ export default function ReaderPage() {
     }
   }, [settings, deviceMode]);
 
+  // ---------------------------------------------------------------------------
+  // TOC scroll active chapter into view
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (hasInitializedChapterRef.current || chapters.length === 0) {
-      return;
-    }
-
-    let targetIdx = 0;
-    if (freshestProgress?.currentChapterId) {
-      const idx = chapters.findIndex((chapter) => chapter.id === freshestProgress.currentChapterId);
-      if (idx >= 0) {
-        targetIdx = idx;
-        pendingRestoreChapterIdRef.current = chapters[idx]?.id ?? null;
-      }
-    }
-
-    setCurrentChapterIdx(targetIdx);
-    hasInitializedChapterRef.current = true;
-  }, [chapters, freshestProgress]);
-
-  useEffect(() => {
-    if (!tocOpen) {
-      return;
-    }
-
+    if (!tocOpen) return;
     const frame = requestAnimationFrame(() => {
       tocActiveChapterRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
-
     return () => cancelAnimationFrame(frame);
   }, [tocOpen, currentChapterIdx]);
 
-  useEffect(() => {
-    if (!currentChapter) {
-      return;
-    }
-
-    const container = contentRef.current;
-    if (!container) {
-      return;
-    }
-
-    const onScroll = () => {
-      if (!isProgrammaticScroll()) {
-        interactedChapterIdsRef.current.add(currentChapter.id);
-      }
-      scheduleSave();
-    };
-
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      container.removeEventListener("scroll", onScroll);
-    };
-  }, [currentChapter, isProgrammaticScroll, scheduleSave]);
-
-  useEffect(() => {
-    if (!currentChapter || chapterLoading) {
-      return;
-    }
-
-    if (restoredChapterIdsRef.current.has(currentChapter.id)) {
-      return;
-    }
-
-    if (interactedChapterIdsRef.current.has(currentChapter.id) && pendingRestoreChapterIdRef.current !== currentChapter.id) {
-      restoredChapterIdsRef.current.add(currentChapter.id);
-      return;
-    }
-
-    const positionRaw = freshestProgress?.currentPosition;
-    const position = parseReaderPosition(positionRaw);
-
-    if (!positionRaw || !position || position.chapterId !== currentChapter.id) {
-      restoredChapterIdsRef.current.add(currentChapter.id);
-      pendingRestoreChapterIdRef.current = null;
-      return;
-    }
-
-    const container = contentRef.current;
-    const contentArea = contentAreaRef.current;
-    if (!container) {
-      return;
-    }
-
-    let attemptsLeft = RESTORE_RETRY_ATTEMPTS;
-
-    const restorePosition = () => {
-      const activeContainer = contentRef.current;
-      if (!activeContainer) {
-        return;
-      }
-
-      let restored = false;
-      if (contentArea && typeof position.textOffset === "number") {
-        setProgrammaticScroll(Math.max(400, RESTORE_RETRY_DELAY_MS + 120));
-        restored = restoreByTextOffset(activeContainer, contentArea, position.textOffset);
-      }
-
-      if (!restored) {
-        const maxScrollableNow = Math.max(1, activeContainer.scrollHeight - activeContainer.clientHeight);
-        const savedMaxScrollable = typeof position.scrollHeight === "number" && typeof position.clientHeight === "number"
-          ? Math.max(1, position.scrollHeight - position.clientHeight)
-          : null;
-
-        const targetScrollTop = savedMaxScrollable
-          ? Math.round(Math.min(1, Math.max(0, position.scrollTop) / savedMaxScrollable) * maxScrollableNow)
-          : Math.max(0, position.scrollTop);
-
-        setProgrammaticScroll(Math.max(400, RESTORE_RETRY_DELAY_MS + 120));
-        activeContainer.scrollTop = targetScrollTop;
-        restored = Math.abs(activeContainer.scrollTop - targetScrollTop) <= 2;
-      }
-
-      if (!restored && attemptsLeft > 0) {
-        attemptsLeft -= 1;
-        restoreRetryTimerRef.current = setTimeout(restorePosition, RESTORE_RETRY_DELAY_MS);
-        return;
-      }
-
-      restoredChapterIdsRef.current.add(currentChapter.id);
-      pendingRestoreChapterIdRef.current = null;
-    };
-
-    restoreTimerRef.current = setTimeout(restorePosition, RESTORE_DELAY_MS);
-
-    return () => {
-      if (restoreTimerRef.current) {
-        clearTimeout(restoreTimerRef.current);
-        restoreTimerRef.current = null;
-      }
-      if (restoreRetryTimerRef.current) {
-        clearTimeout(restoreRetryTimerRef.current);
-        restoreRetryTimerRef.current = null;
-      }
-    };
-  }, [chapterLoading, currentChapter, freshestProgress, setProgrammaticScroll]);
-
-  const closePanels = useCallback(() => {
-    setTocOpen(false);
-    setSettingsOpen(false);
-  }, []);
-
-  function persistSettings(partial: Partial<{ fontSize: number; fontFamily: string; lineHeight: number; theme: ReaderSettingsInputTheme; contentWidth: number }>) {
-    const updated = {
-      fontSize: partial.fontSize ?? fontSize,
-      fontFamily: partial.fontFamily ?? fontFamily,
-      lineHeight: partial.lineHeight ?? lineHeight,
-      theme: partial.theme ?? theme,
-      contentWidth: partial.contentWidth ?? contentWidth,
-    };
-    saveSettings({ data: { ...updated, deviceMode } as typeof updated & { deviceMode: DeviceMode } });
-  }
-
+  // ---------------------------------------------------------------------------
+  // Fullscreen
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFullscreenChange);
@@ -704,139 +656,76 @@ export default function ReaderPage() {
     await readerRootRef.current?.requestFullscreen().catch(() => undefined);
   }
 
-  useEffect(() => {
-    const isOpen = tocOpen || settingsOpen;
-    if (!isOpen) {
-      if (panelsTimerRef.current) clearTimeout(panelsTimerRef.current);
-      return;
-    }
-
-    const panelElements = [tocPanelRef.current, settingsPanelRef.current].filter(Boolean) as HTMLElement[];
-    const isInsidePanel = (target: EventTarget | null) => target instanceof Node && panelElements.some((panel) => panel.contains(target));
-    const clearPanelTimer = () => {
-      if (panelsTimerRef.current) {
-        clearTimeout(panelsTimerRef.current);
-        panelsTimerRef.current = null;
-      }
+  // ---------------------------------------------------------------------------
+  // Settings persistence helper
+  // ---------------------------------------------------------------------------
+  function persistSettings(
+    partial: Partial<{
+      fontSize: number;
+      fontFamily: string;
+      lineHeight: number;
+      theme: ReaderSettingsInputTheme;
+      contentWidth: number;
+    }>
+  ) {
+    const updated = {
+      fontSize: partial.fontSize ?? fontSize,
+      fontFamily: partial.fontFamily ?? fontFamily,
+      lineHeight: partial.lineHeight ?? lineHeight,
+      theme: (partial.theme ?? theme) as ReaderSettingsInputTheme,
+      contentWidth: partial.contentWidth ?? contentWidth,
+      deviceMode,
     };
-    const resetPanelTimer = () => {
-      clearPanelTimer();
-      panelsTimerRef.current = setTimeout(closePanels, 3000);
-    };
-    const handleDocumentActivity = (event: Event) => {
-      if (isInsidePanel(event.target)) {
-        clearPanelTimer();
-        return;
-      }
-      resetPanelTimer();
-    };
-    const handleContentInteraction = (event: Event) => {
-      if (!isInsidePanel(event.target)) closePanels();
-    };
-    const handlePanelEnter = () => clearPanelTimer();
-    const handlePanelLeave = () => resetPanelTimer();
+    saveSettingsMutate({ data: updated });
+  }
 
-    resetPanelTimer();
-    document.addEventListener("pointerdown", handleDocumentActivity, true);
-    document.addEventListener("pointermove", handleDocumentActivity, true);
-    document.addEventListener("keydown", handleDocumentActivity, true);
-    contentRef.current?.addEventListener("pointerdown", handleContentInteraction, true);
-    contentRef.current?.addEventListener("wheel", handleContentInteraction, true);
-    panelElements.forEach((panel) => {
-      panel.addEventListener("pointerenter", handlePanelEnter, true);
-      panel.addEventListener("pointerleave", handlePanelLeave, true);
-      panel.addEventListener("focusin", handlePanelEnter, true);
-      panel.addEventListener("focusout", handlePanelLeave, true);
-    });
-
-    const contentElement = contentRef.current;
-    return () => {
-      clearPanelTimer();
-      document.removeEventListener("pointerdown", handleDocumentActivity, true);
-      document.removeEventListener("pointermove", handleDocumentActivity, true);
-      document.removeEventListener("keydown", handleDocumentActivity, true);
-      contentElement?.removeEventListener("pointerdown", handleContentInteraction, true);
-      contentElement?.removeEventListener("wheel", handleContentInteraction, true);
-      panelElements.forEach((panel) => {
-        panel.removeEventListener("pointerenter", handlePanelEnter, true);
-        panel.removeEventListener("pointerleave", handlePanelLeave, true);
-        panel.removeEventListener("focusin", handlePanelEnter, true);
-        panel.removeEventListener("focusout", handlePanelLeave, true);
-      });
-    };
-  }, [closePanels, settingsOpen, tocOpen]);
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        saveNow({ keepalive: true });
-      }
-    };
-
-    const handlePageHide = () => {
-      saveNow({ keepalive: true });
-    };
-
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("pagehide", handlePageHide);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("pagehide", handlePageHide);
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-      }
-      saveNow({ keepalive: true });
-    };
-  }, [saveNow]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (isInteractiveElement(event.target)) return;
-
-      if ((event.key === " " || event.code === "Space") && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        const container = contentRef.current;
-        if (!container) return;
-        const now = Date.now();
-        event.preventDefault();
-        if (now - lastSpaceScrollAtRef.current < 180) return;
-        lastSpaceScrollAtRef.current = now;
-        container.scrollBy({
-          top: Math.max(160, Math.round(container.clientHeight * 0.9)) * (event.shiftKey ? -1 : 1),
-          behavior: "smooth",
-        });
-        return;
-      }
-
-      if (event.key === "ArrowLeft" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        event.preventDefault();
-        goToPrevChapter();
-        return;
-      }
-
-      if (event.key === "ArrowRight" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        event.preventDefault();
-        goToNextChapter();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [goToNextChapter, goToPrevChapter]);
-
+  // ---------------------------------------------------------------------------
+  // Derived display values
+  // ---------------------------------------------------------------------------
   const THEMES = {
     light: { bg: "bg-white", text: "text-gray-900", ui: "bg-gray-50" },
     sepia: { bg: "bg-amber-50", text: "text-amber-950", ui: "bg-amber-100/50" },
     dark: { bg: "bg-gray-900", text: "text-gray-100", ui: "bg-gray-800" },
   };
-
   const t = THEMES[theme];
 
+  const userProgressSummary = useMemo(() => {
+    if (!remoteProgress?.currentChapterId) return null;
+    const idx = chapters.findIndex((c) => c.id === remoteProgress.currentChapterId);
+    return {
+      progress: remoteProgress.progressPercent ?? 0,
+      currentChapter: idx >= 0 ? idx + 1 : 1,
+    };
+  }, [chapters, remoteProgress]);
+
+  // ---------------------------------------------------------------------------
+  // Loading state while chapter is being resolved
+  // ---------------------------------------------------------------------------
+  if (currentChapterIdx === null || progressQuery.isLoading) {
+    return (
+      <ProtectedRoute>
+        <div className="flex items-center justify-center h-screen bg-background text-foreground">
+          <Loader2 className="w-8 h-8 animate-spin opacity-40" />
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <ProtectedRoute>
-      <div ref={readerRootRef} className={cn("min-h-screen flex flex-col", t.bg, t.text)}>
-        <div className={cn("sticky top-0 z-40 border-b flex items-center justify-between px-4 h-12 gap-4", t.ui, theme === "dark" ? "border-gray-700" : "border-gray-200")}>
+      <div ref={readerRootRef} className={cn("h-screen flex flex-col", t.bg, t.text)}>
+
+        {/* Header */}
+        <div
+          className={cn(
+            "sticky top-0 z-40 border-b flex items-center justify-between px-4 h-12 gap-4",
+            t.ui,
+            theme === "dark" ? "border-gray-700" : "border-gray-200"
+          )}
+        >
           <div className="flex items-center gap-2">
             <Link href={`/book/${bookId}`}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -852,27 +741,64 @@ export default function ReaderPage() {
           </div>
 
           <div className="flex items-center gap-1">
-            <Button variant={tocOpen ? "secondary" : "ghost"} size="icon" className="h-8 w-8" onClick={() => { setSettingsOpen(false); setTocOpen((v) => !v); }}>
+            <Button
+              variant={tocOpen ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                setSettingsOpen(false);
+                setTocOpen((v) => !v);
+              }}
+            >
               <List className="w-4 h-4" />
             </Button>
 
-            <Button variant={settingsOpen ? "secondary" : "ghost"} size="icon" className="h-8 w-8" onClick={() => { setTocOpen(false); setSettingsOpen((v) => !v); }}>
+            <Button
+              variant={settingsOpen ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                setTocOpen(false);
+                setSettingsOpen((v) => !v);
+              }}
+            >
               <Settings className="w-4 h-4" />
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleFullscreen} title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}>
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </div>
 
+        {/* TOC panel */}
         {tocOpen && (
-          <div ref={tocPanelRef} className="fixed right-2 top-14 z-50 w-[calc(100vw-1rem)] max-w-xs rounded-xl border bg-background text-foreground shadow-xl sm:right-4 sm:max-w-sm">
+          <div
+            ref={tocPanelRef}
+            className="fixed right-2 top-14 z-50 flex h-[calc(100vh-4rem)] w-[calc(100vw-1rem)] max-w-xs flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-xl sm:right-4 sm:max-w-sm"
+          >
             <div className="flex items-center justify-between border-b px-4 py-3">
               <h2 className="font-semibold">Содержание</h2>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTocOpen(false)}><X className="w-4 h-4" /></Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setTocOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
-            <ScrollArea className="max-h-[calc(100vh-7rem)] p-2">
+            <ScrollArea className="min-h-0 flex-1 overscroll-contain p-2">
               <div className="space-y-0.5 pr-2">
                 {chapters.map((ch, idx) => {
                   const isActive = idx === currentChapterIdx;
@@ -880,7 +806,10 @@ export default function ReaderPage() {
                     <button
                       key={ch.id}
                       ref={isActive ? tocActiveChapterRef : undefined}
-                      onClick={() => { navigateToChapterIndex(idx); setTocOpen(false); }}
+                      onClick={() => {
+                        navigateToChapterIndex(idx);
+                        setTocOpen(false);
+                      }}
                       className={cn(
                         "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors",
                         isActive
@@ -898,11 +827,22 @@ export default function ReaderPage() {
           </div>
         )}
 
+        {/* Settings panel */}
         {settingsOpen && (
-          <div ref={settingsPanelRef} className="fixed right-2 top-14 z-50 w-[calc(100vw-1rem)] max-w-xs rounded-xl border bg-background text-foreground shadow-xl sm:right-4 sm:max-w-sm">
+          <div
+            ref={settingsPanelRef}
+            className="fixed right-2 top-14 z-50 w-[calc(100vw-1rem)] max-w-xs rounded-xl border bg-background text-foreground shadow-xl sm:right-4 sm:max-w-sm"
+          >
             <div className="flex items-center justify-between border-b px-4 py-3">
               <h2 className="font-semibold">Настройки чтения</h2>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSettingsOpen(false)}><X className="w-4 h-4" /></Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
             <ScrollArea className="max-h-[calc(100vh-7rem)]">
               <div className="p-4 space-y-6">
@@ -912,14 +852,29 @@ export default function ReaderPage() {
                     {(["light", "sepia", "dark"] as const).map((tTheme) => (
                       <button
                         key={tTheme}
-                        onClick={() => { setTheme(tTheme); persistSettings({ theme: tTheme }); }}
+                        onClick={() => {
+                          preserveReaderVisualAnchor(() => {
+                            setTheme(tTheme);
+                            persistSettings({ theme: tTheme });
+                          });
+                        }}
                         className={cn(
                           "flex-1 py-2 rounded-lg text-sm font-medium border transition-colors",
-                          tTheme === "light" ? "bg-white text-gray-900" : tTheme === "sepia" ? "bg-amber-50 text-amber-900" : "bg-gray-900 text-gray-100",
-                          theme === tTheme ? "ring-2 ring-primary border-primary" : "border-gray-200"
+                          tTheme === "light"
+                            ? "bg-white text-gray-900"
+                            : tTheme === "sepia"
+                              ? "bg-amber-50 text-amber-900"
+                              : "bg-gray-900 text-gray-100",
+                          theme === tTheme
+                            ? "ring-2 ring-primary border-primary"
+                            : "border-gray-200"
                         )}
                       >
-                        {tTheme === "light" ? "Светлая" : tTheme === "sepia" ? "Сепия" : "Тёмная"}
+                        {tTheme === "light"
+                          ? "Светлая"
+                          : tTheme === "sepia"
+                            ? "Сепия"
+                            : "Тёмная"}
                       </button>
                     ))}
                   </div>
@@ -933,9 +888,16 @@ export default function ReaderPage() {
                     <span className="text-sm text-muted-foreground">{fontSize}px</span>
                   </div>
                   <Slider
-                    min={12} max={32} step={1}
+                    min={12}
+                    max={32}
+                    step={1}
                     value={[fontSize]}
-                    onValueChange={([v]) => { setFontSize(v); persistSettings({ fontSize: v }); }}
+                    onValueChange={([v]) => {
+                      preserveReaderVisualAnchor(() => {
+                        setFontSize(v);
+                        persistSettings({ fontSize: v });
+                      });
+                    }}
                   />
                 </div>
 
@@ -945,9 +907,16 @@ export default function ReaderPage() {
                     <span className="text-sm text-muted-foreground">{lineHeight}×</span>
                   </div>
                   <Slider
-                    min={1.2} max={2.5} step={0.1}
+                    min={1.2}
+                    max={2.5}
+                    step={0.1}
                     value={[lineHeight]}
-                    onValueChange={([v]) => { setLineHeight(v); persistSettings({ lineHeight: v }); }}
+                    onValueChange={([v]) => {
+                      preserveReaderVisualAnchor(() => {
+                        setLineHeight(v);
+                        persistSettings({ lineHeight: v });
+                      });
+                    }}
                   />
                 </div>
 
@@ -957,21 +926,38 @@ export default function ReaderPage() {
                     <span className="text-sm text-muted-foreground">{contentWidth}%</span>
                   </div>
                   <Slider
-                    min={50} max={95} step={1}
+                    min={50}
+                    max={95}
+                    step={1}
                     value={[contentWidth]}
-                    onValueChange={([v]) => { setContentWidth(v); persistSettings({ contentWidth: v }); }}
+                    onValueChange={([v]) => {
+                      preserveReaderVisualAnchor(() => {
+                        setContentWidth(v);
+                        persistSettings({ contentWidth: v });
+                      });
+                    }}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Шрифт</p>
-                  <Select value={fontFamily} onValueChange={(v) => { setFontFamily(v); persistSettings({ fontFamily: v }); }}>
+                  <Select
+                    value={fontFamily}
+                    onValueChange={(v) => {
+                      preserveReaderVisualAnchor(() => {
+                        setFontFamily(v);
+                        persistSettings({ fontFamily: v });
+                      });
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {FONTS.map((f) => (
-                        <SelectItem key={f} value={f} style={{ fontFamily: f }}>{f}</SelectItem>
+                        <SelectItem key={f} value={f} style={{ fontFamily: f }}>
+                          {f}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -981,13 +967,22 @@ export default function ReaderPage() {
           </div>
         )}
 
-        <div ref={contentRef} className="flex-1 overflow-y-auto">
+        {/* Scrollable content */}
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto"
+          onScroll={scheduleProgressSave}
+        >
           <div
             ref={contentAreaRef}
             className="mx-auto px-4 py-8 sm:px-6 sm:py-10 md:px-8"
             style={{ width: `${contentWidth}%` }}
           >
-            {chapterLoading ? (
+            {currentChapterIdx === null || progressQuery.isLoading ? (
+              <div className="flex justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin opacity-40" />
+              </div>
+            ) : chapterLoading ? (
               <div className="flex justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin opacity-40" />
               </div>
@@ -1001,12 +996,7 @@ export default function ReaderPage() {
                 </h2>
                 <div
                   className="prose prose-base sm:prose-lg max-w-none break-words"
-                  style={{
-                    fontFamily,
-                    fontSize,
-                    lineHeight,
-                    color: "inherit",
-                  }}
+                  style={{ fontFamily, fontSize, lineHeight, color: "inherit" }}
                   dangerouslySetInnerHTML={{ __html: chapterContent.htmlContent ?? "" }}
                 />
               </>
@@ -1015,17 +1005,28 @@ export default function ReaderPage() {
                 <BookOpen className="w-12 h-12 mx-auto mb-4" />
                 <p>В этой книге нет глав</p>
               </div>
-            ) : null}
+            ) : (
+              <div className="flex justify-center py-20 opacity-60">
+                <p>Не удалось загрузить главу</p>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className={cn("sticky bottom-0 z-40 border-t flex items-center justify-between px-4 h-12 gap-4", t.ui, theme === "dark" ? "border-gray-700" : "border-gray-200")}>
+        {/* Footer navigation */}
+        <div
+          className={cn(
+            "sticky bottom-0 z-40 border-t flex items-center justify-between px-4 h-12 gap-4",
+            t.ui,
+            theme === "dark" ? "border-gray-700" : "border-gray-200"
+          )}
+        >
           <Button
             variant="ghost"
             size="sm"
             className="gap-2"
-            onClick={goToPrevChapter}
-            disabled={currentChapterIdx === 0}
+            onClick={() => navigateToChapterIndex(currentChapterIdx - 1)}
+            disabled={currentChapterIdx <= 0}
           >
             <ChevronLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Предыдущая</span>
@@ -1039,13 +1040,21 @@ export default function ReaderPage() {
             variant="ghost"
             size="sm"
             className="gap-2"
-            onClick={goToNextChapter}
+            onClick={() => navigateToChapterIndex(currentChapterIdx + 1)}
             disabled={currentChapterIdx >= chapters.length - 1}
           >
             <span className="hidden sm:inline">Следующая</span>
             <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Sync & progress indicators (bottom-left hover + top-right sync badge) */}
+        <ReaderProgressIndicators
+          isSyncing={isSyncing}
+          lastSyncTime={lastSyncTime}
+          error={syncError}
+          userProgress={userProgressSummary ?? undefined}
+        />
       </div>
     </ProtectedRoute>
   );

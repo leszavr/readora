@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox } from "lucide-react";
 import AdminStats from "@/pages/admin/AdminStats";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminBooks from "@/pages/admin/AdminBooks";
 import AdminGenres from "@/pages/admin/AdminGenres";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import { AdminSmtp } from "@/pages/admin/AdminSmtp";
+import AdminEmails from "@/pages/admin/AdminEmails";
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
@@ -16,6 +17,7 @@ const TABS = [
   { id: "books", label: "Книги", icon: BookCopy },
   { id: "genres", label: "Жанры", icon: Tags },
   { id: "email", label: "Email", icon: Mail },
+  { id: "saved-emails", label: "Письма", icon: Inbox },
   { id: "settings", label: "Настройки", icon: Settings },
 ] as const;
 
@@ -63,6 +65,7 @@ export default function AdminPage() {
           {tab === "books" && <AdminBooks />}
           {tab === "genres" && <AdminGenres />}
           {tab === "email" && <AdminSmtp />}
+          {tab === "saved-emails" && <AdminEmails />}
           {tab === "settings" && <AdminSettings />}
         </div>
       </Layout>

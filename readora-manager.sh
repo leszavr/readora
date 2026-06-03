@@ -17,8 +17,35 @@ LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/readora-manager.log"
 ENV_FILE="$SCRIPT_DIR/.env"
 BACKEND_PID=""
+FRONTEND_PID=""
 
 mkdir -p "$LOG_DIR"
+
+# Cleanup function for graceful shutdown
+cleanup() {
+    print_log "$YELLOW" "INFO" "🛑 Получен сигнал завершения, останавливаем процессы..."
+    
+    if [[ -n "$FRONTEND_PID" ]] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        print_log "$CYAN" "INFO" "Остановка frontend (PID: $FRONTEND_PID)..."
+        kill "$FRONTEND_PID" 2>/dev/null || true
+        wait "$FRONTEND_PID" 2>/dev/null || true
+    fi
+    
+    if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null; then
+        print_log "$CYAN" "INFO" "Остановка backend (PID: $BACKEND_PID)..."
+        kill "$BACKEND_PID" 2>/dev/null || true
+        wait "$BACKEND_PID" 2>/dev/null || true
+    fi
+    
+    # Force kill any remaining processes on dev ports
+    stop_local_dev_processes
+    
+    print_log "$GREEN" "INFO" "✅ Все процессы остановлены"
+    exit 0
+}
+
+# Setup signal handlers
+trap cleanup SIGINT SIGTERM
 
 log() {
     local level="$1"
@@ -109,27 +136,59 @@ wait_for_port() {
 stop_local_dev_processes() {
     local ports=(3000 5000)
     local pids=""
+    local killed_any=false
+
+    print_log "$BLUE" "INFO" "🧹 Останавливаем локальные dev-процессы..."
 
     for port in "${ports[@]}"; do
         pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
         if [[ -n "$pids" ]]; then
+            print_log "$CYAN" "INFO" "Найдены процессы на порту $port: $pids"
             for pid in $pids; do
-                kill "$pid" 2>/dev/null || true
+                if kill -0 "$pid" 2>/dev/null; then
+                    print_log "$CYAN" "INFO" "Отправка SIGTERM процессу $pid..."
+                    kill "$pid" 2>/dev/null || true
+                    killed_any=true
+                fi
             done
-            sleep 1
-
-            pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
-            if [[ -n "$pids" ]]; then
-                for pid in $pids; do
-                    kill -9 "$pid" 2>/dev/null || true
-                done
-            fi
-
-            print_log "$GREEN" "INFO" "✅ Освобожден порт $port"
-        else
-            print_log "$GREEN" "INFO" "✅ Порт $port уже свободен"
         fi
     done
+
+    # Wait a bit for graceful shutdown
+    if [[ "$killed_any" == true ]]; then
+        sleep 2
+    fi
+
+    # Force kill if still running
+    for port in "${ports[@]}"; do
+        pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            print_log "$YELLOW" "WARN" "Процессы на порту $port не остановились, отправка SIGKILL..."
+            for pid in $pids; do
+                kill -9 "$pid" 2>/dev/null || true
+            done
+            print_log "$GREEN" "INFO" "✅ Принудительно освобожден порт $port"
+        else
+            print_log "$GREEN" "INFO" "✅ Порт $port свободен"
+        fi
+    done
+    
+    # Also kill any pnpm processes related to dev:client or dev:server
+    local pnpm_pids
+    pnpm_pids=$(pgrep -f "pnpm.*dev:client|pnpm.*dev:server" || true)
+    if [[ -n "$pnpm_pids" ]]; then
+        print_log "$CYAN" "INFO" "Найдены pnpm dev процессы: $pnpm_pids"
+        for pid in $pnpm_pids; do
+            kill "$pid" 2>/dev/null || true
+        done
+        sleep 1
+        pnpm_pids=$(pgrep -f "pnpm.*dev:client|pnpm.*dev:server" || true)
+        if [[ -n "$pnpm_pids" ]]; then
+            for pid in $pnpm_pids; do
+                kill -9 "$pid" 2>/dev/null || true
+            done
+        fi
+    fi
 }
 
 check_docker_services() {
@@ -229,11 +288,21 @@ start_dev() {
         > >(sed 's/^/[backend] /') \
         2> >(sed 's/^/[backend] /' >&2) &
     BACKEND_PID=$!
+    print_log "$CYAN" "INFO" "Backend запущен с PID: $BACKEND_PID"
 
     wait_for_port 5000 "Backend API" 60 1 || return 1
 
     print_log "$GREEN" "INFO" "🌐 Backend готов, запускаем frontend..."
-    pnpm run dev:client
+    pnpm run dev:client \
+        > >(sed 's/^/[frontend] /') \
+        2> >(sed 's/^/[frontend] /' >&2) &
+    FRONTEND_PID=$!
+    print_log "$CYAN" "INFO" "Frontend запущен с PID: $FRONTEND_PID"
+    
+    print_log "$GREEN" "INFO" "✅ Приложение запущено. Нажмите Ctrl+C для остановки."
+    
+    # Wait for both processes
+    wait "$FRONTEND_PID" "$BACKEND_PID" 2>/dev/null || true
 }
 
 build_project() {

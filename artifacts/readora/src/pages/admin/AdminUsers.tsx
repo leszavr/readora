@@ -5,6 +5,7 @@ import {
   useUpdateAdminUser,
   useDeleteAdminUser,
   useToggleBlockUser,
+  useVerifyUserEmail,
   AdminUserCreateRole,
   AdminUserUpdateRole,
   getListAdminUsersQueryKey,
@@ -20,7 +21,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
@@ -62,6 +63,10 @@ export default function AdminUsers() {
   });
 
   const { mutate: toggleBlock } = useToggleBlockUser({
+    mutation: { onSuccess: invalidate },
+  });
+
+  const { mutate: verifyEmail } = useVerifyUserEmail({
     mutation: { onSuccess: invalidate },
   });
 
@@ -137,6 +142,7 @@ export default function AdminUsers() {
                 <TableHead>Пользователь</TableHead>
                 <TableHead>Роль</TableHead>
                 <TableHead>Статус</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Книг</TableHead>
                 <TableHead>Регистрация</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -145,12 +151,12 @@ export default function AdminUsers() {
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Пользователи не найдены</TableCell>
+                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Пользователи не найдены</TableCell>
                 </TableRow>
               ) : (
                 users.map((u: {
                   id: number; username: string; email: string; role: string;
-                  status: string; bookCount?: number; createdAt: string;
+                  status: string; emailVerified: boolean; bookCount?: number; createdAt: string;
                 }) => (
                   <TableRow key={u.id}>
                     <TableCell>
@@ -169,6 +175,18 @@ export default function AdminUsers() {
                       >
                         {STATUS_LABELS[u.status] ?? u.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {u.emailVerified ? (
+                        <Badge variant="default" className="text-xs gap-1">
+                          <CheckCircle className="w-3 h-3" />
+                          Подтверждён
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                          Не подтверждён
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm">{u.bookCount ?? 0}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -195,6 +213,11 @@ export default function AdminUsers() {
                               ? <><Ban className="w-4 h-4" /> Заблокировать</>
                               : <><Unlock className="w-4 h-4" /> Разблокировать</>}
                           </DropdownMenuItem>
+                          {!u.emailVerified && (
+                            <DropdownMenuItem className="gap-2" onClick={() => verifyEmail({ id: u.id })}>
+                              <CheckCircle className="w-4 h-4" /> Подтвердить email
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
                             if (confirm(`Удалить пользователя ${u.username}?`)) deleteUser({ id: u.id });

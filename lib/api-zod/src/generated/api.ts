@@ -50,7 +50,20 @@ export const LoginResponse = zod.object({
   "avatar": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+}),
+  "message": zod.string().optional()
 })
+
+
+/**
+ * @summary Resend email verification link
+ */
+export const ResendVerificationBody = zod.object({
+  "userId": zod.number()
+})
+
+export const ResendVerificationResponse = zod.object({
+  "message": zod.string().optional()
 })
 
 
@@ -494,6 +507,7 @@ export const GetAdminStatsResponse = zod.object({
   "username": zod.string(),
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -517,6 +531,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "username": zod.string(),
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -549,6 +564,7 @@ export const GetAdminUserResponse = zod.object({
   "username": zod.string(),
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -576,6 +592,7 @@ export const UpdateAdminUserResponse = zod.object({
   "username": zod.string(),
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -604,6 +621,28 @@ export const ToggleBlockUserResponse = zod.object({
   "username": zod.string(),
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
+  "avatar": zod.string().nullish(),
+  "bookCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "lastLoginAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Force verify user email (admin)
+ */
+export const VerifyUserEmailParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const VerifyUserEmailResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "username": zod.string(),
+  "role": zod.enum(['user', 'moderator', 'admin']),
+  "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -694,7 +733,8 @@ export const GetAppSettingsResponse = zod.object({
   "smtpUser": zod.string().nullish(),
   "smtpFrom": zod.string().nullish(),
   "feedbackEmail": zod.string().nullish(),
-  "maintenanceMode": zod.boolean().optional()
+  "maintenanceMode": zod.boolean().optional(),
+  "emailSaveToFiles": zod.boolean().optional()
 })
 
 
@@ -711,7 +751,8 @@ export const UpdateAppSettingsBody = zod.object({
   "smtpPassword": zod.string().nullish(),
   "smtpFrom": zod.string().nullish(),
   "feedbackEmail": zod.string().nullish(),
-  "maintenanceMode": zod.boolean().optional()
+  "maintenanceMode": zod.boolean().optional(),
+  "emailSaveToFiles": zod.boolean().optional()
 })
 
 export const UpdateAppSettingsResponse = zod.object({
@@ -723,7 +764,56 @@ export const UpdateAppSettingsResponse = zod.object({
   "smtpUser": zod.string().nullish(),
   "smtpFrom": zod.string().nullish(),
   "feedbackEmail": zod.string().nullish(),
-  "maintenanceMode": zod.boolean().optional()
+  "maintenanceMode": zod.boolean().optional(),
+  "emailSaveToFiles": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Get list of saved emails
+ */
+export const GetSavedEmailsResponseItem = zod.object({
+  "id": zod.string(),
+  "to": zod.string(),
+  "subject": zod.string(),
+  "date": zod.string(),
+  "timestamp": zod.number()
+})
+export const GetSavedEmailsResponse = zod.array(GetSavedEmailsResponseItem)
+
+
+/**
+ * @summary Delete all saved emails
+ */
+export const ClearSavedEmailsResponse = zod.object({
+  "deleted": zod.number().optional()
+})
+
+
+/**
+ * @summary Get saved email by ID
+ */
+export const GetSavedEmailParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetSavedEmailResponse = zod.object({
+  "id": zod.string(),
+  "to": zod.array(zod.string()),
+  "subject": zod.string(),
+  "html": zod.string(),
+  "text": zod.string(),
+  "from": zod.string(),
+  "date": zod.string(),
+  "timestamp": zod.number()
+})
+
+
+/**
+ * @summary Delete saved email by ID
+ */
+export const DeleteSavedEmailParams = zod.object({
+  "id": zod.coerce.string()
 })
 
 

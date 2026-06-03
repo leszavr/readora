@@ -58,6 +58,7 @@ export interface User {
 
 export interface AuthResult {
   user: User;
+  message?: string;
 }
 
 export interface ProfileUpdate {
@@ -357,6 +358,7 @@ export interface AdminUser {
   username: string;
   role: AdminUserRole;
   status: AdminUserStatus;
+  emailVerified: boolean;
   /** @nullable */
   avatar?: string | null;
   bookCount?: number;
@@ -429,6 +431,7 @@ export interface AppSettings {
   /** @nullable */
   feedbackEmail?: string | null;
   maintenanceMode?: boolean;
+  emailSaveToFiles?: boolean;
 }
 
 export interface AppSettingsUpdate {
@@ -448,7 +451,35 @@ export interface AppSettingsUpdate {
   /** @nullable */
   feedbackEmail?: string | null;
   maintenanceMode?: boolean;
+  emailSaveToFiles?: boolean;
 }
+
+export interface SavedEmailSummary {
+  id: string;
+  to: string;
+  subject: string;
+  date: string;
+  timestamp: number;
+}
+
+export interface SavedEmailFull {
+  id: string;
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+  from: string;
+  date: string;
+  timestamp: number;
+}
+
+export type ResendVerificationBody = {
+  userId: number;
+};
+
+export type ResendVerification200 = {
+  message?: string;
+};
 
 export type ListBooksParams = {
 search?: string;
@@ -514,5 +545,9 @@ export type ListAdminBooksParams = {
 search?: string;
 userId?: number;
 status?: string;
+};
+
+export type ClearSavedEmails200 = {
+  deleted?: number;
 };
 

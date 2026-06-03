@@ -1,8 +1,36 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { emailService } from "../lib/email-service";
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const userId = req.session.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Не авторизован" });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user || user.status === "blocked") {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "Не авторизован" });
+    return;
+  }
+
+  // Check email verification if email service is enabled
+  if (emailService.isEnabled() && !user.emailVerified) {
+    res.status(403).json({ 
+      error: "Подтвердите email перед входом",
+      code: "EMAIL_NOT_VERIFIED"
+    });
+    return;
+  }
+
+  (req as Request & { user: typeof user }).user = user;
+  next();
+}
+
+export async function requireAuthWithoutEmailCheck(req: Request, res: Response, next: NextFunction): Promise<void> {
   const userId = req.session.userId;
   if (!userId) {
     res.status(401).json({ error: "Не авторизован" });

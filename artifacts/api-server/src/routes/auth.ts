@@ -68,12 +68,19 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
 
     const baseUrl = process.env.APP_ORIGIN || "http://localhost:3000";
     await emailService.sendEmailVerification(email, username, token, baseUrl);
+
+    // Don't create session - user must verify email and login
+    res.status(201).json({ 
+      user: formatUser(user),
+      message: "Проверьте email для подтверждения. После подтверждения войдите в систему.",
+    });
+    return;
   }
 
+  // Email verification disabled - create session immediately
   req.session.userId = user.id;
   res.status(201).json({ 
     user: formatUser(user),
-    message: emailService.isEnabled() ? "Проверьте email для подтверждения" : undefined,
   });
 });
 
@@ -96,7 +103,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   }
 
   if (!user.emailVerified && emailService.isEnabled()) {
-    res.status(403).json({ error: "Подтвердите email перед входом" });
+    res.status(403).json({ 
+      error: "Подтвердите email перед входом",
+      code: "EMAIL_NOT_VERIFIED",
+      userId: user.id
+    });
     return;
   }
 
@@ -249,6 +260,60 @@ router.get("/auth/verify/:token", async (req, res): Promise<void> => {
     .where(eq(emailVerificationTokensTable.userId, verificationToken.userId));
 
   res.json({ message: "Email успешно подтвержден" });
+});
+
+// Resend email verification (public route for users who can't login)
+router.post("/auth/resend-verification", authLimiter, async (req, res): Promise<void> => {
+  try {
+    const userIdSchema = z.object({ userId: z.number() });
+    const parsed = userIdSchema.safeParse(req.body ?? {});
+
+    if (!parsed.success) {
+      // Return success for security (don't reveal if user exists)
+      res.json({ message: "Если аккаунт существует, письмо отправлено" });
+      return;
+    }
+
+    const { userId } = parsed.data;
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+
+    if (!user) {
+      // Return success for security (don't reveal if user exists)
+      res.json({ message: "Если аккаунт существует, письмо отправлено" });
+      return;
+    }
+
+    if (user.emailVerified) {
+      res.json({ message: "Если аккаунт существует, письмо отправлено" });
+      return;
+    }
+
+    if (!emailService.isEnabled()) {
+      res.json({ message: "Если аккаунт существует, письмо отправлено" });
+      return;
+    }
+
+    // Delete old verification tokens
+    await db.delete(emailVerificationTokensTable).where(eq(emailVerificationTokensTable.userId, user.id));
+
+    // Create new token
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await db.insert(emailVerificationTokensTable).values({
+      userId: user.id,
+      token,
+      expiresAt,
+    });
+
+    const baseUrl = process.env.APP_ORIGIN || "http://localhost:3000";
+    await emailService.sendEmailVerification(user.email, user.username, token, baseUrl);
+
+    res.json({ message: "Если аккаунт существует, письмо отправлено" });
+  } catch (error) {
+    // Always return success for security
+    res.json({ message: "Если аккаунт существует, письмо отправлено" });
+  }
 });
 
 // Forgot password

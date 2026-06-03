@@ -92,6 +92,17 @@ router.get("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
     .from(readingProgressTable)
     .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
 
+  req.log.info(
+    {
+      userId: user.id,
+      bookId,
+      currentChapterId: progress?.currentChapterId ?? null,
+      progressPercent: progress?.progressPercent ?? null,
+      readingStatus: progress?.readingStatus ?? "not_started",
+    },
+    "[Reader] GET progress"
+  );
+
   res.json({
     bookId,
     userId: user.id,
@@ -121,6 +132,18 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
   const normalizedReadingStatus = readingStatus === "not_started" || readingStatus === "reading" || readingStatus === "finished"
     ? readingStatus
     : "reading";
+
+  req.log.info(
+    {
+      userId: user.id,
+      bookId,
+      currentChapterId: normalizedCurrentChapterId,
+      progressPercent: normalizedProgressPercent,
+      readingStatus: normalizedReadingStatus,
+      positionLength: normalizedCurrentPosition?.length ?? 0,
+    },
+    "[Reader] PUT progress - saving"
+  );
 
   const values: typeof readingProgressTable.$inferInsert = {
     userId: user.id,
@@ -152,6 +175,17 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
     .select()
     .from(readingProgressTable)
     .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
+
+  req.log.info(
+    {
+      userId: user.id,
+      bookId,
+      currentChapterId: saved?.currentChapterId ?? null,
+      progressPercent: saved?.progressPercent ?? null,
+      readingStatus: saved?.readingStatus ?? "not_started",
+    },
+    "[Reader] PUT progress - saved"
+  );
 
   res.json({
     bookId,

@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import { db, appSettingsTable } from "@workspace/db";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 
 interface SMTPSettings {
   host: string;
@@ -14,6 +15,15 @@ interface SMTPSettings {
   from: string;
   appBaseUrl: string | null;
   enabled: boolean;
+  saveToFiles: boolean;
+}
+
+interface SavedEmail {
+  id: string;
+  to: string;
+  subject: string;
+  date: string;
+  timestamp: number;
 }
 
 interface EmailOptions {
@@ -131,6 +141,7 @@ class EmailService {
 
       const secure = settingsMap.get("smtp_secure") === "true";
       const hasAuth = Boolean(user && password);
+      const saveToFiles = settingsMap.get("email_save_to_files") === "true";
 
       this.settings = {
         host,
@@ -141,7 +152,13 @@ class EmailService {
         from,
         appBaseUrl,
         enabled: true,
+        saveToFiles,
       };
+
+      // Создаём папку для сохранения писем если включена опция
+      if (saveToFiles) {
+        await this.ensureEmailsDirectory();
+      }
 
       this.transporter = nodemailer.createTransport({
         host: this.settings.host,
@@ -162,6 +179,37 @@ class EmailService {
     }
   }
 
+  private async ensureEmailsDirectory(): Promise<void> {
+    const emailsDir = join(process.cwd(), "logs", "emails");
+    if (!existsSync(emailsDir)) {
+      await mkdir(emailsDir, { recursive: true });
+    }
+  }
+
+  private async saveEmailToFile(options: EmailOptions): Promise<string> {
+    await this.ensureEmailsDirectory();
+    const emailsDir = join(process.cwd(), "logs", "emails");
+    const timestamp = Date.now();
+    const id = `${timestamp}-${Math.random().toString(36).substring(2, 9)}`;
+    const filename = `${id}.json`;
+    const filepath = join(emailsDir, filename);
+
+    const emailData = {
+      id,
+      to: Array.isArray(options.to) ? options.to : [options.to],
+      subject: options.subject,
+      html: options.html,
+      text: options.text || "",
+      from: this.settings?.from || "noreply@readora.local",
+      date: new Date(timestamp).toISOString(),
+      timestamp,
+    };
+
+    await writeFile(filepath, JSON.stringify(emailData, null, 2), "utf-8");
+    console.log(`[EmailService] Email saved to file: ${filename}`);
+    return id;
+  }
+
   async sendEmail(options: EmailOptions): Promise<boolean> {
     if (!this.transporter || !this.settings) {
       await this.initialize();
@@ -172,6 +220,18 @@ class EmailService {
       return false;
     }
 
+    // Если включено сохранение в файлы - сохраняем и возвращаем успех
+    if (this.settings.saveToFiles) {
+      try {
+        await this.saveEmailToFile(options);
+        return true;
+      } catch (error) {
+        console.error("[EmailService] Failed to save email to file:", error);
+        return false;
+      }
+    }
+
+    // Обычная отправка через SMTP
     try {
       const info = await this.transporter.sendMail({
         from: this.settings.from,
@@ -284,6 +344,101 @@ class EmailService {
     return this.transporter !== null && this.settings !== null;
   }
 
+  isSavingToFiles(): boolean {
+    return this.settings?.saveToFiles === true;
+  }
+
+  async getSavedEmails(): Promise<SavedEmail[]> {
+    try {
+      await this.ensureEmailsDirectory();
+      const emailsDir = join(process.cwd(), "logs", "emails");
+      const files = await readdir(emailsDir);
+      const emails: SavedEmail[] = [];
+
+      for (const file of files) {
+        if (!file.endsWith(".json")) continue;
+        try {
+          const filepath = join(emailsDir, file);
+          const stats = await stat(filepath);
+          const content = await readFile(filepath, "utf-8");
+          const data = JSON.parse(content);
+          emails.push({
+            id: data.id,
+            to: Array.isArray(data.to) ? data.to.join(", ") : data.to,
+            subject: data.subject,
+            date: data.date,
+            timestamp: data.timestamp || stats.mtimeMs,
+          });
+        } catch (error) {
+          console.error(`[EmailService] Failed to read email file ${file}:`, error);
+        }
+      }
+
+      // Сортируем по времени (новые первые)
+      return emails.sort((a, b) => b.timestamp - a.timestamp);
+    } catch (error) {
+      console.error("[EmailService] Failed to get saved emails:", error);
+      return [];
+    }
+  }
+
+  async getSavedEmail(id: string): Promise<any | null> {
+    try {
+      const emailsDir = join(process.cwd(), "logs", "emails");
+      const files = await readdir(emailsDir);
+      const file = files.find(f => f.startsWith(id));
+      if (!file) return null;
+
+      const filepath = join(emailsDir, file);
+      const content = await readFile(filepath, "utf-8");
+      return JSON.parse(content);
+    } catch (error) {
+      console.error(`[EmailService] Failed to get saved email ${id}:`, error);
+      return null;
+    }
+  }
+
+  async deleteSavedEmail(id: string): Promise<boolean> {
+    try {
+      const emailsDir = join(process.cwd(), "logs", "emails");
+      const files = await readdir(emailsDir);
+      const file = files.find(f => f.startsWith(id));
+      if (!file) return false;
+
+      const filepath = join(emailsDir, file);
+      await unlink(filepath);
+      console.log(`[EmailService] Deleted saved email: ${id}`);
+      return true;
+    } catch (error) {
+      console.error(`[EmailService] Failed to delete saved email ${id}:`, error);
+      return false;
+    }
+  }
+
+  async clearSavedEmails(): Promise<number> {
+    try {
+      const emailsDir = join(process.cwd(), "logs", "emails");
+      const files = await readdir(emailsDir);
+      let count = 0;
+
+      for (const file of files) {
+        if (!file.endsWith(".json")) continue;
+        try {
+          await unlink(join(emailsDir, file));
+          count++;
+        } catch (error) {
+          console.error(`[EmailService] Failed to delete file ${file}:`, error);
+        }
+      }
+
+      console.log(`[EmailService] Cleared ${count} saved emails`);
+      return count;
+    } catch (error) {
+      console.error("[EmailService] Failed to clear saved emails:", error);
+      return 0;
+    }
+  }
+
   async sendTestEmail(to: string): Promise<SmtpTestResult> {
     try {
       if (!this.transporter || !this.settings) {
@@ -299,15 +454,19 @@ class EmailService {
         ? `<p><img src="${publicBaseUrl}/readora-wordmark.webp" alt="Readora" style="height:28px;width:auto"></p>`
         : "";
 
-      const info = await this.transporter.sendMail({
-        from: this.settings.from,
+      // Используем sendEmail чтобы учитывался флаг saveToFiles
+      const sent = await this.sendEmail({
         to,
         subject: "Тестовое письмо — Readora",
         text: "Это тестовое письмо от Readora. Если вы его получили — SMTP настроен корректно.",
         html: `${logoHtml}<p>Это тестовое письмо от <strong>Readora</strong>.</p><p>Если вы его получили — SMTP настроен корректно.</p>`,
       });
 
-      return { success: true, messageId: info.messageId };
+      if (sent) {
+        return { success: true, messageId: this.settings.saveToFiles ? "saved-to-file" : undefined };
+      } else {
+        return { success: false, error: "Не удалось отправить письмо" };
+      }
     } catch (error) {
       const formatted = formatSmtpError(error);
       console.error("[EmailService] Failed to send test email:", error);

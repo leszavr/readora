@@ -35,6 +35,7 @@ import type {
   BulkDeleteResult,
   Chapter,
   ChapterContent,
+  ClearSavedEmails200,
   Cycle,
   CycleInput,
   ErrorResponse,
@@ -54,6 +55,10 @@ import type {
   ReaderSettingsInput,
   ReadingProgress,
   RegisterInput,
+  ResendVerification200,
+  ResendVerificationBody,
+  SavedEmailFull,
+  SavedEmailSummary,
   User
 } from './api.schemas';
 
@@ -356,6 +361,77 @@ export const useLogout = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getLogoutMutationOptions(options));
+    }
+
+export const getResendVerificationUrl = () => {
+
+
+
+
+  return `/api/auth/resend-verification`
+}
+
+/**
+ * @summary Resend email verification link
+ */
+export const resendVerification = async (resendVerificationBody: ResendVerificationBody, options?: RequestInit): Promise<ResendVerification200> => {
+
+  return customFetch<ResendVerification200>(getResendVerificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      resendVerificationBody,)
+  }
+);}
+
+
+
+
+export const getResendVerificationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendVerification>>, TError,{data: BodyType<ResendVerificationBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendVerification>>, TError,{data: BodyType<ResendVerificationBody>}, TContext> => {
+
+const mutationKey = ['resendVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendVerification>>, {data: BodyType<ResendVerificationBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  resendVerification(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof resendVerification>>>
+    export type ResendVerificationMutationBody = BodyType<ResendVerificationBody>
+    export type ResendVerificationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Resend email verification link
+ */
+export const useResendVerification = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendVerification>>, TError,{data: BodyType<ResendVerificationBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resendVerification>>,
+        TError,
+        {data: BodyType<ResendVerificationBody>},
+        TContext
+      > => {
+      return useMutation(getResendVerificationMutationOptions(options));
     }
 
 export const getGetMeUrl = () => {
@@ -2530,6 +2606,76 @@ export const useToggleBlockUser = <TError = ErrorType<unknown>,
       return useMutation(getToggleBlockUserMutationOptions(options));
     }
 
+export const getVerifyUserEmailUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/users/${id}/verify-email`
+}
+
+/**
+ * @summary Force verify user email (admin)
+ */
+export const verifyUserEmail = async (id: number, options?: RequestInit): Promise<AdminUser> => {
+
+  return customFetch<AdminUser>(getVerifyUserEmailUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getVerifyUserEmailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyUserEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyUserEmail>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['verifyUserEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyUserEmail>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  verifyUserEmail(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyUserEmailMutationResult = NonNullable<Awaited<ReturnType<typeof verifyUserEmail>>>
+
+    export type VerifyUserEmailMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Force verify user email (admin)
+ */
+export const useVerifyUserEmail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyUserEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyUserEmail>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getVerifyUserEmailMutationOptions(options));
+    }
+
 export const getListAdminBooksUrl = (params?: ListAdminBooksParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -2977,5 +3123,299 @@ export const useUpdateAppSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAppSettingsMutationOptions(options));
+    }
+
+export const getGetSavedEmailsUrl = () => {
+
+
+
+
+  return `/api/admin/saved-emails`
+}
+
+/**
+ * @summary Get list of saved emails
+ */
+export const getSavedEmails = async ( options?: RequestInit): Promise<SavedEmailSummary[]> => {
+
+  return customFetch<SavedEmailSummary[]>(getGetSavedEmailsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSavedEmailsQueryKey = () => {
+    return [
+    `/api/admin/saved-emails`
+    ] as const;
+    }
+
+
+export const getGetSavedEmailsQueryOptions = <TData = Awaited<ReturnType<typeof getSavedEmails>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavedEmails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSavedEmailsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSavedEmails>>> = ({ signal }) => getSavedEmails({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSavedEmails>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSavedEmailsQueryResult = NonNullable<Awaited<ReturnType<typeof getSavedEmails>>>
+export type GetSavedEmailsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get list of saved emails
+ */
+
+export function useGetSavedEmails<TData = Awaited<ReturnType<typeof getSavedEmails>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavedEmails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSavedEmailsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getClearSavedEmailsUrl = () => {
+
+
+
+
+  return `/api/admin/saved-emails`
+}
+
+/**
+ * @summary Delete all saved emails
+ */
+export const clearSavedEmails = async ( options?: RequestInit): Promise<ClearSavedEmails200> => {
+
+  return customFetch<ClearSavedEmails200>(getClearSavedEmailsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getClearSavedEmailsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSavedEmails>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearSavedEmails>>, TError,void, TContext> => {
+
+const mutationKey = ['clearSavedEmails'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearSavedEmails>>, void> = () => {
+
+
+          return  clearSavedEmails(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearSavedEmailsMutationResult = NonNullable<Awaited<ReturnType<typeof clearSavedEmails>>>
+
+    export type ClearSavedEmailsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete all saved emails
+ */
+export const useClearSavedEmails = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSavedEmails>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearSavedEmails>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearSavedEmailsMutationOptions(options));
+    }
+
+export const getGetSavedEmailUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/saved-emails/${id}`
+}
+
+/**
+ * @summary Get saved email by ID
+ */
+export const getSavedEmail = async (id: string, options?: RequestInit): Promise<SavedEmailFull> => {
+
+  return customFetch<SavedEmailFull>(getGetSavedEmailUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSavedEmailQueryKey = (id: string,) => {
+    return [
+    `/api/admin/saved-emails/${id}`
+    ] as const;
+    }
+
+
+export const getGetSavedEmailQueryOptions = <TData = Awaited<ReturnType<typeof getSavedEmail>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavedEmail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSavedEmailQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSavedEmail>>> = ({ signal }) => getSavedEmail(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSavedEmail>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSavedEmailQueryResult = NonNullable<Awaited<ReturnType<typeof getSavedEmail>>>
+export type GetSavedEmailQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get saved email by ID
+ */
+
+export function useGetSavedEmail<TData = Awaited<ReturnType<typeof getSavedEmail>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavedEmail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSavedEmailQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteSavedEmailUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/saved-emails/${id}`
+}
+
+/**
+ * @summary Delete saved email by ID
+ */
+export const deleteSavedEmail = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteSavedEmailUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteSavedEmailMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSavedEmail>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSavedEmail>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteSavedEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSavedEmail>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteSavedEmail(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSavedEmailMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSavedEmail>>>
+
+    export type DeleteSavedEmailMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete saved email by ID
+ */
+export const useDeleteSavedEmail = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSavedEmail>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSavedEmail>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteSavedEmailMutationOptions(options));
     }
 

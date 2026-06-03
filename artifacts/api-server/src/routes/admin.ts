@@ -143,7 +143,22 @@ router.patch("/admin/users/:id", requireAdmin, async (req, res): Promise<void> =
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(booksTable).where(eq(booksTable.ownerUserId, id));
   res.json({ ...formatUser(user), bookCount: count });
 });
+// POST /admin/users/:id/verify-email - Force email verification by admin
+router.post("/admin/users/:id/verify-email", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number.parseInt(String(req.params.id), 10);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  if (!user) { res.status(404).json({ error: "Пользователь не найден" }); return; }
 
+  if (user.emailVerified) {
+    res.status(400).json({ error: "Email уже подтвержден" });
+    return;
+  }
+
+  await db.update(usersTable).set({ emailVerified: true, emailVerifiedAt: new Date() }).where(eq(usersTable.id, id));
+  const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(booksTable).where(eq(booksTable.ownerUserId, id));
+  const [updated] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  res.json({ ...formatUser(updated!), bookCount: count });
+});
 // POST /admin/users/:id/password
 router.post("/admin/users/:id/password", requireAdmin, async (req, res): Promise<void> => {
   const id = Number.parseInt(String(req.params.id), 10);
@@ -262,6 +277,7 @@ router.get("/admin/settings", requireAdmin, async (_req, res): Promise<void> => 
     appBaseUrl: map.app_base_url ?? null,
     feedbackEmail: map.feedbackEmail ?? null,
     maintenanceMode: map.maintenanceMode === "true",
+    emailSaveToFiles: map.email_save_to_files === "true",
   });
 });
 
@@ -280,11 +296,16 @@ router.patch("/admin/settings", requireAdmin, async (req, res): Promise<void> =>
     const strVal = normalizeSettingValue(value);
     // Пароли: не затирать пустым значением (фронт не получает пароль при GET)
     if (SENSITIVE_KEYS.has(key) && (strVal === null || strVal.length === 0)) continue;
+    
+    // camelCase -> snake_case для некоторых ключей
+    let dbKey = key;
+    if (key === "emailSaveToFiles") dbKey = "email_save_to_files";
+    
     await db
       .insert(appSettingsTable)
-      .values({ key, value: strVal })
+      .values({ key: dbKey, value: strVal })
       .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: strVal } });
-    if (key.startsWith("smtp_") || key.startsWith("smtp")) smtpTouched = true;
+    if (key.startsWith("smtp_") || key.startsWith("smtp") || key === "emailSaveToFiles") smtpTouched = true;
   }
   // Переинициализируем emailService, чтобы изменения вступили в силу без перезапуска
   if (smtpTouched) {
@@ -311,6 +332,7 @@ router.patch("/admin/settings", requireAdmin, async (req, res): Promise<void> =>
     appBaseUrl: map.app_base_url ?? null,
     feedbackEmail: map.feedbackEmail ?? null,
     maintenanceMode: map.maintenanceMode === "true",
+    emailSaveToFiles: map.email_save_to_files === "true",
   });
 });
 
@@ -432,6 +454,44 @@ router.delete("/admin/genres/:id", requireAdmin, async (req, res): Promise<void>
   const id = Number.parseInt(String(req.params.id), 10);
   await db.delete(genresTable).where(eq(genresTable.id, id));
   res.sendStatus(204);
+});
+
+// GET /admin/saved-emails - список сохранённых писем
+router.get("/admin/saved-emails", requireAdmin, async (_req, res): Promise<void> => {
+  const emails = await emailService.getSavedEmails();
+  res.json(emails);
+});
+
+// GET /admin/saved-emails/:id - просмотр конкретного письма
+router.get("/admin/saved-emails/:id", requireAdmin, async (req, res): Promise<void> => {
+  const id = String(req.params.id);
+  const email = await emailService.getSavedEmail(id);
+  
+  if (!email) {
+    res.status(404).json({ error: "Письмо не найдено" });
+    return;
+  }
+  
+  res.json(email);
+});
+
+// DELETE /admin/saved-emails/:id - удалить конкретное письмо
+router.delete("/admin/saved-emails/:id", requireAdmin, async (req, res): Promise<void> => {
+  const id = String(req.params.id);
+  const deleted = await emailService.deleteSavedEmail(id);
+  
+  if (!deleted) {
+    res.status(404).json({ error: "Письмо не найдено" });
+    return;
+  }
+  
+  res.sendStatus(204);
+});
+
+// DELETE /admin/saved-emails - очистить все письма
+router.delete("/admin/saved-emails", requireAdmin, async (_req, res): Promise<void> => {
+  const count = await emailService.clearSavedEmails();
+  res.json({ deleted: count });
 });
 
 export default router;

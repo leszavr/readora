@@ -26,6 +26,7 @@ interface SmtpLocal {
   appBaseUrl: string;
   secure: boolean;
   enabled: boolean;
+  saveToFiles: boolean;
 }
 
 interface SmtpResponse {
@@ -36,6 +37,7 @@ interface SmtpResponse {
   app_base_url?: string | null;
   smtp_secure?: string | null;
   smtp_enabled?: string | null;
+  emailSaveToFiles?: boolean;
 }
 
 const DEFAULTS: SmtpLocal = {
@@ -47,6 +49,7 @@ const DEFAULTS: SmtpLocal = {
   appBaseUrl: "",
   secure: false,
   enabled: false,
+  saveToFiles: false,
 };
 
 export function AdminSmtp() {
@@ -79,12 +82,13 @@ export function AdminSmtp() {
       appBaseUrl: data.app_base_url ?? "",
       secure: data.smtp_secure === "true",
       enabled: data.smtp_enabled === "true",
+      saveToFiles: data.emailSaveToFiles === true,
     });
   }, [data]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload: Record<string, string | null> = {
+      const payload: Record<string, string | null | boolean> = {
         smtp_host: local.host,
         smtp_port: local.port,
         smtp_user: local.user,
@@ -92,6 +96,7 @@ export function AdminSmtp() {
         app_base_url: local.appBaseUrl.trim() || null,
         smtp_secure: local.secure ? "true" : "false",
         smtp_enabled: local.enabled ? "true" : "false",
+        emailSaveToFiles: local.saveToFiles,
       };
       // Пароль отправляем только если пользователь его ввёл
       if (local.password.length > 0) {
@@ -123,6 +128,7 @@ export function AdminSmtp() {
             app_base_url: local.appBaseUrl.trim() || null,
             smtp_secure: local.secure ? "true" : "false",
             smtp_enabled: local.enabled ? "true" : "false",
+            emailSaveToFiles: local.saveToFiles,
           };
         }
         return {
@@ -133,6 +139,7 @@ export function AdminSmtp() {
           app_base_url: local.appBaseUrl.trim() || null,
           smtp_secure: local.secure ? "true" : "false",
           smtp_enabled: local.enabled ? "true" : "false",
+          emailSaveToFiles: local.saveToFiles,
         };
       });
     },
@@ -230,6 +237,24 @@ export function AdminSmtp() {
               checked={local.enabled}
               onCheckedChange={(checked) =>
                 setLocal((prev) => ({ ...prev, enabled: checked }))
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="space-y-1">
+              <Label htmlFor="email-save-to-files" className="font-semibold">
+                Сохранять письма в файлы
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Письма будут сохраняться локально вместо отправки через SMTP (для отладки)
+              </p>
+            </div>
+            <Switch
+              id="email-save-to-files"
+              checked={local.saveToFiles}
+              onCheckedChange={(checked) =>
+                setLocal((prev) => ({ ...prev, saveToFiles: checked }))
               }
             />
           </div>

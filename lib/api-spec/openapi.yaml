@@ -101,6 +101,32 @@ paths:
         "204":
           description: Logged out
 
+  /auth/resend-verification:
+    post:
+      operationId: resendVerification
+      tags: [auth]
+      summary: Resend email verification link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
   /auth/me:
     get:
       operationId: getMe
@@ -684,6 +710,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminUser"
 
+  /admin/users/{id}/verify-email:
+    post:
+      operationId: verifyUserEmail
+      tags: [admin]
+      summary: Force verify user email (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
   /admin/books:
     get:
       operationId: listAdminBooks
@@ -793,6 +838,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/AppSettings"
 
+  /admin/saved-emails:
+    get:
+      operationId: getSavedEmails
+      tags: [admin]
+      summary: Get list of saved emails
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedEmailSummary"
+    delete:
+      operationId: clearSavedEmails
+      tags: [admin]
+      summary: Delete all saved emails
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+
+  /admin/saved-emails/{id}:
+    get:
+      operationId: getSavedEmail
+      tags: [admin]
+      summary: Get saved email by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedEmailFull"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSavedEmail
+      tags: [admin]
+      summary: Delete saved email by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
 components:
   schemas:
     HealthStatus:
@@ -841,6 +951,8 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/User"
+        message:
+          type: string
 
     ProfileUpdate:
       type: object
@@ -1183,7 +1295,7 @@ components:
 
     AdminUser:
       type: object
-      required: [id, email, username, role, status, createdAt]
+      required: [id, email, username, role, status, emailVerified, createdAt]
       properties:
         id:
           type: integer
@@ -1197,6 +1309,8 @@ components:
         status:
           type: string
           enum: [active, blocked]
+        emailVerified:
+          type: boolean
         avatar:
           type: ["string", "null"]
         bookCount:
@@ -1283,6 +1397,8 @@ components:
           type: ["string", "null"]
         maintenanceMode:
           type: boolean
+        emailSaveToFiles:
+          type: boolean
 
     AppSettingsUpdate:
       type: object
@@ -1307,3 +1423,43 @@ components:
           type: ["string", "null"]
         maintenanceMode:
           type: boolean
+        emailSaveToFiles:
+          type: boolean
+
+    SavedEmailSummary:
+      type: object
+      required: [id, to, subject, date, timestamp]
+      properties:
+        id:
+          type: string
+        to:
+          type: string
+        subject:
+          type: string
+        date:
+          type: string
+        timestamp:
+          type: number
+
+    SavedEmailFull:
+      type: object
+      required: [id, to, subject, html, text, from, date, timestamp]
+      properties:
+        id:
+          type: string
+        to:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        html:
+          type: string
+        text:
+          type: string
+        from:
+          type: string
+        date:
+          type: string
+        timestamp:
+          type: number

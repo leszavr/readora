@@ -53,8 +53,8 @@ export default function VerifyEmailPage() {
                 <CheckCircle2 className="mx-auto h-16 w-16 text-green-600" />
                 <h1 className="mt-4 text-2xl font-bold text-green-600">Email подтвержден!</h1>
                 <p className="mt-2 text-muted-foreground">{message}</p>
-                <Button className="mt-6" onClick={() => navigate("/library")}>
-                  Перейти в библиотеку
+                <Button className="mt-6" onClick={() => navigate("/login?verified=true")}>
+                  Войти в систему
                 </Button>
               </>
             )}

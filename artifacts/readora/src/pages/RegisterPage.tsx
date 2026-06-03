@@ -25,6 +25,13 @@ export default function RegisterPage() {
   const { mutate: doRegister, isPending, error } = useRegister({
     mutation: {
       onSuccess: (data) => {
+        // If email verification required, don't set user and redirect to login
+        if (data.message?.includes("Проверьте email")) {
+          navigate("/login?registered=true");
+          return;
+        }
+        
+        // Email verification disabled - user is logged in
         qc.setQueryData(getGetMeQueryKey(), data.user);
         qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
         navigate("/library");
