@@ -431,6 +431,12 @@ export interface AppSettings {
   /** @nullable */
   feedbackEmail?: string | null;
   maintenanceMode?: boolean;
+  /** @nullable */
+  maintenanceReason?: string | null;
+  /** @nullable */
+  maintenanceEta?: string | null;
+  /** @nullable */
+  maintenanceMessage?: string | null;
   emailSaveToFiles?: boolean;
 }
 
@@ -451,7 +457,23 @@ export interface AppSettingsUpdate {
   /** @nullable */
   feedbackEmail?: string | null;
   maintenanceMode?: boolean;
+  /** @nullable */
+  maintenanceReason?: string | null;
+  /** @nullable */
+  maintenanceEta?: string | null;
+  /** @nullable */
+  maintenanceMessage?: string | null;
   emailSaveToFiles?: boolean;
+}
+
+export interface MaintenanceStatus {
+  enabled?: boolean;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  eta?: string | null;
+  /** @nullable */
+  message?: string | null;
 }
 
 export interface SavedEmailSummary {

@@ -577,6 +577,19 @@ paths:
                 items:
                   $ref: "#/components/schemas/PublicBook"
 
+  /public/maintenance-status:
+    get:
+      operationId: getMaintenanceStatus
+      tags: [health]
+      summary: Get maintenance mode status (public)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceStatus"
+
   # ADMIN
   /admin/stats:
     get:
@@ -1397,6 +1410,12 @@ components:
           type: ["string", "null"]
         maintenanceMode:
           type: boolean
+        maintenanceReason:
+          type: ["string", "null"]
+        maintenanceEta:
+          type: ["string", "null"]
+        maintenanceMessage:
+          type: ["string", "null"]
         emailSaveToFiles:
           type: boolean
 
@@ -1423,8 +1442,26 @@ components:
           type: ["string", "null"]
         maintenanceMode:
           type: boolean
+        maintenanceReason:
+          type: ["string", "null"]
+        maintenanceEta:
+          type: ["string", "null"]
+        maintenanceMessage:
+          type: ["string", "null"]
         emailSaveToFiles:
           type: boolean
+
+    MaintenanceStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        reason:
+          type: ["string", "null"]
+        eta:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
 
     SavedEmailSummary:
       type: object

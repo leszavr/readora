@@ -277,6 +277,9 @@ router.get("/admin/settings", requireAdmin, async (_req, res): Promise<void> => 
     appBaseUrl: map.app_base_url ?? null,
     feedbackEmail: map.feedbackEmail ?? null,
     maintenanceMode: map.maintenanceMode === "true",
+    maintenanceReason: map.maintenanceReason ?? null,
+    maintenanceEta: map.maintenanceEta ?? null,
+    maintenanceMessage: map.maintenanceMessage ?? null,
     emailSaveToFiles: map.email_save_to_files === "true",
   });
 });
@@ -332,7 +335,25 @@ router.patch("/admin/settings", requireAdmin, async (req, res): Promise<void> =>
     appBaseUrl: map.app_base_url ?? null,
     feedbackEmail: map.feedbackEmail ?? null,
     maintenanceMode: map.maintenanceMode === "true",
+    maintenanceReason: map.maintenanceReason ?? null,
+    maintenanceEta: map.maintenanceEta ?? null,
+    maintenanceMessage: map.maintenanceMessage ?? null,
     emailSaveToFiles: map.email_save_to_files === "true",
+  });
+});
+
+// GET /public/maintenance-status - публичный endpoint для проверки режима обслуживания
+router.get("/public/maintenance-status", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(appSettingsTable);
+  const map: Record<string, string | null> = {};
+  for (const r of rows) {
+    map[r.key] = r.value;
+  }
+  res.json({
+    enabled: map.maintenanceMode === "true",
+    reason: map.maintenanceReason ?? null,
+    eta: map.maintenanceEta ?? null,
+    message: map.maintenanceMessage ?? null,
   });
 });
 

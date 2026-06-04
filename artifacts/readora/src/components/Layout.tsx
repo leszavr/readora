@@ -12,6 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BookOpen, Library, LogOut, User as UserIcon, ShieldCheck, Shield, Sparkles } from "lucide-react";
+import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
+import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
 
 function BrandWordmark({ className }: Readonly<{ className?: string }>) {
   return (
@@ -26,9 +28,17 @@ function BrandWordmark({ className }: Readonly<{ className?: string }>) {
 }
 
 export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { user, isAuthenticated, isModerator } = useAuth();
+  const { user, isAuthenticated, isModerator, isAdmin } = useAuth();
   const [location, navigate] = useLocation();
   const qc = useQueryClient();
+  const { data: maintenanceStatus } = useMaintenanceStatus();
+  
+  // Проверяем, находимся ли мы на странице логина (исключаем из проверки режима обслуживания)
+  const isLoginPage = location === "/login" || location.startsWith("/login");
+  
+  // Показываем баннер админу при активном режиме обслуживания
+  const showAdminMaintenanceBanner = isAdmin && maintenanceStatus?.enabled;
+  
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     qc.setQueryData(getGetMeQueryKey(), null);
@@ -41,6 +51,7 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <MaintenanceOverlay status={maintenanceStatus ?? null} isLoginPage={isLoginPage} />
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border shadow-xs">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2">
@@ -125,6 +136,16 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
           </div>
         </div>
       </header>
+
+      {/* Баннер режима обслуживания для администраторов */}
+      {showAdminMaintenanceBanner && (
+        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2">
+          <div className="max-w-6xl mx-auto flex items-center justify-center gap-2 text-sm text-destructive">
+            <span className="text-base">⚙️</span>
+            <span className="font-medium">Сайт в режиме технического обслуживания</span>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1">{children}</main>
 

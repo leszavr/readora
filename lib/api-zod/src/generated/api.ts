@@ -483,6 +483,17 @@ export const GetPopularBooksResponse = zod.array(GetPopularBooksResponseItem)
 
 
 /**
+ * @summary Get maintenance mode status (public)
+ */
+export const GetMaintenanceStatusResponse = zod.object({
+  "enabled": zod.boolean().optional(),
+  "reason": zod.string().nullish(),
+  "eta": zod.string().nullish(),
+  "message": zod.string().nullish()
+})
+
+
+/**
  * @summary Admin dashboard stats
  */
 export const GetAdminStatsResponse = zod.object({
@@ -734,6 +745,9 @@ export const GetAppSettingsResponse = zod.object({
   "smtpFrom": zod.string().nullish(),
   "feedbackEmail": zod.string().nullish(),
   "maintenanceMode": zod.boolean().optional(),
+  "maintenanceReason": zod.string().nullish(),
+  "maintenanceEta": zod.string().nullish(),
+  "maintenanceMessage": zod.string().nullish(),
   "emailSaveToFiles": zod.boolean().optional()
 })
 
@@ -752,6 +766,9 @@ export const UpdateAppSettingsBody = zod.object({
   "smtpFrom": zod.string().nullish(),
   "feedbackEmail": zod.string().nullish(),
   "maintenanceMode": zod.boolean().optional(),
+  "maintenanceReason": zod.string().nullish(),
+  "maintenanceEta": zod.string().nullish(),
+  "maintenanceMessage": zod.string().nullish(),
   "emailSaveToFiles": zod.boolean().optional()
 })
 
@@ -765,6 +782,9 @@ export const UpdateAppSettingsResponse = zod.object({
   "smtpFrom": zod.string().nullish(),
   "feedbackEmail": zod.string().nullish(),
   "maintenanceMode": zod.boolean().optional(),
+  "maintenanceReason": zod.string().nullish(),
+  "maintenanceEta": zod.string().nullish(),
+  "maintenanceMessage": zod.string().nullish(),
   "emailSaveToFiles": zod.boolean().optional()
 })
 
