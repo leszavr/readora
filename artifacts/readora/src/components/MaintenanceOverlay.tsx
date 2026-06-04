@@ -24,26 +24,28 @@ export function MaintenanceOverlay({ status, isLoginPage }: MaintenanceOverlayPr
   useEffect(() => {
     const shouldLockScroll = status?.enabled && !isAdmin && !isLoginPage;
     
-    if (shouldLockScroll) {
-      // Сохраняем текущее значение overflow
-      const originalOverflow = document.body.style.overflow;
-      const originalPaddingRight = document.body.style.paddingRight;
-      
-      // Вычисляем ширину скроллбара для предотвращения сдвига контента
-      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-      
-      // Блокируем прокрутку
-      document.body.style.overflow = "hidden";
-      if (scrollbarWidth > 0) {
-        document.body.style.paddingRight = `${scrollbarWidth}px`;
-      }
-      
-      // Cleanup: восстанавливаем оригинальные значения при размонтировании или деактивации
-      return () => {
-        document.body.style.overflow = originalOverflow;
-        document.body.style.paddingRight = originalPaddingRight;
-      };
+    if (!shouldLockScroll) {
+      return undefined;
     }
+    
+    // Сохраняем текущее значение overflow
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+    
+    // Вычисляем ширину скроллбара для предотвращения сдвига контента
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    
+    // Блокируем прокрутку
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    
+    // Cleanup: восстанавливаем оригинальные значения при размонтировании или деактивации
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+    };
   }, [status?.enabled, isAdmin, isLoginPage]);
 
   // Не показываем оверлей если:
