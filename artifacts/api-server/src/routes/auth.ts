@@ -38,12 +38,10 @@ const loginSchema = z.object({
 router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   const parsed = registerSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    res
-      .status(400)
-      .json({
-        error:
-          "Проверьте email, имя и пароль. Пароль должен быть не менее 8 символов",
-      });
+    res.status(400).json({
+      error:
+        "Проверьте email, имя и пароль. Пароль должен быть не менее 8 символов",
+    });
     return;
   }
   const { email, password, username } = parsed.data;
@@ -199,11 +197,9 @@ router.post(
 
     const parsed = schema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({
-          error: "Укажите текущий пароль и новый пароль не короче 8 символов",
-        });
+      res.status(400).json({
+        error: "Укажите текущий пароль и новый пароль не короче 8 символов",
+      });
       return;
     }
 
@@ -222,11 +218,9 @@ router.post(
     }
 
     if (!emailService.isEnabled()) {
-      res
-        .status(400)
-        .json({
-          error: "Подтверждение смены пароля недоступно: SMTP отключен",
-        });
+      res.status(400).json({
+        error: "Подтверждение смены пароля недоступно: SMTP отключен",
+      });
       return;
     }
 
@@ -486,12 +480,10 @@ router.post(
 
     const parsed = resetSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Токен и новый пароль обязательны. Пароль должен быть не менее 8 символов",
-        });
+      res.status(400).json({
+        error:
+          "Токен и новый пароль обязательны. Пароль должен быть не менее 8 символов",
+      });
       return;
     }
 

@@ -384,8 +384,9 @@ export async function customFetch<T = unknown>(
     const errorData = await parseErrorBody(response, method);
 
     // Обработка режима обслуживания - принудительный редирект на главную
+    // Пользователь увидит оверлей с информацией о техработах
     if (response.status === 403 && isMaintenanceModeError(errorData)) {
-      // Очищаем сессию и перенаправляем на главную (там покажется оверлей)
+      // Перенаправляем на главную страницу, где отобразится оверлей режима обслуживания
       window.location.href = "/";
       throw new ApiError(response, errorData, requestInfo);
     }
