@@ -180,6 +180,131 @@ function textValue(value: unknown): string {
   return "";
 }
 
+/**
+ * Автоопределение кодировки и декодирование содержимого FB2 файла
+ */
+function detectAndConvertEncoding(fileBuffer: Buffer): string {
+  const content = fileBuffer.toString('utf-8');
+  const encodingMatch = /<?xml[^>]*encoding=["']([^"']+)["']/i.exec(content);
+  const declaredEncoding = encodingMatch?.[1]?.toLowerCase();
+
+  if (declaredEncoding && declaredEncoding !== 'utf-8' && declaredEncoding !== 'utf8') {
+    return tryDecodeWithEncoding(fileBuffer, declaredEncoding, content);
+  }
+
+  if (hasEncodingIssues(content)) {
+    return tryDecodeWindows1251(fileBuffer, content);
+  }
+
+  return content;
+}
+
+/**
+ * Пытается декодировать с указанной кодировкой
+ */
+function tryDecodeWithEncoding(fileBuffer: Buffer, encoding: string, fallback: string): string {
+  console.info(`[FB2Parser] Detected encoding from XML declaration: ${encoding}`);
+  try {
+    if (encoding === 'windows-1251' || encoding === 'cp1251') {
+      return decodeWindows1251(fileBuffer);
+    }
+    console.warn(`[FB2Parser] Unsupported encoding: ${encoding}, using UTF-8 fallback`);
+  } catch (error) {
+    console.warn(`⚠️ [FB2Parser] Failed to decode with ${encoding}:`, error);
+  }
+  return fallback;
+}
+
+/**
+ * Пытается декодировать из Windows-1251 с обработкой ошибок
+ */
+function tryDecodeWindows1251(fileBuffer: Buffer, fallback: string): string {
+  console.warn('[FB2Parser] Detected encoding issues, trying Windows-1251 decode');
+  try {
+    return decodeWindows1251(fileBuffer);
+  } catch (error) {
+    console.warn(`⚠️ [FB2Parser] Windows-1251 decode failed, using original content:`, error);
+    return fallback;
+  }
+}
+
+/**
+ * Проверяет наличие проблем с кодировкой (кракозябры или ромбики)
+ */
+function hasEncodingIssues(content: string): boolean {
+  // Ищем характерные паттерны неправильной кодировки
+  const badPatterns = [
+    /Ð[À-ß]/g,  // Типичные кракозябры от неправильной кодировки
+    /â€/g,       // Еще один паттерн
+    /Ã[€¿]/g,    // Исправлено: отдельные символы вместо диапазона
+  ];
+
+  // Проверяем наличие ромбиков (replacement character) - признак невалидного UTF-8
+  // Это происходит когда Win-1251 файл пытаются декодировать как UTF-8
+  const hasReplacementChars = content.includes('\uFFFD');
+
+  return hasReplacementChars || badPatterns.some(pattern => pattern.test(content));
+}
+
+/**
+ * Декодирует содержимое из Windows-1251
+ */
+function decodeWindows1251(buffer: Buffer): string {
+  // Полная таблица перекодировки Windows-1251 -> UTF-8 (включая все спецсимволы)
+  const cp1251Map: { [key: number]: string } = {
+    // Кириллица заглавные буквы (0xC0-0xDF)
+    0xC0: 'А', 0xC1: 'Б', 0xC2: 'В', 0xC3: 'Г', 0xC4: 'Д', 0xC5: 'Е', 0xC6: 'Ж', 0xC7: 'З',
+    0xC8: 'И', 0xC9: 'Й', 0xCA: 'К', 0xCB: 'Л', 0xCC: 'М', 0xCD: 'Н', 0xCE: 'О', 0xCF: 'П',
+    0xD0: 'Р', 0xD1: 'С', 0xD2: 'Т', 0xD3: 'У', 0xD4: 'Ф', 0xD5: 'Х', 0xD6: 'Ц', 0xD7: 'Ч',
+    0xD8: 'Ш', 0xD9: 'Щ', 0xDA: 'Ъ', 0xDB: 'Ы', 0xDC: 'Ь', 0xDD: 'Э', 0xDE: 'Ю', 0xDF: 'Я',
+    // Кириллица строчные буквы (0xE0-0xFF)
+    0xE0: 'а', 0xE1: 'б', 0xE2: 'в', 0xE3: 'г', 0xE4: 'д', 0xE5: 'е', 0xE6: 'ж', 0xE7: 'з',
+    0xE8: 'и', 0xE9: 'й', 0xEA: 'к', 0xEB: 'л', 0xEC: 'м', 0xED: 'н', 0xEE: 'о', 0xEF: 'п',
+    0xF0: 'р', 0xF1: 'с', 0xF2: 'т', 0xF3: 'у', 0xF4: 'ф', 0xF5: 'х', 0xF6: 'ц', 0xF7: 'ч',
+    0xF8: 'ш', 0xF9: 'щ', 0xFA: 'ъ', 0xFB: 'ы', 0xFC: 'ь', 0xFD: 'э', 0xFE: 'ю', 0xFF: 'я',
+    // Ё/ё
+    0xA8: 'Ё', 0xB8: 'ё',
+    // Специальные символы Windows-1251 (0x80-0xBF) - КРИТИЧЕСКИ ВАЖНО!
+    0x80: '\u0402', 0x81: '\u0403', 0x82: '\u201A', 0x83: '\u0453', 0x84: '\u201E',
+    0x85: '\u2026', // Многоточие ... (КРИТИЧНО!)
+    0x86: '\u2020', 0x87: '\u2021', 0x88: '\u20AC', 0x89: '\u2030', 0x8A: '\u0409',
+    0x8B: '\u2039', // Левая одиночная угловая кавычка ‹
+    0x8C: '\u040A', 0x8D: '\u040C', 0x8E: '\u040B', 0x8F: '\u040F',
+    0x90: '\u0452', 0x91: '\u2018', 0x92: '\u2019', 0x93: '\u201C', 0x94: '\u201D',
+    0x95: '\u2022', // Буллет •
+    0x96: '\u2013', // Короткое тире –
+    0x97: '\u2014', // Длинное тире —
+    0x98: '\u0098', 0x99: '\u2122', 0x9A: '\u0459',
+    0x9B: '\u203A', // Правая одиночная угловая кавычка ›
+    0x9C: '\u045A', 0x9D: '\u045C', 0x9E: '\u045B', 0x9F: '\u045F',
+    0xA0: '\u00A0', // Неразрывный пробел
+    0xA1: '\u040E', 0xA2: '\u045E', 0xA3: '\u0408', 0xA4: '\u00A4', 0xA5: '\u0490',
+    0xA6: '\u00A6', 0xA7: '\u00A7', 0xA9: '\u00A9', 0xAA: '\u0404',
+    0xAB: '\u00AB', // Левая кавычка-ёлочка « (КРИТИЧНО!)
+    0xAC: '\u00AC', 0xAD: '\u00AD', 0xAE: '\u00AE', 0xAF: '\u0407',
+    0xB0: '\u00B0', 0xB1: '\u00B1', 0xB2: '\u0406', 0xB3: '\u0456', 0xB4: '\u0491',
+    0xB5: '\u00B5', 0xB6: '\u00B6', 0xB7: '\u00B7', 0xB9: '\u2116', // Номер №
+    0xBA: '\u0454',
+    0xBB: '\u00BB', // Правая кавычка-ёлочка » (КРИТИЧНО!)
+    0xBC: '\u0458', 0xBD: '\u0405', 0xBE: '\u0455', 0xBF: '\u0457'
+  };
+
+  let result = '';
+  for (const byte of buffer) {
+    if (cp1251Map[byte]) {
+      result += cp1251Map[byte];
+    } else if (byte < 128) {
+      // ASCII символы остаются как есть
+      result += String.fromCodePoint(byte);
+    } else {
+      // Неизвестные символы заменяем на ?
+      result += '?';
+    }
+  }
+
+  return result;
+}
+
 function extractReadableEpubHtml(htmlText: string): { html: string; text: string; title: string | null } {
   const $xml = cheerio.load(htmlText, { xmlMode: true });
   $xml("script, style, header, footer, form, iframe, link, meta, button, input, textarea, select, nav[role='navigation'], nav[epub\\:type='toc'], nav[epub\\:type='landmarks'], [epub\\:type='pagebreak']").remove();
@@ -213,7 +338,7 @@ export function validateBookFile(buffer: Buffer, ext: "fb2" | "epub"): void {
 
   if (ext === "fb2") {
     if (buffer.length > MAX_FB2_XML_BYTES) throw new Error("FB2 превышает допустимый размер XML");
-    const sample = buffer.subarray(0, Math.min(buffer.length, 4096)).toString("utf-8").replace(/^\uFEFF/, "");
+    const sample = detectAndConvertEncoding(buffer.subarray(0, Math.min(buffer.length, 4096)));
     if (!/<(?:\w+:)?FictionBook[\s>]/i.test(sample)) {
       throw new Error("Некорректный FB2: не найден корневой FictionBook");
     }
@@ -246,7 +371,7 @@ export function parseBook(buffer: Buffer, ext: "fb2" | "epub"): ParsedBook {
 // ─── FB2 Parser ───────────────────────────────────────────────────────────────
 
 export function parseFB2(buffer: Buffer): ParsedBook {
-  const xmlText = buffer.toString("utf-8");
+  const xmlText = detectAndConvertEncoding(buffer);
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
