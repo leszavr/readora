@@ -1,3 +1,5 @@
+<p align="center"><img src="artifacts/readora/public/r_1200_logo.png" alt="Readora Logo" width="400"></p>
+
 # Readora
 
 > Личная веб-библиотека для чтения книг в форматах **FB2** и **EPUB**. Хранение, организация, чтение в браузере. Интерфейс полностью на русском языке.
