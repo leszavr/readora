@@ -383,10 +383,10 @@ export async function customFetch<T = unknown>(
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
 
-    // Обработка режима обслуживания - принудительный редирект на логин
+    // Обработка режима обслуживания - принудительный редирект на главную
     if (response.status === 403 && isMaintenanceModeError(errorData)) {
-      // Очищаем сессию и перенаправляем на логин
-      window.location.href = "/login";
+      // Очищаем сессию и перенаправляем на главную (там покажется оверлей)
+      window.location.href = "/";
       throw new ApiError(response, errorData, requestInfo);
     }
 
