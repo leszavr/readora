@@ -13,7 +13,6 @@ import {
   useGetChapter,
   useGetProgress,
   useSaveProgress,
-  useSaveReaderSettings,
   ReaderSettingsInputTheme,
   getGetProgressQueryKey,
 } from "@workspace/api-client-react";
@@ -64,6 +63,12 @@ import {
   saveReaderProgressToStorage,
   getFreshestReaderProgress,
 } from "@/lib/reader-local-progress";
+import {
+  loadReaderSettingsFromStorage,
+  saveReaderSettingsToStorage,
+  mergeSettings,
+  type ReaderLocalSettings,
+} from "@/lib/reader-local-settings";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
 
@@ -259,7 +264,6 @@ export default function ReaderPage() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { mutate: saveSettingsMutate } = useSaveReaderSettings();
   const { mutate: saveProgressMutate } = useSaveProgress();
 
   // Chapter navigation state — null while progress is loading
@@ -678,17 +682,27 @@ export default function ReaderPage() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Apply server settings to local state
+  // Initialize settings from localStorage first, then merge with server settings
   // ---------------------------------------------------------------------------
+  const [areSettingsInitialized, setAreSettingsInitialized] = useState(false);
+
   useEffect(() => {
-    if (settings) {
-      setFontSize(settings.fontSize ?? 18);
-      setFontFamily(settings.fontFamily ?? "Georgia");
-      setLineHeight(settings.lineHeight ?? 1.7);
-      setTheme((settings.theme as "light" | "sepia" | "dark") ?? "light");
-      setContentWidth(settings.contentWidth ?? (deviceMode === "mobile" ? 95 : 80));
-    }
-  }, [settings, deviceMode]);
+    if (areSettingsInitialized) return;
+
+    // Load local settings first (device-specific)
+    const localSettings = loadReaderSettingsFromStorage(deviceMode);
+    
+    // Merge with server settings (local takes precedence if exists)
+    const merged = mergeSettings(localSettings, settings ?? null, deviceMode);
+    
+    setFontSize(merged.fontSize);
+    setFontFamily(merged.fontFamily);
+    setLineHeight(merged.lineHeight);
+    setTheme(merged.theme);
+    setContentWidth(merged.contentWidth);
+    
+    setAreSettingsInitialized(true);
+  }, [settings, deviceMode, areSettingsInitialized]);
 
   // ---------------------------------------------------------------------------
   // TOC scroll active chapter into view
@@ -719,27 +733,65 @@ export default function ReaderPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Settings persistence helper
+  // Settings persistence helper - saves to both localStorage and server
   // ---------------------------------------------------------------------------
-  function persistSettings(
-    partial: Partial<{
-      fontSize: number;
-      fontFamily: string;
-      lineHeight: number;
-      theme: ReaderSettingsInputTheme;
-      contentWidth: number;
-    }>
-  ) {
-    const updated = {
-      fontSize: partial.fontSize ?? fontSize,
-      fontFamily: partial.fontFamily ?? fontFamily,
-      lineHeight: partial.lineHeight ?? lineHeight,
-      theme: (partial.theme ?? theme) as ReaderSettingsInputTheme,
-      contentWidth: partial.contentWidth ?? contentWidth,
-      deviceMode,
-    };
-    saveSettingsMutate({ data: updated });
-  }
+  const persistSettings = useCallback(
+    (
+      partial: Partial<{
+        fontSize: number;
+        fontFamily: string;
+        lineHeight: number;
+        theme: ReaderSettingsInputTheme;
+        contentWidth: number;
+      }>
+    ) => {
+      const updated: ReaderLocalSettings = {
+        fontSize: partial.fontSize ?? fontSize,
+        fontFamily: partial.fontFamily ?? fontFamily,
+        lineHeight: partial.lineHeight ?? lineHeight,
+        theme: (partial.theme ?? theme) as ReaderLocalSettings["theme"],
+        contentWidth: partial.contentWidth ?? contentWidth,
+        _version: 1,
+      };
+
+      // Save to localStorage immediately (device-specific)
+      saveReaderSettingsToStorage(updated);
+
+      // Sync to server (for cross-device backup, but local takes precedence)
+      // Use custom fetch to include deviceMode in query params
+      fetch(`/api/reader/settings?deviceMode=${deviceMode}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fontSize: updated.fontSize,
+          fontFamily: updated.fontFamily,
+          lineHeight: updated.lineHeight,
+          theme: updated.theme,
+          contentWidth: updated.contentWidth,
+        }),
+        credentials: "include",
+      }).catch(() => {
+        // Ignore server errors - local settings take precedence
+      });
+    },
+    [fontSize, fontFamily, lineHeight, theme, contentWidth, deviceMode]
+  );
+
+  // ---------------------------------------------------------------------------
+  // Save settings to localStorage whenever they change (debounced)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!areSettingsInitialized) return;
+
+    // Save to localStorage on every change for immediate persistence
+    saveReaderSettingsToStorage({
+      fontSize,
+      fontFamily,
+      lineHeight,
+      theme,
+      contentWidth,
+    });
+  }, [fontSize, fontFamily, lineHeight, theme, contentWidth, areSettingsInitialized]);
 
   // ---------------------------------------------------------------------------
   // Derived display values
