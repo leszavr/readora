@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 
 import {
   createReaderProgressPayload,
+  createSemanticProgressPayload,
   type ReaderProgressPayload,
 } from "@/components/reader/core/reader-progress-core";
 import {
@@ -53,6 +54,10 @@ import {
   useRestoreReaderScroll,
   usePeriodicProgressSave,
 } from "@/components/reader/core/use-reader-progress-sync";
+import {
+  captureSemanticPosition,
+  restoreSemanticPosition,
+} from "@/components/reader/core/reader-text-anchor";
 import { useReaderSyncState } from "@/components/reader/core/use-reader-sync-state";
 import { useReaderPanelsAutoclose } from "@/components/reader/core/use-reader-panels-autoclose";
 import { useSmoothReaderSpaceScroll } from "@/components/reader/core/use-smooth-reader-space-scroll";
@@ -105,6 +110,7 @@ interface PendingScrollRestore {
 // ---------------------------------------------------------------------------
 function usePersistProgressOnUnmount({
   scrollContainerRef,
+  contentAreaRef,
   chapters,
   currentChapterId,
   currentChapterIdx,
@@ -112,6 +118,7 @@ function usePersistProgressOnUnmount({
   bookId,
 }: {
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  contentAreaRef: RefObject<HTMLDivElement | null>;
   chapters: Array<{ id: number }>;
   currentChapterId: number | null;
   currentChapterIdx: number | null;
@@ -147,14 +154,47 @@ function usePersistProgressOnUnmount({
       if (!container || !chs.length || chId === null || chIdx === null) return;
       if (contentLoadingRef.current) return;
 
-      const payload = createReaderProgressPayload({
-        chapterId: chId,
-        chapterIndex: chIdx,
-        totalChapters: chs.length,
-        scrollTop: container.scrollTop,
-        scrollHeight: container.scrollHeight,
-        clientHeight: container.clientHeight,
-      });
+      // Используем семантическое позиционирование (v2) при сохранении при закрытии
+      const contentArea = contentAreaRef.current;
+      let payload: ReaderProgressPayload;
+      
+      if (contentArea) {
+        const semanticPosition = captureSemanticPosition({
+          chapterId: chId,
+          scrollContainer: container,
+          contentArea,
+          viewportInset: 8,
+        });
+        
+        if (semanticPosition) {
+          payload = createSemanticProgressPayload({
+            chapterId: chId,
+            chapterIndex: chIdx,
+            totalChapters: chs.length,
+            semanticPosition,
+          });
+        } else {
+          // Fallback к legacy
+          payload = createReaderProgressPayload({
+            chapterId: chId,
+            chapterIndex: chIdx,
+            totalChapters: chs.length,
+            scrollTop: container.scrollTop,
+            scrollHeight: container.scrollHeight,
+            clientHeight: container.clientHeight,
+          });
+        }
+      } else {
+        // Fallback к legacy если нет contentArea
+        payload = createReaderProgressPayload({
+          chapterId: chId,
+          chapterIndex: chIdx,
+          totalChapters: chs.length,
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight,
+        });
+      }
 
       // Save to localStorage for instant restore on next visit
       saveReaderProgressToStorage(
@@ -347,9 +387,13 @@ export default function ReaderPage() {
         onError?: (error: unknown) => void;
       }
     ) => {
+      // Определяем версию позиции для логирования
+      const isSemantic = payload.currentPosition.includes('"version":2');
+      
       console.log('[ReaderPage] Saving progress:', {
         chapterId: payload.currentChapterId,
         progressPercent: payload.progressPercent,
+        positionVersion: isSemantic ? 'v2 (semantic)' : 'v1 (legacy)',
         positionLength: payload.currentPosition.length,
       });
       
@@ -402,7 +446,7 @@ export default function ReaderPage() {
     useReaderSyncState({ saveProgress });
 
   // ---------------------------------------------------------------------------
-  // Debounced save on scroll
+  // Debounced save on scroll (with semantic positioning v2)
   // ---------------------------------------------------------------------------
   const { scheduleSave: scheduleProgressSave, saveNow: saveProgressNow } =
     useDebouncedReaderProgressSave({
@@ -414,6 +458,7 @@ export default function ReaderPage() {
       onSave: saveWithSync,
       debounceMs: 1500,
       enabled: currentChapterId !== null && chapters.length > 0,
+      useSemanticPosition: true, // Включаем семантическое позиционирование v2
     });
 
   // Periodic auto-save disabled - debounced save on scroll is enough
@@ -511,6 +556,7 @@ export default function ReaderPage() {
   // ---------------------------------------------------------------------------
   usePersistProgressOnUnmount({
     scrollContainerRef,
+    contentAreaRef,
     chapters,
     currentChapterId,
     currentChapterIdx,

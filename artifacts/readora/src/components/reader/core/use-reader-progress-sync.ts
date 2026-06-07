@@ -3,14 +3,24 @@
 //   - currentChapterId (DB id) instead of currentChapter (1-based number)
 //   - currentChapterIdx (0-based) added for progress calculation
 //   - canRestorePositionForChapter checks position.chapterId
+//   - Добавлена поддержка семантического позиционирования (v2) через reader-text-anchor.ts
 
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import {
   canRestorePositionForChapter,
   createReaderProgressPayload,
+  createSemanticProgressPayload,
   parseReaderPosition,
+  isSemanticPosition,
   type ReaderProgressPayload,
+  type SemanticReadingPosition,
 } from "./reader-progress-core";
+import {
+  captureSemanticPosition,
+  restoreSemanticPosition,
+  parseReadingPosition,
+  type RestoreResult,
+} from "./reader-text-anchor";
 
 interface SaveNowOptions {
   chapterId?: number;
@@ -27,6 +37,11 @@ interface UseDebouncedReaderProgressSaveOptions {
   onSave: (payload: ReaderProgressPayload) => void;
   debounceMs?: number;
   enabled?: boolean;
+  /** 
+   * Использовать семантическое позиционирование (v2) вместо legacy (v1).
+   * По умолчанию true.
+   */
+  useSemanticPosition?: boolean;
 }
 
 interface UseRestoreReaderScrollOptions {
@@ -70,11 +85,15 @@ function isScrollIntentKey(event: KeyboardEvent): boolean {
   );
 }
 
+// Legacy v1: глобальный textOffset (устаревший метод)
+// Сохраняем для обратной совместимости при чтении старых позиций
+
 type CaretDocument = Document & {
   caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
   caretRangeFromPoint?: (x: number, y: number) => Range | null;
 };
 
+/** @deprecated Используйте captureSemanticPosition из reader-text-anchor.ts */
 function getTopLeftTextOffset(scrollContainer: HTMLElement, contentArea: HTMLElement): number | null {
   const scrollRect = scrollContainer.getBoundingClientRect();
   const contentRect = contentArea.getBoundingClientRect();
@@ -109,6 +128,7 @@ function getTopLeftTextOffset(scrollContainer: HTMLElement, contentArea: HTMLEle
   return range.toString().length;
 }
 
+/** @deprecated Используйте restoreSemanticPosition из reader-text-anchor.ts */
 function findTextNodeByOffset(root: HTMLElement, textOffset: number): { node: Text; offset: number } | null {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let remaining = Math.max(0, textOffset);
@@ -129,6 +149,7 @@ function findTextNodeByOffset(root: HTMLElement, textOffset: number): { node: Te
   return null;
 }
 
+/** @deprecated Используйте restoreSemanticPosition из reader-text-anchor.ts */
 function restoreByTextOffset(
   scrollContainer: HTMLElement,
   contentArea: HTMLElement,
@@ -186,11 +207,18 @@ function scheduleReaderScrollRestore({
     };
   }
 
-  const normalizedSavedScrollTop = Math.max(0, position.scrollTop);
-  const savedScrollable =
-    typeof position.scrollHeight === "number" && typeof position.clientHeight === "number"
-      ? Math.max(1, position.scrollHeight - position.clientHeight)
+  // Проверяем, является ли позиция семантической (v2)
+  const isSemantic = isSemanticPosition(position);
+  
+  // Для legacy позиций используем старые значения
+  const normalizedSavedScrollTop = isSemantic ? 0 : Math.max(0, (position as { scrollTop: number }).scrollTop);
+  const savedScrollable = isSemantic
+    ? null
+    : typeof (position as { scrollHeight?: number }).scrollHeight === "number" && 
+      typeof (position as { clientHeight?: number }).clientHeight === "number"
+      ? Math.max(1, (position as { scrollHeight: number }).scrollHeight - (position as { clientHeight: number }).clientHeight)
       : null;
+  
   let attemptsLeft = retryAttempts;
   let userInteracted = false;
   const container = scrollContainerRef.current;
@@ -224,19 +252,56 @@ function scheduleReaderScrollRestore({
 
   const restorePosition = () => {
     if (userInteracted) return;
-
     if (!container) return;
 
     const contentArea = contentAreaRef?.current ?? null;
-    if (
-      contentArea &&
-      typeof position.textOffset === "number" &&
-      (onProgrammaticScroll?.(Math.max(400, retryDelayMs + 120)), true) &&
-      restoreByTextOffset(container, contentArea, position.textOffset)
-    ) {
+    if (!contentArea) return;
+
+    // === Семантическое восстановление (v2) ===
+    if (isSemantic) {
+      const semanticPosition = position as SemanticReadingPosition;
+      
+      console.log('[ReaderRestore] Using semantic position (v2):', {
+        elementPath: semanticPosition.elementPath,
+        elementTag: semanticPosition.elementTag,
+        charOffset: semanticPosition.charOffset,
+        chapterPercent: semanticPosition.chapterPercent,
+      });
+
+      onProgrammaticScroll?.(Math.max(400, retryDelayMs + 120));
+      
+      const result = restoreSemanticPosition({
+        position: semanticPosition,
+        scrollContainer: container,
+        contentArea,
+        viewportInset: 8,
+        smooth: false,
+      });
+
+      console.log('[ReaderRestore] Semantic restore result:', result);
+
+      // Если семантическое восстановление не удалось и есть попытки — пробуем снова
+      if (!result.success && attemptsLeft > 0) {
+        attemptsLeft -= 1;
+        retryTimeout = setTimeout(restorePosition, retryDelayMs);
+      }
+      
       return;
     }
 
+    // === Legacy восстановление (v1) — для обратной совместимости ===
+    const legacyPosition = position as { scrollTop: number; textOffset?: number };
+
+    // Сначала пробуем textOffset (если есть)
+    if (typeof legacyPosition.textOffset === "number") {
+      console.log('[ReaderRestore] Trying legacy textOffset:', legacyPosition.textOffset);
+      if (restoreByTextOffset(container, contentArea, legacyPosition.textOffset)) {
+        console.log('[ReaderRestore] Legacy textOffset restore successful');
+        return;
+      }
+    }
+
+    // Fallback к пропорциональному scrollTop
     let targetScrollTop = normalizedSavedScrollTop;
 
     if (savedScrollable !== null) {
@@ -245,6 +310,12 @@ function scheduleReaderScrollRestore({
           Math.max(1, container.scrollHeight - container.clientHeight)
       );
     }
+
+    console.log('[ReaderRestore] Using legacy scrollTop fallback:', {
+      targetScrollTop,
+      savedScrollable,
+      currentScrollable: Math.max(1, container.scrollHeight - container.clientHeight),
+    });
 
     onProgrammaticScroll?.(Math.max(400, retryDelayMs + 120));
     container.scrollTop = targetScrollTop;
@@ -278,6 +349,7 @@ export function useDebouncedReaderProgressSave({
   onSave,
   debounceMs = 1000,
   enabled = true,
+  useSemanticPosition = true,
 }: UseDebouncedReaderProgressSaveOptions) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -292,6 +364,8 @@ export function useDebouncedReaderProgressSave({
     if (!enabled) return;
 
     const container = scrollContainerRef.current;
+    const contentArea = contentAreaRef?.current;
+    
     if (!container) {
       console.warn('[DebouncedSave] saveNow: No scroll container');
       return;
@@ -307,33 +381,75 @@ export function useDebouncedReaderProgressSave({
     console.log('[DebouncedSave] saveNow called:', {
       chapterId,
       chapterIdx,
+      useSemanticPosition,
       scrollTop: container.scrollTop,
       scrollHeight: container.scrollHeight,
       clientHeight: container.clientHeight,
-      isScrollable: container.scrollHeight > container.clientHeight,
-      maxScroll: Math.max(0, container.scrollHeight - container.clientHeight),
     });
 
-    const payload = createReaderProgressPayload({
-      chapterId,
-      chapterIndex: chapterIdx,
-      totalChapters,
-      scrollTop: container.scrollTop,
-      scrollHeight: container.scrollHeight,
-      clientHeight: container.clientHeight,
-      progressOverride: options?.progressOverride,
-      textOffset: contentAreaRef?.current
-        ? getTopLeftTextOffset(container, contentAreaRef.current) ?? undefined
-        : undefined,
-    });
+    let payload: ReaderProgressPayload;
+
+    // === Семантическое позиционирование (v2) ===
+    if (useSemanticPosition && contentArea) {
+      const semanticPosition = captureSemanticPosition({
+        chapterId,
+        scrollContainer: container,
+        contentArea,
+        viewportInset: 8,
+      });
+
+      if (semanticPosition) {
+        console.log('[DebouncedSave] Captured semantic position:', {
+          elementPath: semanticPosition.elementPath,
+          elementTag: semanticPosition.elementTag,
+          charOffset: semanticPosition.charOffset,
+          textPreview: semanticPosition.textPreview.slice(0, 30) + '...',
+        });
+
+        payload = createSemanticProgressPayload({
+          chapterId,
+          chapterIndex: chapterIdx,
+          totalChapters,
+          semanticPosition,
+          progressOverride: options?.progressOverride,
+        });
+      } else {
+        // Fallback к legacy если не удалось захватить семантическую позицию
+        console.warn('[DebouncedSave] Failed to capture semantic position, falling back to legacy');
+        payload = createReaderProgressPayload({
+          chapterId,
+          chapterIndex: chapterIdx,
+          totalChapters,
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight,
+          progressOverride: options?.progressOverride,
+        });
+      }
+    } else {
+      // === Legacy позиционирование (v1) ===
+      payload = createReaderProgressPayload({
+        chapterId,
+        chapterIndex: chapterIdx,
+        totalChapters,
+        scrollTop: container.scrollTop,
+        scrollHeight: container.scrollHeight,
+        clientHeight: container.clientHeight,
+        progressOverride: options?.progressOverride,
+        textOffset: contentArea
+          ? getTopLeftTextOffset(container, contentArea) ?? undefined
+          : undefined,
+      });
+    }
 
     console.log('[DebouncedSave] Created payload:', {
       chapterId: payload.currentChapterId,
       progressPercent: payload.progressPercent,
+      positionVersion: useSemanticPosition ? 'v2 (semantic)' : 'v1 (legacy)',
     });
 
     onSave(payload);
-  }, [enabled, scrollContainerRef, contentAreaRef, currentChapterId, currentChapterIdx, totalChapters, onSave]);
+  }, [enabled, scrollContainerRef, contentAreaRef, currentChapterId, currentChapterIdx, totalChapters, onSave, useSemanticPosition]);
 
   const scheduleSave = useCallback(() => {
     if (!enabled) return;
