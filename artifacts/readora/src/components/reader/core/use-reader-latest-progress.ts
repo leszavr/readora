@@ -9,6 +9,7 @@ import {
   createReaderProgressPayload,
   getReaderProgressSignature,
   parseReaderPosition,
+  isSemanticPosition,
 } from "./reader-progress-core";
 
 interface RemoteReadingProgress {
@@ -83,13 +84,23 @@ function isRemoteProgressAhead(
     return false;
   }
 
+  // Для семантических позиций (v2) используем chapterPercent для сравнения
+  if (isSemanticPosition(remotePosition)) {
+    const localScrollable = Math.max(1, container.scrollHeight - container.clientHeight);
+    const localRatio = Math.min(1, container.scrollTop / localScrollable);
+    const remoteRatio = remotePosition.chapterPercent / 100;
+    return remoteRatio > localRatio + 0.03;
+  }
+
+  // Legacy позиции (v1) — используем scrollTop/scrollHeight
+  const legacyPosition = remotePosition as { scrollTop: number; scrollHeight?: number; clientHeight?: number };
   const localScrollable = Math.max(1, container.scrollHeight - container.clientHeight);
   const remoteScrollable =
-    typeof remotePosition.scrollHeight === "number" && typeof remotePosition.clientHeight === "number"
-      ? Math.max(1, remotePosition.scrollHeight - remotePosition.clientHeight)
+    typeof legacyPosition.scrollHeight === "number" && typeof legacyPosition.clientHeight === "number"
+      ? Math.max(1, legacyPosition.scrollHeight - legacyPosition.clientHeight)
       : localScrollable;
   const localRatio = Math.min(1, container.scrollTop / localScrollable);
-  const remoteRatio = Math.min(1, remotePosition.scrollTop / remoteScrollable);
+  const remoteRatio = Math.min(1, legacyPosition.scrollTop / remoteScrollable);
 
   return remoteRatio > localRatio + 0.03;
 }
