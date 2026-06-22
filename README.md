@@ -225,7 +225,7 @@ Readora развивается как дочерний проект Voxlibris и
 
 - Сайт: [https://voxlibris.ru](https://voxlibris.ru)
 - Подробное описание платформы: [VOXLIBRIS.md](./VOXLIBRIS.md)
-- Контакт для заинтересованных лиц: [admin@voxli.ru](mailto:admin@voxli.ru)
+- Контакт для заинтересованных лиц: [admin@voxlibris.ru](mailto:admin@voxlibris.ru)
 
 ## Вклад в проект
 
