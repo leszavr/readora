@@ -14,7 +14,7 @@ const feedbackSchema = z.object({
 });
 
 // POST /api/feedback - публичный endpoint для отправки обратной связи
-router.post("/api/feedback", async (req, res): Promise<void> => {
+router.post("/feedback", async (req, res): Promise<void> => {
   try {
     const validated = feedbackSchema.parse(req.body);
 
