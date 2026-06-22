@@ -24,6 +24,7 @@ interface SmtpLocal {
   password: string;
   from: string;
   appBaseUrl: string;
+  feedbackEmail: string;
   secure: boolean;
   enabled: boolean;
   saveToFiles: boolean;
@@ -35,6 +36,7 @@ interface SmtpResponse {
   smtp_user?: string | null;
   smtp_from?: string | null;
   app_base_url?: string | null;
+  feedback_email?: string | null;
   smtp_secure?: string | null;
   smtp_enabled?: string | null;
   emailSaveToFiles?: boolean;
@@ -47,6 +49,7 @@ const DEFAULTS: SmtpLocal = {
   password: "",
   from: "",
   appBaseUrl: "",
+  feedbackEmail: "",
   secure: false,
   enabled: false,
   saveToFiles: false,
@@ -80,6 +83,7 @@ export function AdminSmtp() {
       password: "",
       from: data.smtp_from ?? "",
       appBaseUrl: data.app_base_url ?? "",
+      feedbackEmail: data.feedback_email ?? "",
       secure: data.smtp_secure === "true",
       enabled: data.smtp_enabled === "true",
       saveToFiles: data.emailSaveToFiles === true,
@@ -94,6 +98,7 @@ export function AdminSmtp() {
         smtp_user: local.user,
         smtp_from: local.from,
         app_base_url: local.appBaseUrl.trim() || null,
+        feedback_email: local.feedbackEmail.trim() || null,
         smtp_secure: local.secure ? "true" : "false",
         smtp_enabled: local.enabled ? "true" : "false",
         emailSaveToFiles: local.saveToFiles,
@@ -126,6 +131,7 @@ export function AdminSmtp() {
             smtp_user: local.user,
             smtp_from: local.from,
             app_base_url: local.appBaseUrl.trim() || null,
+            feedback_email: local.feedbackEmail.trim() || null,
             smtp_secure: local.secure ? "true" : "false",
             smtp_enabled: local.enabled ? "true" : "false",
             emailSaveToFiles: local.saveToFiles,
@@ -137,6 +143,7 @@ export function AdminSmtp() {
           smtp_user: local.user,
           smtp_from: local.from,
           app_base_url: local.appBaseUrl.trim() || null,
+          feedback_email: local.feedbackEmail.trim() || null,
           smtp_secure: local.secure ? "true" : "false",
           smtp_enabled: local.enabled ? "true" : "false",
           emailSaveToFiles: local.saveToFiles,
@@ -350,6 +357,22 @@ export function AdminSmtp() {
             />
             <p className="text-xs text-muted-foreground">
               Используется в email-ссылках (подтверждение, сброс пароля) и для логотипа в письмах.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="feedback-email">Email для обратной связи</Label>
+            <Input
+              id="feedback-email"
+              type="email"
+              placeholder="feedback@yourdomain.com"
+              value={local.feedbackEmail}
+              onChange={(e) =>
+                setLocal((prev) => ({ ...prev, feedbackEmail: e.target.value }))
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Адрес, на который будут приходить сообщения из формы обратной связи
             </p>
           </div>
 

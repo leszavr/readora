@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,9 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BookOpen, Library, LogOut, User as UserIcon, ShieldCheck, Shield, Sparkles } from "lucide-react";
+import { BookOpen, Library, LogOut, User as UserIcon, ShieldCheck, MessageSquare } from "lucide-react";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
+import { LegalOverlay } from "@/components/LegalOverlay";
+import { FeedbackModal } from "@/components/FeedbackModal";
+import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
+import { CopyrightHoldersContent } from "@/components/legal/CopyrightHoldersContent";
+import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 
 function BrandWordmark({ className }: Readonly<{ className?: string }>) {
   return (
@@ -32,6 +38,10 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [location, navigate] = useLocation();
   const qc = useQueryClient();
   const { data: maintenanceStatus } = useMaintenanceStatus();
+  
+  // State для управления оверлеями и модалами
+  const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   
   // Проверяем, находимся ли мы на странице логина (исключаем из проверки режима обслуживания)
   const isLoginPage = location === "/login" || location.startsWith("/login");
@@ -165,7 +175,8 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                 <BrandWordmark className="h-6 w-auto" />
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Личная библиотека для чтения книг в форматах FB2 и EPUB. 
+                Личная библиотека для чтения книг в форматах FB2 и EPUB.
+                <br />
                 Удобно, безопасно, бесплатно.
               </p>
 
@@ -191,10 +202,10 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                   доступна для лицензирования:
                   {" "}
                   <a
-                    href="mailto:admin@voxli.ru"
+                    href="mailto:admin@voxlibris.ru"
                     className="font-medium text-primary/90 hover:text-primary hover:underline"
                   >
-                    admin@voxli.ru
+                    admin@voxlibris.ru
                   </a>
                 </p>
               </div>
@@ -243,17 +254,38 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
             <div>
               <h4 className="font-semibold mb-3 text-sm">Информация</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-center gap-2">
-                  <Shield className="w-3 h-3" />
-                  Приватность данных
+                <li>
+                  <button
+                    onClick={() => setActiveLegalPage("terms")}
+                    className="hover:text-foreground transition-colors text-left"
+                  >
+                    Правила пользования
+                  </button>
                 </li>
-                <li className="flex items-center gap-2">
-                  <BookOpen className="w-3 h-3" />
-                  FB2 и EPUB
+                <li>
+                  <button
+                    onClick={() => setActiveLegalPage("copyright")}
+                    className="hover:text-foreground transition-colors text-left"
+                  >
+                    Правообладателям
+                  </button>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Sparkles className="w-3 h-3" />
-                  Бесплатно навсегда
+                <li>
+                  <button
+                    onClick={() => setActiveLegalPage("privacy")}
+                    className="hover:text-foreground transition-colors text-left"
+                  >
+                    Политика обработки персональных данных
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setIsFeedbackOpen(true)}
+                    className="hover:text-foreground transition-colors flex items-center gap-2 text-left"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    Обратная связь
+                  </button>
                 </li>
               </ul>
             </div>
@@ -264,6 +296,34 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
           </div>
         </div>
       </footer>
+
+      {/* Legal Overlays */}
+      <LegalOverlay
+        isOpen={activeLegalPage === "terms"}
+        onClose={() => setActiveLegalPage(null)}
+        title="Правила пользования"
+      >
+        <TermsOfServiceContent />
+      </LegalOverlay>
+
+      <LegalOverlay
+        isOpen={activeLegalPage === "copyright"}
+        onClose={() => setActiveLegalPage(null)}
+        title="Информация для правообладателей"
+      >
+        <CopyrightHoldersContent />
+      </LegalOverlay>
+
+      <LegalOverlay
+        isOpen={activeLegalPage === "privacy"}
+        onClose={() => setActiveLegalPage(null)}
+        title="Политика обработки персональных данных"
+      >
+        <PrivacyPolicyContent />
+      </LegalOverlay>
+
+      {/* Feedback Modal */}
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 }
