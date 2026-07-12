@@ -1,6 +1,7 @@
 import type { Book } from "@workspace/api-client-react";
 import { BookCard } from "@/components/BookCard";
 import { CycleStack } from "@/components/CycleStack";
+import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
 
 type ViewMode = "grid" | "list";
 
@@ -89,13 +90,13 @@ export function ShelfView({ books, viewMode, useStacks = false }: ShelfViewProps
     }
 
     return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      <div className={CARD_GRID_CLASS}>
         {items.map((item, idx) => (
-          <div key={idx} className="relative">
+          <div key={idx} className={`relative self-start ${CARD_ITEM_HEIGHT_CLASS}`}>
             {item.type === "cycle" ? (
-              <CycleStack cycleName={item.cycleName} books={item.books} />
+              <CycleStack cycleName={item.cycleName} books={item.books} className="h-full" />
             ) : (
-              <BookCard book={item.book} />
+              <BookCard book={item.book} className="h-full" />
             )}
           </div>
         ))}
@@ -112,9 +113,11 @@ export function ShelfView({ books, viewMode, useStacks = false }: ShelfViewProps
       {singleBooks.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Одиночные книги</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <div className={CARD_GRID_CLASS}>
             {singleBooks.map((book) => (
-              <BookCard key={book.id} book={book} />
+              <div key={book.id} className={`self-start ${CARD_ITEM_HEIGHT_CLASS}`}>
+                <BookCard book={book} className="h-full" />
+              </div>
             ))}
           </div>
         </div>

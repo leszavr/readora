@@ -26,6 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import { ShelfView } from "@/components/ShelfView";
+import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
 
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
@@ -348,6 +349,7 @@ function LibraryPageLayout({
             selectedBooks={selectedBooks}
             toggleBookSelection={toggleBookSelection}
             setUploadOpen={setUploadOpen}
+            groupBy={groupBy}
             // pass whether to render cycle stacks inline: only on shelf and when not grouped
             // LibraryContent will receive props and forward to ShelfView
           />
@@ -637,6 +639,7 @@ function LibraryContent({
   selectedBooks,
   toggleBookSelection,
   setUploadOpen,
+  groupBy,
 }: Readonly<{
   isLoading: boolean;
   bookItems: any[];
@@ -650,6 +653,7 @@ function LibraryContent({
   selectedBooks: Set<number>;
   toggleBookSelection: (id: number) => void;
   setUploadOpen: (open: boolean) => void;
+  groupBy: GroupOption;
 }>) {
   if (isLoading) {
     return <LoadingState viewMode={viewMode} />;
@@ -660,10 +664,10 @@ function LibraryContent({
     return <EmptyState section={section} hasFilters={hasFilters} onUploadClick={() => setUploadOpen(true)} />;
   }
   
-  if (section === "shelf") {
-    // read persisted grouping preference — when user selected "Без группировки"
-    const [persistedGroupBy] = useLocalStorageState<GroupOption>("readora.library.groupBy", "none");
-    const useStacks = persistedGroupBy === "none";
+  // For the shelf section, render the special ShelfView only when not grouped.
+  // When grouped, fall through to grouped rendering (server returns grouped object).
+  if (section === "shelf" && !isGrouped) {
+    const useStacks = groupBy === "none";
     return <ShelfView books={bookItems} viewMode={viewMode} useStacks={useStacks} />;
   }
 
@@ -686,10 +690,7 @@ const SKELETON_KEYS = Array.from({ length: 12 }, (_, i) => `skeleton-loader-${i}
 
 function LoadingState({ viewMode }: Readonly<{ viewMode: ViewMode }>) {
   return (
-    <div className={viewMode === "grid" 
-      ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
-      : "space-y-2"
-    }>
+    <div className={viewMode === "grid" ? CARD_GRID_CLASS : "space-y-2"}>
       {SKELETON_KEYS.map((key) => (
         <div key={key} className="animate-pulse">
           {viewMode === "grid" ? (
@@ -760,14 +761,11 @@ function GroupedBooksView({ books, viewMode }: Readonly<{ books: any; viewMode: 
               ({groupBooks.length})
             </span>
           </h2>
-          <div className={viewMode === "grid"
-            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
-            : "space-y-2"
-          }>
+          <div className={viewMode === "grid" ? CARD_GRID_CLASS : "space-y-2"}>
             {groupBooks.map((book) => (
-              <div key={book.id} className="relative">
+              <div key={book.id} className={`relative self-start ${viewMode === "grid" ? CARD_ITEM_HEIGHT_CLASS : ""}`}>
                 {viewMode === "grid" ? (
-                  <BookCard book={book} />
+                  <BookCard book={book} className="h-full" />
                 ) : (
                   <BookListItem book={book} />
                 )}
@@ -792,12 +790,9 @@ function BooksGridView({
   onToggleSelection: (id: number) => void;
 }>) {
   return (
-    <div className={viewMode === "grid"
-      ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
-      : "space-y-2"
-    }>
+    <div className={viewMode === "grid" ? CARD_GRID_CLASS : "space-y-2"}>
       {bookItems.map((book: any) => (
-        <div key={book.id} className="relative">
+        <div key={book.id} className={`relative self-start ${viewMode === "grid" ? CARD_ITEM_HEIGHT_CLASS : ""}`}>
           {selectedBooks.size > 0 && (
             <div className="absolute top-2 left-2 z-10">
               <Checkbox
@@ -808,7 +803,7 @@ function BooksGridView({
             </div>
           )}
           {viewMode === "grid" ? (
-            <BookCard book={book} />
+            <BookCard book={book} className="h-full" />
           ) : (
             <BookListItem 
               book={book} 
