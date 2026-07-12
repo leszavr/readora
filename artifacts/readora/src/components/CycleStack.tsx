@@ -2,30 +2,32 @@ import React from "react";
 import type { Book } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { BookCard } from "./BookCard";
+import { CARD_ITEM_HEIGHT_CLASS, DIALOG_CARD_GRID_CLASS } from "./cardGrid";
 import { cn } from "@/lib/utils";
 
 interface Props {
   cycleName: string;
   books: Book[];
+  className?: string;
 }
 
 const PREVIEW_COUNT = 3;
 
-export function CycleStack({ cycleName, books }: Props) {
+export function CycleStack({ cycleName, books, className }: Props) {
   const [open, setOpen] = React.useState(false);
 
   const preview = books.slice(0, PREVIEW_COUNT);
 
   return (
-    <div className="space-y-2">
+    <div className={cn("space-y-2", className)}>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group relative block w-full text-left"
+        className="group relative block h-full w-full text-left"
         aria-label={`Открыть цикл ${cycleName}`}
       >
-        <div className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col h-full min-h-[28rem]">
-          <div className="aspect-[2/3] bg-muted relative overflow-hidden flex items-center justify-center">
+        <div className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col h-full min-h-0">
+          <div className="aspect-[2/3] shrink-0 bg-muted relative overflow-hidden flex items-center justify-center">
             {preview.map((book, i) => {
               const z = preview.length - i;
               // visibility / left offset per layer: layer0 always visible, layer1 visible from sm, layer2 visible from md
@@ -48,7 +50,7 @@ export function CycleStack({ cycleName, books }: Props) {
                   }}
                 >
                   {book.coverUrl ? (
-                    <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                    <img src={book.coverUrl} alt={book.title} className="w-full h-full object-contain" />
                   ) : (
                     <div className="w-full h-full bg-muted flex items-center justify-center text-xs text-muted-foreground p-2">
                       {book.title}
@@ -79,10 +81,10 @@ export function CycleStack({ cycleName, books }: Props) {
             <DialogDescription>{books.length} {getBooksCountSuffix(books.length)}</DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className={cn("mt-4", DIALOG_CARD_GRID_CLASS)}>
             {books.map((b) => (
-              <div key={b.id} className="h-full min-w-0">
-                <BookCard book={b} />
+              <div key={b.id} className={cn("min-w-0", CARD_ITEM_HEIGHT_CLASS)}>
+                <BookCard book={b} className="h-full" compactActions />
               </div>
             ))}
           </div>

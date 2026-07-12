@@ -7,13 +7,16 @@ import {
 } from "@workspace/api-client-react";
 import type { Book } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Check, Circle } from "lucide-react";
 
 interface Props {
   book: Book;
+  className?: string;
+  compactActions?: boolean;
 }
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -23,7 +26,7 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
   abandoned: { label: "Заброшено", variant: "destructive" },
 };
 
-export function BookCard({ book }: Readonly<Props>) {
+export function BookCard({ book, className, compactActions = false }: Readonly<Props>) {
   const qc = useQueryClient();
   const { mutate: saveProgress, isPending: isUpdatingStatus } = useSaveProgress({
     mutation: {
@@ -59,15 +62,18 @@ export function BookCard({ book }: Readonly<Props>) {
   };
 
   return (
-    <Link href={`/book/${book.id}`}>
-      <div className="group bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col h-full">
+    <Link href={`/book/${book.id}`} className="block h-full">
+      <div className={cn(
+        "group bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col self-start",
+        className,
+      )}>
         {/* Cover */}
-        <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+        <div className="aspect-[2/3] shrink-0 bg-muted relative overflow-hidden">
           {book.coverUrl ? (
             <img
               src={book.coverUrl}
               alt={book.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-primary/10 to-primary/5 p-4">
@@ -120,21 +126,27 @@ export function BookCard({ book }: Readonly<Props>) {
               type="button"
               size="sm"
               variant={book.readingStatus === "finished" ? "secondary" : "outline"}
-              className="h-7 text-[11px] min-w-0 whitespace-nowrap"
+              className="h-7 min-w-0 px-2 text-[11px] sm:px-3"
               disabled={isUpdatingStatus}
               onClick={(event) => setQuickStatus(event, "finished")}
+              aria-label="Отметить как прочитанную"
+              title="Прочитано"
             >
-              Прочитано
+              <Check className={cn("size-3.5", !compactActions && "sm:hidden")} aria-hidden="true" />
+              <span className={cn(compactActions ? "hidden" : "hidden sm:inline")}>Прочитано</span>
             </Button>
             <Button
               type="button"
               size="sm"
               variant={book.readingStatus === "not_started" || !book.readingStatus ? "secondary" : "outline"}
-              className="h-7 text-[11px] min-w-0 whitespace-nowrap"
+              className="h-7 min-w-0 px-2 text-[11px] sm:px-3"
               disabled={isUpdatingStatus}
               onClick={(event) => setQuickStatus(event, "not_started")}
+              aria-label="Отметить как нечитанную"
+              title="Не читал"
             >
-              Не читал
+              <Circle className={cn("size-3.5", !compactActions && "sm:hidden")} aria-hidden="true" />
+              <span className={cn(compactActions ? "hidden" : "hidden sm:inline")}>Не читал</span>
             </Button>
           </div>
         </div>
