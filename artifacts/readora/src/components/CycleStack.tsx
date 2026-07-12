@@ -24,7 +24,7 @@ export function CycleStack({ cycleName, books }: Props) {
         className="group relative block w-full text-left"
         aria-label={`Открыть цикл ${cycleName}`}
       >
-        <div className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col h-full">
+        <div className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col h-full min-h-[28rem]">
           <div className="aspect-[2/3] bg-muted relative overflow-hidden flex items-center justify-center">
             {preview.map((book, i) => {
               const z = preview.length - i;
@@ -65,8 +65,8 @@ export function CycleStack({ cycleName, books }: Props) {
             )}
           </div>
 
-          <div className="p-3 flex flex-col gap-1.5">
-            <h3 className="font-semibold text-sm line-clamp-1 leading-tight">{cycleName}</h3>
+          <div className="p-3 flex flex-col gap-1.5 min-h-[6.5rem]">
+            <h3 className="font-semibold text-sm line-clamp-4 leading-tight">{cycleName}</h3>
             <p className="text-xs text-muted-foreground">{books.length} {getBooksCountSuffix(books.length)}</p>
           </div>
         </div>
