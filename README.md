@@ -1,4 +1,4 @@
-<p align="center"><img src="artifacts/readora/public/512_logo.png" alt="Readora Logo" width="200"></p>
+<p align="center"><img src="artifacts/readora/public/og-image.png" alt="Readora"></p>
 
 # Readora
 
