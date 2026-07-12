@@ -115,12 +115,12 @@ export function BookCard({ book }: Readonly<Props>) {
             <Progress value={book.progressPercent} className="h-1" />
           )}
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-2 gap-2 pt-1 min-w-0">
             <Button
               type="button"
               size="sm"
               variant={book.readingStatus === "finished" ? "secondary" : "outline"}
-              className="h-7 text-[11px]"
+              className="h-7 text-[11px] min-w-0 whitespace-nowrap"
               disabled={isUpdatingStatus}
               onClick={(event) => setQuickStatus(event, "finished")}
             >
@@ -130,7 +130,7 @@ export function BookCard({ book }: Readonly<Props>) {
               type="button"
               size="sm"
               variant={book.readingStatus === "not_started" || !book.readingStatus ? "secondary" : "outline"}
-              className="h-7 text-[11px]"
+              className="h-7 text-[11px] min-w-0 whitespace-nowrap"
               disabled={isUpdatingStatus}
               onClick={(event) => setQuickStatus(event, "not_started")}
             >
