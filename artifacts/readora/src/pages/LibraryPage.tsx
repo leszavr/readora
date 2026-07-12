@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorageState } from "@/hooks/use-local-storage-state";
+import { ShelfView } from "@/components/ShelfView";
 
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
@@ -290,39 +291,7 @@ function LibraryPageLayout({
   showDeleteDialog,
   handleBulkDelete,
   toggleBookSelection,
-}: Readonly<{
-  uploadOpen: boolean;
-  setUploadOpen: (open: boolean) => void;
-  showGrouped: boolean;
-  groupedSectionCount: number;
-  sectionBookItems: any[];
-  selectedBooks: Set<number>;
-  setShowDeleteDialog: (open: boolean) => void;
-  clearSelection: () => void;
-  librarySection: LibrarySection;
-  setLibrarySection: (section: LibrarySection) => void;
-  search: string;
-  setSearch: (value: string) => void;
-  statusFilter: ListBooksStatus | "all";
-  setStatusFilter: (value: ListBooksStatus | "all") => void;
-  genreItems: any[];
-  genreFilter: string;
-  setGenreFilter: (value: string) => void;
-  sortBy: SortOption;
-  setSortBy: (value: SortOption) => void;
-  sortDir: "asc" | "desc";
-  setSortDir: (value: "asc" | "desc") => void;
-  groupBy: GroupOption;
-  setGroupBy: (value: GroupOption) => void;
-  viewMode: ViewMode;
-  setViewMode: (value: ViewMode) => void;
-  selectAll: () => void;
-  isLoading: boolean;
-  sectionGroupedBooks: any;
-  showDeleteDialog: boolean;
-  handleBulkDelete: () => void;
-  toggleBookSelection: (id: number) => void;
-}>) {
+}: any) {
   return (
     <ProtectedRoute>
       <Layout>
@@ -379,6 +348,8 @@ function LibraryPageLayout({
             selectedBooks={selectedBooks}
             toggleBookSelection={toggleBookSelection}
             setUploadOpen={setUploadOpen}
+            // pass whether to render cycle stacks inline: only on shelf and when not grouped
+            // LibraryContent will receive props and forward to ShelfView
           />
         </div>
 
@@ -689,6 +660,13 @@ function LibraryContent({
     return <EmptyState section={section} hasFilters={hasFilters} onUploadClick={() => setUploadOpen(true)} />;
   }
   
+  if (section === "shelf") {
+    // read persisted grouping preference — when user selected "Без группировки"
+    const [persistedGroupBy] = useLocalStorageState<GroupOption>("readora.library.groupBy", "none");
+    const useStacks = persistedGroupBy === "none";
+    return <ShelfView books={bookItems} viewMode={viewMode} useStacks={useStacks} />;
+  }
+
   if (isGrouped) {
     return <GroupedBooksView books={books} viewMode={viewMode} />;
   }
