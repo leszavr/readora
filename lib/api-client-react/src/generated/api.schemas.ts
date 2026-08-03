@@ -24,6 +24,7 @@ export interface RegisterInput {
 export interface LoginInput {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -65,6 +66,17 @@ export interface ProfileUpdate {
   username?: string;
   /** @nullable */
   avatar?: string | null;
+}
+
+export interface TrustedDevice {
+  id: number;
+  /** @nullable */
+  deviceInfo: string | null;
+  /** @nullable */
+  ipAddress?: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
 }
 
 export interface Genre {
@@ -500,6 +512,15 @@ export type ResendVerificationBody = {
 };
 
 export type ResendVerification200 = {
+  message?: string;
+};
+
+export type RevokeAllTrustedDevices200 = {
+  message?: string;
+  count?: number;
+};
+
+export type RevokeTrustedDevice200 = {
   message?: string;
 };
 

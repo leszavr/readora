@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
 import { EmailVerificationModal } from "@/components/EmailVerificationModal";
 
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const { isAuthenticated } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
@@ -54,7 +56,7 @@ export default function LoginPage() {
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    doLogin({ data: { email, password } });
+    doLogin({ data: { email, password, rememberMe } });
   }
 
   const errorMsg = error
@@ -132,10 +134,22 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="text-right">
-                <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-                  Забыли пароль?
-                </Link>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onCheckedChange={setRememberMe}
+                  />
+                  <Label htmlFor="rememberMe" className="text-sm font-normal cursor-pointer">
+                    Запомнить меня на этом устройстве
+                  </Label>
+                </div>
+                <div className="text-right">
+                  <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                    Забыли пароль?
+                  </Link>
+                </div>
               </div>
 
               {errorMsg && (

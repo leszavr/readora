@@ -84,16 +84,19 @@ app.use(
       pool,
       tableName: "user_sessions",
       createTableIfMissing: true,
+      // Автоматическая очистка просроченных сессий каждые 15 минут
+      pruneSessionInterval: 15 * 60,
     }),
     secret: sessionSecret ?? "readora-secret-dev",
     resave: false,
     saveUninitialized: false,
+    rolling: true, // Продлевать сессию при каждой активности
     name: "readora.sid",
     cookie: {
       httpOnly: true,
       secure: isProduction,
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 дней (увеличено с 7)
     },
   }),
 );
@@ -102,6 +105,10 @@ app.use(
 await emailService.initialize().catch((error) => {
   logger.error({ error }, "Failed to initialize email service");
 });
+
+// Автоматическое восстановление сессии из remember token (ПЕРЕД роутами)
+const { autoRestoreSession } = await import("./middlewares/auto-restore-session");
+app.use("/api", autoRestoreSession);
 
 app.use("/api", router);
 

@@ -35,9 +35,12 @@ export const RegisterBody = zod.object({
 /**
  * @summary Login
  */
+export const loginBodyRememberMeDefault = false;
+
 export const LoginBody = zod.object({
   "email": zod.string(),
-  "password": zod.string()
+  "password": zod.string(),
+  "rememberMe": zod.boolean().default(loginBodyRememberMeDefault)
 })
 
 export const LoginResponse = zod.object({
@@ -99,6 +102,41 @@ export const UpdateProfileResponse = zod.object({
   "avatar": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Get list of trusted devices
+ */
+export const GetTrustedDevicesResponseItem = zod.object({
+  "id": zod.number(),
+  "deviceInfo": zod.string().nullable(),
+  "ipAddress": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date()
+})
+export const GetTrustedDevicesResponse = zod.array(GetTrustedDevicesResponseItem)
+
+
+/**
+ * @summary Revoke all trusted devices
+ */
+export const RevokeAllTrustedDevicesResponse = zod.object({
+  "message": zod.string().optional(),
+  "count": zod.number().optional()
+})
+
+
+/**
+ * @summary Revoke a specific trusted device
+ */
+export const RevokeTrustedDeviceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RevokeTrustedDeviceResponse = zod.object({
+  "message": zod.string().optional()
 })
 
 
