@@ -165,6 +165,83 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
 
+  /auth/trusted-devices:
+    get:
+      operationId: getTrustedDevices
+      tags: [auth]
+      summary: Get list of trusted devices
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrustedDevice"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: revokeAllTrustedDevices
+      tags: [auth]
+      summary: Revoke all trusted devices
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/trusted-devices/{id}:
+    delete:
+      operationId: revokeTrustedDevice
+      tags: [auth]
+      summary: Revoke a specific trusted device
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # GENRES
   /genres:
     get:
@@ -957,6 +1034,9 @@ components:
           type: string
         password:
           type: string
+        rememberMe:
+          type: boolean
+          default: false
 
     AuthResult:
       type: object
@@ -998,6 +1078,26 @@ components:
           format: date-time
         lastLoginAt:
           type: ["string", "null"]
+          format: date-time
+
+    TrustedDevice:
+      type: object
+      required: [id, deviceInfo, createdAt, lastUsedAt, expiresAt]
+      properties:
+        id:
+          type: integer
+        deviceInfo:
+          type: ["string", "null"]
+        ipAddress:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
           format: date-time
 
     # GENRES

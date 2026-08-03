@@ -33,6 +33,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
@@ -102,7 +103,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Email и пароль обязательны" });
     return;
   }
-  const { email, password } = parsed.data;
+  const { email, password, rememberMe } = parsed.data;
 
   const [user] = await db
     .select()
@@ -148,12 +149,34 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   (req.session as { maintenanceVersion?: string }).maintenanceVersion =
     sessionVersionSetting?.value || "0";
 
+  // ✅ Создаем remember token если пользователь выбрал "Запомнить меня"
+  if (rememberMe) {
+    const { createRememberToken } = await import("../lib/remember-token-service");
+    try {
+      const rememberToken = await createRememberToken(user.id, req);
+      const isProduction = process.env.NODE_ENV === "production";
+      
+      // Устанавливаем remember token в отдельную cookie (90 дней)
+      res.cookie("readora.remember", rememberToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: "lax",
+        maxAge: 90 * 24 * 60 * 60 * 1000, // 90 дней
+        path: "/",
+      });
+    } catch (error) {
+      // Логируем ошибку, но не прерываем вход
+      console.error("[auth/login] Failed to create remember token:", error);
+    }
+  }
+
   res.json({ user: formatUser(user) });
 });
 
 router.post("/auth/logout", (req, res): void => {
   req.session.destroy(() => {
     res.clearCookie("readora.sid");
+    res.clearCookie("readora.remember"); // ✅ Удаляем remember token
     res.sendStatus(204);
   });
 });
@@ -534,6 +557,61 @@ function formatUser(u: typeof usersTable.$inferSelect) {
     lastLoginAt: u.lastLoginAt ?? null,
   };
 }
+
+// GET /auth/trusted-devices - Получить список доверенных устройств
+router.get("/auth/trusted-devices", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as Request & { user: typeof usersTable.$inferSelect }).user;
+  const { getUserRememberTokens } = await import("../lib/remember-token-service");
+  
+  try {
+    const devices = await getUserRememberTokens(user.id);
+    res.json(devices);
+  } catch (error) {
+    res.status(500).json({ error: "Не удалось получить список устройств" });
+  }
+});
+
+// DELETE /auth/trusted-devices/:id - Отозвать доступ для конкретного устройства
+router.delete("/auth/trusted-devices/:id", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as Request & { user: typeof usersTable.$inferSelect }).user;
+  const tokenId = Number.parseInt(String(req.params.id), 10);
+  
+  if (Number.isNaN(tokenId)) {
+    res.status(400).json({ error: "Некорректный ID устройства" });
+    return;
+  }
+
+  const { revokeRememberToken, getUserRememberTokens } = await import("../lib/remember-token-service");
+  
+  try {
+    // Проверяем, что токен принадлежит текущему пользователю
+    const devices = await getUserRememberTokens(user.id);
+    const device = devices.find((d) => d.id === tokenId);
+    
+    if (!device) {
+      res.status(404).json({ error: "Устройство не найдено" });
+      return;
+    }
+
+    await revokeRememberToken(tokenId);
+    res.json({ message: "Доступ для устройства отозван" });
+  } catch (error) {
+    res.status(500).json({ error: "Не удалось отозвать доступ" });
+  }
+});
+
+// DELETE /auth/trusted-devices - Отозвать доступ для всех устройств
+router.delete("/auth/trusted-devices", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as Request & { user: typeof usersTable.$inferSelect }).user;
+  const { revokeAllUserRememberTokens } = await import("../lib/remember-token-service");
+  
+  try {
+    const count = await revokeAllUserRememberTokens(user.id);
+    res.json({ message: `Доступ отозван для ${count} устройств` });
+  } catch (error) {
+    res.status(500).json({ error: "Не удалось отозвать доступ" });
+  }
+});
 
 export { formatUser };
 export default router;

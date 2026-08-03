@@ -69,6 +69,21 @@ export async function requireAuth(
     return;
   }
 
+  // ✅ Проверка на неактивность более 30 дней
+  const INACTIVITY_THRESHOLD_DAYS = 30;
+  const inactivityThreshold = new Date(
+    Date.now() - INACTIVITY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  if (user.lastLoginAt && user.lastLoginAt < inactivityThreshold) {
+    req.session.destroy(() => {});
+    res.status(401).json({
+      error: "Сессия истекла из-за длительной неактивности (более 30 дней)",
+      code: "INACTIVE_USER",
+    });
+    return;
+  }
+
   // Check maintenance mode for non-admin users
   const maintenanceCheck = await checkMaintenanceMode(req, user);
   if (maintenanceCheck.blocked) {
