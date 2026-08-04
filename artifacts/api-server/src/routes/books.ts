@@ -10,6 +10,7 @@ import { parseBook } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
+import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
 
@@ -63,26 +64,6 @@ function toUploadJobResponse(job: typeof bookUploadJobsTable.$inferSelect) {
 
 async function updateUploadJob(jobId: number, values: Partial<typeof bookUploadJobsTable.$inferInsert>): Promise<void> {
   await db.update(bookUploadJobsTable).set(values).where(eq(bookUploadJobsTable.id, jobId));
-}
-
-async function deleteStoredFilesIfUnreferenced(book: typeof booksTable.$inferSelect, excludingBookIds: number[] = [book.id]): Promise<void> {
-  const [{ count: sameFileCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(booksTable)
-    .where(and(eq(booksTable.storageKey, book.storageKey), notInArray(booksTable.id, excludingBookIds)));
-  if (sameFileCount === 0) {
-    fs.rmSync(resolveUploadPath(book.storageKey), { force: true });
-  }
-
-  if (book.coverPath) {
-    const [{ count: sameCoverCount }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(booksTable)
-      .where(and(eq(booksTable.coverPath, book.coverPath), notInArray(booksTable.id, excludingBookIds)));
-    if (sameCoverCount === 0) {
-      fs.rmSync(resolveUploadPath(book.coverPath), { force: true });
-    }
-  }
 }
 
 async function deleteCoverIfUnreferenced(coverPath: string, excludingBookIds: number[]): Promise<void> {
@@ -635,13 +616,17 @@ router.delete("/books/:id", requireAuth, async (req, res): Promise<void> => {
 // POST /books/delete-bulk
 router.post("/books/delete-bulk", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
-  const { ids } = req.body ?? {};
-  if (!Array.isArray(ids) || ids.length === 0) {
-    res.status(400).json({ error: "Список ID обязателен" });
+  const ids = normalizeBookIds(req.body?.ids);
+  if (!ids) {
+    res.status(400).json({ error: "Передайте от 1 до 500 корректных ID книг" });
     return;
   }
   const booksToDelete = await db.select().from(booksTable).where(and(eq(booksTable.ownerUserId, user.id), inArray(booksTable.id, ids)));
   const deletingIds = booksToDelete.map((book) => book.id);
+  if (deletingIds.length === 0) {
+    res.json({ deleted: 0 });
+    return;
+  }
   for (const book of booksToDelete) {
     await deleteStoredFilesIfUnreferenced(book, deletingIds);
   }

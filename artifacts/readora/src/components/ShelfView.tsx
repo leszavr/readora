@@ -2,6 +2,7 @@ import type { Book } from "@workspace/api-client-react";
 import { BookCard } from "@/components/BookCard";
 import { CycleStack } from "@/components/CycleStack";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type ViewMode = "grid" | "list";
 
@@ -9,6 +10,9 @@ interface ShelfViewProps {
   books: Book[];
   viewMode: ViewMode;
   useStacks?: boolean; // when true, render cycle stacks inline in the grid
+  isSelectionMode?: boolean;
+  selectedBooks?: Set<number>;
+  onToggleSelection?: (id: number) => void;
 }
 
 function getCycleGroupsAndSingleBooks(books: Book[]) {
@@ -51,8 +55,51 @@ function getCycleGroupsAndSingleBooks(books: Book[]) {
   };
 }
 
-export function ShelfView({ books, viewMode, useStacks = false }: ShelfViewProps) {
+export function ShelfView({
+  books,
+  viewMode,
+  useStacks = false,
+  isSelectionMode = false,
+  selectedBooks = new Set<number>(),
+  onToggleSelection,
+}: ShelfViewProps) {
   const { cycleGroups, singleBooks } = getCycleGroupsAndSingleBooks(books);
+
+  if (isSelectionMode) {
+    if (viewMode !== "grid") {
+      return (
+        <div className="space-y-2">
+          {books.map((book) => (
+            <label key={book.id} className="flex cursor-pointer items-center gap-4 rounded-lg border bg-card p-4">
+              <Checkbox checked={selectedBooks.has(book.id)} onCheckedChange={() => onToggleSelection?.(book.id)} />
+              <div>
+                <p className="font-medium">{book.title}</p>
+                {book.author && <p className="text-sm text-muted-foreground">{book.author}</p>}
+              </div>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className={CARD_GRID_CLASS}>
+        {books.map((book) => (
+          <div key={book.id} className={`relative self-start ${CARD_ITEM_HEIGHT_CLASS}`}>
+            <div className="absolute left-2 top-2 z-10">
+              <Checkbox
+                checked={selectedBooks.has(book.id)}
+                onCheckedChange={() => onToggleSelection?.(book.id)}
+                onClick={(event) => event.stopPropagation()}
+                className="border-2 bg-background"
+              />
+            </div>
+            <BookCard book={book} className="h-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   if (viewMode !== "grid") {
     return (

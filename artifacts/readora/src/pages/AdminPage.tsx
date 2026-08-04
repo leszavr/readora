@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { cn } from "@/lib/utils";
 import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox } from "lucide-react";
-import AdminStats from "@/pages/admin/AdminStats";
-import AdminUsers from "@/pages/admin/AdminUsers";
-import AdminBooks from "@/pages/admin/AdminBooks";
-import AdminGenres from "@/pages/admin/AdminGenres";
-import AdminSettings from "@/pages/admin/AdminSettings";
-import { AdminSmtp } from "@/pages/admin/AdminSmtp";
-import AdminEmails from "@/pages/admin/AdminEmails";
+
+const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
+const AdminBooks = lazy(() => import("@/pages/admin/AdminBooks"));
+const AdminGenres = lazy(() => import("@/pages/admin/AdminGenres"));
+const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
+const AdminSmtp = lazy(() => import("@/pages/admin/AdminSmtp").then(({ AdminSmtp }) => ({ default: AdminSmtp })));
+const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
@@ -59,14 +60,15 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* Tab content */}
-          {tab === "stats" && <AdminStats />}
-          {tab === "users" && <AdminUsers />}
-          {tab === "books" && <AdminBooks />}
-          {tab === "genres" && <AdminGenres />}
-          {tab === "email" && <AdminSmtp />}
-          {tab === "saved-emails" && <AdminEmails />}
-          {tab === "settings" && <AdminSettings />}
+          <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
+            {tab === "stats" && <AdminStats />}
+            {tab === "users" && <AdminUsers />}
+            {tab === "books" && <AdminBooks />}
+            {tab === "genres" && <AdminGenres />}
+            {tab === "email" && <AdminSmtp />}
+            {tab === "saved-emails" && <AdminEmails />}
+            {tab === "settings" && <AdminSettings />}
+          </Suspense>
         </div>
       </Layout>
     </ProtectedRoute>
