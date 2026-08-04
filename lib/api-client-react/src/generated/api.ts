@@ -3205,6 +3205,77 @@ export const useDeleteAdminBook = <TError = ErrorType<unknown>,
       return useMutation(getDeleteAdminBookMutationOptions(options));
     }
 
+export const getDeleteBulkAdminBooksUrl = () => {
+
+
+
+
+  return `/api/admin/books/delete-bulk`
+}
+
+/**
+ * @summary Delete multiple books (admin)
+ */
+export const deleteBulkAdminBooks = async (bulkDeleteInput: BulkDeleteInput, options?: RequestInit): Promise<BulkDeleteResult> => {
+
+  return customFetch<BulkDeleteResult>(getDeleteBulkAdminBooksUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkDeleteInput,)
+  }
+);}
+
+
+
+
+export const getDeleteBulkAdminBooksMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBulkAdminBooks>>, TError,{data: BodyType<BulkDeleteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBulkAdminBooks>>, TError,{data: BodyType<BulkDeleteInput>}, TContext> => {
+
+const mutationKey = ['deleteBulkAdminBooks'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBulkAdminBooks>>, {data: BodyType<BulkDeleteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  deleteBulkAdminBooks(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBulkAdminBooksMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBulkAdminBooks>>>
+    export type DeleteBulkAdminBooksMutationBody = BodyType<BulkDeleteInput>
+    export type DeleteBulkAdminBooksMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete multiple books (admin)
+ */
+export const useDeleteBulkAdminBooks = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBulkAdminBooks>>, TError,{data: BodyType<BulkDeleteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBulkAdminBooks>>,
+        TError,
+        {data: BodyType<BulkDeleteInput>},
+        TContext
+      > => {
+      return useMutation(getDeleteBulkAdminBooksMutationOptions(options));
+    }
+
 export const getToggleBlockBookUrl = (id: number,) => {
 
 

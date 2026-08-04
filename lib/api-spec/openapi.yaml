@@ -879,6 +879,25 @@ paths:
         "204":
           description: Deleted
 
+  /admin/books/delete-bulk:
+    post:
+      operationId: deleteBulkAdminBooks
+      tags: [admin]
+      summary: Delete multiple books (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeleteInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeleteResult"
+
   /admin/books/{id}/toggle-block:
     post:
       operationId: toggleBlockBook

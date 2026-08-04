@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ListBooksStatus, useListBooks, useListGenres, useDeleteBook } from "@workspace/api-client-react";
+import { ListBooksStatus, useListBooks, useListGenres, useDeleteBulkBooks } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { BookCard } from "@/components/BookCard";
@@ -61,35 +61,6 @@ function filterGroupedBySection(groupedSource: Record<string, any[]>, section: L
   return grouped;
 }
 
-async function deleteSelectedBooks(
-  selectedBooks: Set<number>,
-  mutateAsync: (params: { id: number }) => Promise<unknown>,
-  refetch: () => void,
-  toast: (args: { title: string; description: string; variant?: "destructive" }) => void,
-  onSuccess: () => void,
-): Promise<void> {
-  try {
-    for (const bookId of selectedBooks) {
-      await mutateAsync({ id: bookId });
-    }
-
-    toast({
-      title: "Книги удалены",
-      description: `Успешно удалено книг: ${selectedBooks.size}`,
-    });
-
-    onSuccess();
-    refetch();
-  } catch (error) {
-    console.error("Failed to delete books:", error);
-    toast({
-      title: "Ошибка",
-      description: "Не удалось удалить некоторые книги",
-      variant: "destructive",
-    });
-  }
-}
-
 export default function LibraryPage() {
   const [location] = useLocation();
   const [uploadOpen, setUploadOpen] = useState(location.includes("upload=1"));
@@ -102,6 +73,7 @@ export default function LibraryPage() {
   const [librarySection, setLibrarySection] = useLocalStorageState<LibrarySection>("readora.library.section", "library");
   const [viewMode, setViewMode] = useLocalStorageState<ViewMode>("readora.library.viewMode", "grid");
   const [selectedBooks, setSelectedBooks] = useState<Set<number>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { toast } = useToast();
 
@@ -118,7 +90,7 @@ export default function LibraryPage() {
   });
 
   const { data: genres = [] } = useListGenres();
-  const deleteBookMutation = useDeleteBook();
+  const deleteBooksMutation = useDeleteBulkBooks();
 
   const bookItems = Array.isArray(books) ? books : [];
   const genreItems = Array.isArray(genres) ? genres : [];
@@ -166,6 +138,14 @@ export default function LibraryPage() {
     };
   }, [isGrouped, sortedGroupedBooks, librarySection]);
 
+  const visibleBookItems = useMemo(() => {
+    if (!isGrouped || !sectionGroupedBooks || typeof sectionGroupedBooks !== "object" || !("grouped" in sectionGroupedBooks)) {
+      return sectionBookItems;
+    }
+
+    return Object.values((sectionGroupedBooks as { grouped: Record<string, any[]> }).grouped).flat();
+  }, [isGrouped, sectionGroupedBooks, sectionBookItems]);
+
   const groupedSectionCount = isGrouped && sectionGroupedBooks && typeof sectionGroupedBooks === "object" && "grouped" in sectionGroupedBooks
     ? Object.keys((sectionGroupedBooks as { grouped: Record<string, any[]> }).grouped).length
     : 0;
@@ -179,6 +159,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     setSelectedBooks(new Set());
+    setIsSelectionMode(false);
     if (librarySection === "shelf" && statusFilter !== "finished") {
       setStatusFilter("finished");
       return;
@@ -199,28 +180,36 @@ export default function LibraryPage() {
   };
 
   const selectAll = () => {
-    if (showGrouped) return;
-    const allIds = new Set(sectionBookItems.map((b: any) => b.id));
+    const allIds = new Set(visibleBookItems.map((b: any) => b.id));
     setSelectedBooks(allIds);
   };
 
   const clearSelection = () => {
     setSelectedBooks(new Set());
+    setIsSelectionMode(false);
   };
 
   const handleBulkDelete = async () => {
     if (selectedBooks.size === 0) return;
 
-    await deleteSelectedBooks(
-      selectedBooks,
-      deleteBookMutation.mutateAsync,
-      refetch,
-      toast,
-      () => {
-        setSelectedBooks(new Set());
-        setShowDeleteDialog(false);
-      },
-    );
+    try {
+      const result = await deleteBooksMutation.mutateAsync({ data: { ids: [...selectedBooks] } });
+      toast({
+        title: "Книги удалены",
+        description: `Успешно удалено книг: ${result.deleted}`,
+      });
+      setSelectedBooks(new Set());
+      setIsSelectionMode(false);
+      setShowDeleteDialog(false);
+      refetch();
+    } catch (error) {
+      console.error("Failed to delete books:", error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить выбранные книги",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -229,8 +218,10 @@ export default function LibraryPage() {
       setUploadOpen={setUploadOpen}
       showGrouped={showGrouped}
       groupedSectionCount={groupedSectionCount}
-      sectionBookItems={sectionBookItems}
+      visibleBookItems={visibleBookItems}
       selectedBooks={selectedBooks}
+      isSelectionMode={isSelectionMode}
+      setIsSelectionMode={setIsSelectionMode}
       setShowDeleteDialog={setShowDeleteDialog}
       clearSelection={clearSelection}
       librarySection={librarySection}
@@ -265,8 +256,10 @@ function LibraryPageLayout({
   setUploadOpen,
   showGrouped,
   groupedSectionCount,
-  sectionBookItems,
+  visibleBookItems,
   selectedBooks,
+  isSelectionMode,
+  setIsSelectionMode,
   setShowDeleteDialog,
   clearSelection,
   librarySection,
@@ -300,8 +293,10 @@ function LibraryPageLayout({
           <LibraryHeader
             showGrouped={showGrouped}
             groupedSectionCount={groupedSectionCount}
-            sectionBookItems={sectionBookItems}
+            visibleBookItems={visibleBookItems}
             selectedBooks={selectedBooks}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
             setShowDeleteDialog={setShowDeleteDialog}
             clearSelection={clearSelection}
             setUploadOpen={setUploadOpen}
@@ -329,16 +324,16 @@ function LibraryPageLayout({
             setGroupBy={setGroupBy}
             viewMode={viewMode}
             setViewMode={setViewMode}
-            showGrouped={showGrouped}
-            sectionBookItems={sectionBookItems}
+            visibleBookItems={visibleBookItems}
             selectedBooks={selectedBooks}
+            isSelectionMode={isSelectionMode}
             clearSelection={clearSelection}
             selectAll={selectAll}
           />
 
           <LibraryContent
             isLoading={isLoading}
-            bookItems={sectionBookItems}
+            bookItems={visibleBookItems}
             isGrouped={showGrouped}
             books={sectionGroupedBooks}
             search={search}
@@ -350,8 +345,7 @@ function LibraryPageLayout({
             toggleBookSelection={toggleBookSelection}
             setUploadOpen={setUploadOpen}
             groupBy={groupBy}
-            // pass whether to render cycle stacks inline: only on shelf and when not grouped
-            // LibraryContent will receive props and forward to ShelfView
+            isSelectionMode={isSelectionMode}
           />
         </div>
 
@@ -382,16 +376,20 @@ function LibraryPageLayout({
 function LibraryHeader({
   showGrouped,
   groupedSectionCount,
-  sectionBookItems,
+  visibleBookItems,
   selectedBooks,
+  isSelectionMode,
+  setIsSelectionMode,
   setShowDeleteDialog,
   clearSelection,
   setUploadOpen,
 }: Readonly<{
   showGrouped: boolean;
   groupedSectionCount: number;
-  sectionBookItems: any[];
+  visibleBookItems: any[];
   selectedBooks: Set<number>;
+  isSelectionMode: boolean;
+  setIsSelectionMode: (enabled: boolean) => void;
   setShowDeleteDialog: (open: boolean) => void;
   clearSelection: () => void;
   setUploadOpen: (open: boolean) => void;
@@ -401,21 +399,23 @@ function LibraryHeader({
       <div>
         <h1 className="text-2xl font-bold">Моя библиотека</h1>
         <p className="text-muted-foreground text-sm">
-          {showGrouped ? `${groupedSectionCount} групп` : `${sectionBookItems.length} книг`}
+          {showGrouped ? `${groupedSectionCount} групп` : `${visibleBookItems.length} книг`}
         </p>
       </div>
       <div className="flex gap-2">
-        {selectedBooks.size > 0 && (
+        {isSelectionMode && (
           <>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDeleteDialog(true)}
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Удалить ({selectedBooks.size})
-            </Button>
+            {selectedBooks.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Удалить ({selectedBooks.size})
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -426,6 +426,11 @@ function LibraryHeader({
               Отменить
             </Button>
           </>
+        )}
+        {!isSelectionMode && visibleBookItems.length > 0 && (
+          <Button variant="outline" size="sm" onClick={() => setIsSelectionMode(true)}>
+            Выбрать
+          </Button>
         )}
         <Button onClick={() => setUploadOpen(true)} className="gap-2">
           <Upload className="w-4 h-4" />
@@ -484,9 +489,9 @@ function LibraryFiltersBar({
   setGroupBy,
   viewMode,
   setViewMode,
-  showGrouped,
-  sectionBookItems,
+  visibleBookItems,
   selectedBooks,
+  isSelectionMode,
   clearSelection,
   selectAll,
 }: Readonly<{
@@ -506,9 +511,9 @@ function LibraryFiltersBar({
   setGroupBy: (value: GroupOption) => void;
   viewMode: ViewMode;
   setViewMode: (value: ViewMode) => void;
-  showGrouped: boolean;
-  sectionBookItems: any[];
+  visibleBookItems: any[];
   selectedBooks: Set<number>;
+  isSelectionMode: boolean;
   clearSelection: () => void;
   selectAll: () => void;
 }>) {
@@ -612,13 +617,13 @@ function LibraryFiltersBar({
         </Button>
       </div>
 
-      {!showGrouped && sectionBookItems.length > 0 && (
+      {isSelectionMode && visibleBookItems.length > 0 && (
         <Button
           variant="outline"
           size="sm"
-          onClick={selectedBooks.size === sectionBookItems.length ? clearSelection : selectAll}
+          onClick={selectedBooks.size === visibleBookItems.length ? clearSelection : selectAll}
         >
-          {selectedBooks.size === sectionBookItems.length ? "Снять выделение" : "Выбрать все"}
+          {selectedBooks.size === visibleBookItems.length ? "Снять выделение" : "Выбрать все"}
         </Button>
       )}
     </div>
@@ -640,6 +645,7 @@ function LibraryContent({
   toggleBookSelection,
   setUploadOpen,
   groupBy,
+  isSelectionMode,
 }: Readonly<{
   isLoading: boolean;
   bookItems: any[];
@@ -654,6 +660,7 @@ function LibraryContent({
   toggleBookSelection: (id: number) => void;
   setUploadOpen: (open: boolean) => void;
   groupBy: GroupOption;
+  isSelectionMode: boolean;
 }>) {
   if (isLoading) {
     return <LoadingState viewMode={viewMode} />;
@@ -668,11 +675,28 @@ function LibraryContent({
   // When grouped, fall through to grouped rendering (server returns grouped object).
   if (section === "shelf" && !isGrouped) {
     const useStacks = groupBy === "none";
-    return <ShelfView books={bookItems} viewMode={viewMode} useStacks={useStacks} />;
+    return (
+      <ShelfView
+        books={bookItems}
+        viewMode={viewMode}
+        useStacks={useStacks}
+        isSelectionMode={isSelectionMode}
+        selectedBooks={selectedBooks}
+        onToggleSelection={toggleBookSelection}
+      />
+    );
   }
 
   if (isGrouped) {
-    return <GroupedBooksView books={books} viewMode={viewMode} />;
+    return (
+      <GroupedBooksView
+        books={books}
+        viewMode={viewMode}
+        isSelectionMode={isSelectionMode}
+        selectedBooks={selectedBooks}
+        onToggleSelection={toggleBookSelection}
+      />
+    );
   }
   
   return (
@@ -681,6 +705,7 @@ function LibraryContent({
       viewMode={viewMode}
       selectedBooks={selectedBooks}
       onToggleSelection={toggleBookSelection}
+      isSelectionMode={isSelectionMode}
     />
   );
 }
@@ -749,7 +774,13 @@ function EmptyState({ section, hasFilters, onUploadClick }: Readonly<{ section: 
   );
 }
 
-function GroupedBooksView({ books, viewMode }: Readonly<{ books: any; viewMode: ViewMode }>) {
+function GroupedBooksView({ books, viewMode, isSelectionMode, selectedBooks, onToggleSelection }: Readonly<{
+  books: any;
+  viewMode: ViewMode;
+  isSelectionMode: boolean;
+  selectedBooks: Set<number>;
+  onToggleSelection: (id: number) => void;
+}>) {
   return (
     <div className="space-y-8">
       {Object.entries(books.grouped).map(([groupName, groupBooks]: [string, any[]]) => (
@@ -761,17 +792,13 @@ function GroupedBooksView({ books, viewMode }: Readonly<{ books: any; viewMode: 
               ({groupBooks.length})
             </span>
           </h2>
-          <div className={viewMode === "grid" ? CARD_GRID_CLASS : "space-y-2"}>
-            {groupBooks.map((book) => (
-              <div key={book.id} className={`relative self-start ${viewMode === "grid" ? CARD_ITEM_HEIGHT_CLASS : ""}`}>
-                {viewMode === "grid" ? (
-                  <BookCard book={book} className="h-full" />
-                ) : (
-                  <BookListItem book={book} />
-                )}
-              </div>
-            ))}
-          </div>
+          <BooksGridView
+            bookItems={groupBooks}
+            viewMode={viewMode}
+            selectedBooks={selectedBooks}
+            onToggleSelection={onToggleSelection}
+            isSelectionMode={isSelectionMode}
+          />
         </div>
       ))}
     </div>
@@ -782,22 +809,25 @@ function BooksGridView({
   bookItems, 
   viewMode, 
   selectedBooks, 
-  onToggleSelection 
+  onToggleSelection,
+  isSelectionMode,
 }: Readonly<{ 
   bookItems: any[]; 
   viewMode: ViewMode; 
   selectedBooks: Set<number>; 
   onToggleSelection: (id: number) => void;
+  isSelectionMode: boolean;
 }>) {
   return (
     <div className={viewMode === "grid" ? CARD_GRID_CLASS : "space-y-2"}>
       {bookItems.map((book: any) => (
         <div key={book.id} className={`relative self-start ${viewMode === "grid" ? CARD_ITEM_HEIGHT_CLASS : ""}`}>
-          {selectedBooks.size > 0 && (
+          {isSelectionMode && (
             <div className="absolute top-2 left-2 z-10">
               <Checkbox
                 checked={selectedBooks.has(book.id)}
                 onCheckedChange={() => onToggleSelection(book.id)}
+                onClick={(event) => event.stopPropagation()}
                 className="bg-background border-2"
               />
             </div>
@@ -809,7 +839,7 @@ function BooksGridView({
               book={book} 
               selected={selectedBooks.has(book.id)}
               onSelect={() => onToggleSelection(book.id)}
-              showCheckbox={selectedBooks.size > 0}
+              showCheckbox={isSelectionMode}
             />
           )}
         </div>

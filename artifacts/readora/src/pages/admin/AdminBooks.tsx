@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListAdminBooks,
   useDeleteAdminBook,
+  useDeleteBulkAdminBooks,
   useToggleBlockBook,
   getListAdminBooksQueryKey,
 } from "@workspace/api-client-react";
@@ -13,18 +14,76 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminBooks() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<number>>(new Set());
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const { data: books = [], isLoading } = useListAdminBooks({ search: search || undefined });
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminBooksQueryKey() });
 
   const { mutate: deleteBook } = useDeleteAdminBook({ mutation: { onSuccess: invalidate } });
+  const deleteBooksMutation = useDeleteBulkAdminBooks();
   const { mutate: toggleBlock } = useToggleBlockBook({ mutation: { onSuccess: invalidate } });
+
+  useEffect(() => {
+    setSelectedBookIds(new Set());
+  }, [search]);
+
+  const allVisibleSelected = books.length > 0 && books.every((book) => selectedBookIds.has(book.id));
+  const someVisibleSelected = books.some((book) => selectedBookIds.has(book.id));
+
+  const toggleBookSelection = (bookId: number) => {
+    setSelectedBookIds((current) => {
+      const next = new Set(current);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  };
+
+  const toggleAllVisibleBooks = () => {
+    setSelectedBookIds(allVisibleSelected ? new Set() : new Set(books.map((book) => book.id)));
+  };
+
+  const deleteSelectedBooks = async () => {
+    if (selectedBookIds.size === 0) return;
+
+    try {
+      const result = await deleteBooksMutation.mutateAsync({ data: { ids: [...selectedBookIds] } });
+      toast({
+        title: "Книги удалены",
+        description: `Успешно удалено книг: ${result.deleted}`,
+      });
+      setSelectedBookIds(new Set());
+      setShowDeleteDialog(false);
+      invalidate();
+    } catch (error) {
+      console.error("Failed to delete books:", error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить выбранные книги",
+        variant: "destructive",
+      });
+    }
+  };
 
   const formatSize = (bytes: number | null) => {
     if (!bytes) return "—";
@@ -39,6 +98,12 @@ export default function AdminBooks() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Поиск книг..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        {selectedBookIds.size > 0 && (
+          <Button variant="destructive" size="sm" className="gap-2" onClick={() => setShowDeleteDialog(true)}>
+            <Trash2 className="w-4 h-4" />
+            Удалить ({selectedBookIds.size})
+          </Button>
+        )}
       </div>
 
       <div className="border rounded-xl overflow-hidden bg-card">
@@ -48,28 +113,42 @@ export default function AdminBooks() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleAllVisibleBooks}
+                    aria-label="Выбрать все книги"
+                  />
+                </TableHead>
                 <TableHead>Название</TableHead>
                 <TableHead>Формат</TableHead>
                 <TableHead>Владелец</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead>Размер</TableHead>
                 <TableHead>Загружена</TableHead>
-                <TableHead className="w-10"></TableHead>
+                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {books.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Книги не найдены</TableCell>
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Книги не найдены</TableCell>
                 </TableRow>
               ) : (
                 books.map((b: {
                   id: number; title: string; author?: string | null;
                   format: string; status: string; ownerUsername?: string | null;
                   fileSize?: number | null; uploadedAt: string;
-                }) => (
-                  <TableRow key={b.id}>
-                    <TableCell>
+                  }) => (
+                    <TableRow key={b.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedBookIds.has(b.id)}
+                          onCheckedChange={() => toggleBookSelection(b.id)}
+                          aria-label={`Выбрать книгу ${b.title}`}
+                        />
+                      </TableCell>
+                      <TableCell>
                       <div>
                         <p className="font-medium text-sm">{b.title}</p>
                         {b.author && <p className="text-xs text-muted-foreground">{b.author}</p>}
@@ -117,6 +196,26 @@ export default function AdminBooks() {
           </Table>
         )}
       </div>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить выбранные книги?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Будет удалено книг: {selectedBookIds.size}. Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={deleteSelectedBooks}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

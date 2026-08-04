@@ -1,22 +1,23 @@
-import React, { Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
-import NotFound from "@/pages/not-found";
-import HomePage from "@/pages/HomePage";
-import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
-import LibraryPage from "@/pages/LibraryPage";
-import BookPage from "@/pages/BookPage";
-import ReaderPage from "@/pages/ReaderPage";
-import ProfilePage from "@/pages/ProfilePage";
-import AdminPage from "@/pages/AdminPage";
-import VerifyEmailPage from "@/pages/VerifyEmailPage";
-import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
-import ResetPasswordPage from "@/pages/ResetPasswordPage";
-import ConfirmPasswordChangePage from "@/pages/ConfirmPasswordChangePage";
+
+const NotFound = lazy(() => import("@/pages/not-found"));
+const HomePage = lazy(() => import("@/pages/HomePage"));
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
+const LibraryPage = lazy(() => import("@/pages/LibraryPage"));
+const BookPage = lazy(() => import("@/pages/BookPage"));
+const ReaderPage = lazy(() => import("@/pages/ReaderPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
+const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
+const ConfirmPasswordChangePage = lazy(() => import("@/pages/ConfirmPasswordChangePage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,21 +30,23 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={HomePage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
-      <Route path="/verify/:token" component={VerifyEmailPage} />
-      <Route path="/forgot-password" component={ForgotPasswordPage} />
-      <Route path="/reset-password/:token" component={ResetPasswordPage} />
-      <Route path="/confirm-password-change/:token" component={ConfirmPasswordChangePage} />
-      <Route path="/library" component={LibraryPage} />
-      <Route path="/book/:id" component={BookPage} />
-      <Route path="/reader/:id" component={ReaderPage} />
-      <Route path="/profile" component={ProfilePage} />
-      <Route path="/admin" component={AdminPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <Switch>
+        <Route path="/" component={HomePage} />
+        <Route path="/login" component={LoginPage} />
+        <Route path="/register" component={RegisterPage} />
+        <Route path="/verify/:token" component={VerifyEmailPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/reset-password/:token" component={ResetPasswordPage} />
+        <Route path="/confirm-password-change/:token" component={ConfirmPasswordChangePage} />
+        <Route path="/library" component={LibraryPage} />
+        <Route path="/book/:id" component={BookPage} />
+        <Route path="/reader/:id" component={ReaderPage} />
+        <Route path="/profile" component={ProfilePage} />
+        <Route path="/admin" component={AdminPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, inArray, sql, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import os from "node:os";
 import { statfs } from "node:fs/promises";
@@ -20,6 +20,7 @@ import { requireAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
+import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 
 const router = Router();
 
@@ -421,10 +422,37 @@ router.delete(
   requireAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
+    const [book] = await db.select().from(booksTable).where(eq(booksTable.id, id));
+    if (!book) {
+      res.status(404).json({ error: "Книга не найдена" });
+      return;
+    }
+    await deleteStoredFilesIfUnreferenced(book);
     await db.delete(booksTable).where(eq(booksTable.id, id));
     res.sendStatus(204);
   },
 );
+
+// POST /admin/books/delete-bulk
+router.post("/admin/books/delete-bulk", requireAdmin, async (req, res): Promise<void> => {
+  const ids = normalizeBookIds(req.body?.ids);
+  if (!ids) {
+    res.status(400).json({ error: "Передайте от 1 до 500 корректных ID книг" });
+    return;
+  }
+
+  const booksToDelete = await db.select().from(booksTable).where(inArray(booksTable.id, ids));
+  const deletingIds = booksToDelete.map((book) => book.id);
+  if (deletingIds.length === 0) {
+    res.json({ deleted: 0 });
+    return;
+  }
+  for (const book of booksToDelete) {
+    await deleteStoredFilesIfUnreferenced(book, deletingIds);
+  }
+  const deleted = await db.delete(booksTable).where(inArray(booksTable.id, deletingIds)).returning({ id: booksTable.id });
+  res.json({ deleted: deleted.length });
+});
 
 // POST /admin/books/:id/toggle-block
 router.post(

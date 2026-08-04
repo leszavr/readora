@@ -751,6 +751,18 @@ export const DeleteAdminBookParams = zod.object({
 
 
 /**
+ * @summary Delete multiple books (admin)
+ */
+export const DeleteBulkAdminBooksBody = zod.object({
+  "ids": zod.array(zod.number())
+})
+
+export const DeleteBulkAdminBooksResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
  * @summary Block/unblock book (admin)
  */
 export const ToggleBlockBookParams = zod.object({
