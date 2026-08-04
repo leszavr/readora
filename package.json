@@ -2,6 +2,7 @@
   "name": "readora",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent $npm_execpath\" in *pnpm*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "dev:server": "pnpm --filter @workspace/api-server run dev",

@@ -21,10 +21,9 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "10.24.0"
+          version: "9.0.0"
       - name: Использовать npm registry
         run: |
-          if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
           pnpm config set registry https://registry.npmjs.org
       - name: Установить зависимости
         run: pnpm install --frozen-lockfile
@@ -50,10 +49,9 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "10.24.0"
+          version: "9.0.0"
       - name: Использовать npm registry
         run: |
-          if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
           pnpm config set registry https://registry.npmjs.org
       - name: Установить зависимости
         run: pnpm install --frozen-lockfile
@@ -74,10 +72,9 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "10.24.0"
+          version: "9.0.0"
       - name: Использовать npm registry
         run: |
-          if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
           pnpm config set registry https://registry.npmjs.org
       - name: Установить зависимости
         run: pnpm install --frozen-lockfile
@@ -97,10 +94,9 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "10.24.0"
+          version: "9.0.0"
       - name: Сдвинуть registry к npm (CI)
         run: |
-          if [ -f .npmrc ]; then mv .npmrc .npmrc.ci.bak; fi
           export npm_config_registry=https://registry.npmjs.org
           pnpm config set registry https://registry.npmjs.org
       - name: Установить зависимости
