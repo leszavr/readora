@@ -20,8 +20,6 @@ jobs:
           node-version: "22"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: "9.0.0"
       - name: Использовать npm registry
         run: |
           pnpm config set registry https://registry.npmjs.org
@@ -48,8 +46,6 @@ jobs:
           node-version: "22"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: "9.0.0"
       - name: Использовать npm registry
         run: |
           pnpm config set registry https://registry.npmjs.org
@@ -71,8 +67,6 @@ jobs:
           node-version: "22"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: "9.0.0"
       - name: Использовать npm registry
         run: |
           pnpm config set registry https://registry.npmjs.org
@@ -93,8 +87,6 @@ jobs:
           node-version: "22"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: "9.0.0"
       - name: Сдвинуть registry к npm (CI)
         run: |
           export npm_config_registry=https://registry.npmjs.org
