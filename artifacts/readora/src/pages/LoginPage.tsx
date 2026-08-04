@@ -6,7 +6,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
@@ -20,7 +26,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
+  const [showEmailVerificationModal, setShowEmailVerificationModal] =
+    useState(false);
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
 
   // Check for success messages in URL
@@ -32,7 +39,11 @@ export default function LoginPage() {
     if (isAuthenticated) navigate("/library");
   }, [isAuthenticated]);
 
-  const { mutate: doLogin, isPending, error } = useLogin({
+  const {
+    mutate: doLogin,
+    isPending,
+    error,
+  } = useLogin({
     mutation: {
       onSuccess: (data) => {
         qc.setQueryData(getGetMeQueryKey(), data.user);
@@ -40,10 +51,16 @@ export default function LoginPage() {
         navigate("/library");
       },
       onError: (err) => {
-        const errorData = err.data as { error?: string; userId?: number } | null;
+        const errorData = err.data as {
+          error?: string;
+          userId?: number;
+        } | null;
         const errorMsg = errorData?.error ?? "";
-        
-        if (errorMsg.includes("Подтвердите email") || errorMsg.includes("email")) {
+
+        if (
+          errorMsg.includes("Подтвердите email") ||
+          errorMsg.includes("email")
+        ) {
           // Try to extract userId from session or error response
           if (errorData?.userId) {
             setPendingUserId(errorData.userId);
@@ -68,9 +85,17 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center rounded-2xl bg-primary/10 px-4 py-3 mb-4">
-            <img src="/readora-wordmark.webp" alt="Readora" className="h-8 w-auto" loading="eager" decoding="async" />
+            <img
+              src="/readora-wordmark.webp"
+              alt="Readora"
+              className="h-8 w-auto"
+              loading="eager"
+              decoding="async"
+            />
           </div>
-          <p className="text-muted-foreground text-sm mt-1">Войдите в свою библиотеку</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            Войдите в свою библиотеку
+          </p>
         </div>
 
         <Card>
@@ -83,11 +108,12 @@ export default function LoginPage() {
               <Alert className="mb-4">
                 <Mail className="h-4 w-4" />
                 <AlertDescription>
-                  Регистрация успешна! Проверьте вашу почту и перейдите по ссылке для подтверждения email, затем войдите в систему.
+                  Регистрация успешна! Проверьте вашу почту и перейдите по
+                  ссылке для подтверждения email, затем войдите в систему.
                 </AlertDescription>
               </Alert>
             )}
-            
+
             {emailVerified && (
               <Alert className="mb-4">
                 <CheckCircle className="h-4 w-4" />
@@ -125,11 +151,17 @@ export default function LoginPage() {
                   />
                   <button
                     type="button"
-                    aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                    aria-label={
+                      showPassword ? "Скрыть пароль" : "Показать пароль"
+                    }
                     className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
                     onClick={() => setShowPassword((prev) => !prev)}
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -141,12 +173,18 @@ export default function LoginPage() {
                     checked={rememberMe}
                     onCheckedChange={setRememberMe}
                   />
-                  <Label htmlFor="rememberMe" className="text-sm font-normal cursor-pointer">
+                  <Label
+                    htmlFor="rememberMe"
+                    className="text-sm font-normal cursor-pointer"
+                  >
                     Запомнить меня на этом устройстве
                   </Label>
                 </div>
                 <div className="text-right">
-                  <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm text-primary hover:underline"
+                  >
                     Забыли пароль?
                   </Link>
                 </div>
@@ -157,14 +195,19 @@ export default function LoginPage() {
               )}
 
               <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
                 Войти
               </Button>
             </form>
 
             <p className="text-center text-sm text-muted-foreground mt-4">
               Нет аккаунта?{" "}
-              <Link href="/register" className="text-primary hover:underline font-medium">
+              <Link
+                href="/register"
+                className="text-primary hover:underline font-medium"
+              >
                 Зарегистрироваться
               </Link>
             </p>
