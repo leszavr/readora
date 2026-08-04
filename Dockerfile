@@ -20,7 +20,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm -r --if-present run build
 
 # Выделяем prod-зависимости api-server в отдельную директорию
-RUN pnpm --filter @workspace/api-server deploy --legacy --prod /deploy
+RUN pnpm --config.minimumReleaseAge=0 --filter @workspace/api-server deploy --legacy --prod /deploy
 
 # ─── Stage 2: production ────────────────────────────────────────────────────
 FROM node:24-bookworm-slim AS production
