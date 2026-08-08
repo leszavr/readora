@@ -139,11 +139,12 @@ app.use("/api", autoRestoreSession);
 app.use("/api", router);
 
 if (hasClientDist && homeRenderer) {
-  const spaHtml = readFileSync(resolve(clientDist, "index.html"), "utf8").replace("<meta name=\"robots\" content=\"index, follow\" />", "<meta name=\"robots\" content=\"noindex, nofollow\" />");
+  const indexHtml = readFileSync(resolve(clientDist, "index.html"), "utf8");
+  const privateSpaHtml = indexHtml.replace("<meta name=\"robots\" content=\"index, follow\" />", "<meta name=\"robots\" content=\"noindex, nofollow\" />");
   app.get("/", async (_req, res, next) => {
     try {
       res.type("html").send(homeRenderer.renderHomeDocument({
-        template: spaHtml,
+        template: indexHtml,
         publicBaseUrl: getPublicBaseUrl(),
         popularBooks: await getPopularBooks(6),
       }));
@@ -158,7 +159,7 @@ if (hasClientDist && homeRenderer) {
       return;
     }
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
-    res.status(spaRoutes.some((route) => route.test(req.path)) ? 200 : 404).type("html").send(spaHtml);
+    res.status(spaRoutes.some((route) => route.test(req.path)) ? 200 : 404).type("html").send(privateSpaHtml);
   });
 }
 
