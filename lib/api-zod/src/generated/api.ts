@@ -255,6 +255,7 @@ export const ListBooksResponseItem = zod.object({
   "readingStatus": zod.union([zod.literal('not_started'),zod.literal('reading'),zod.literal('finished'),zod.literal(null)]).nullish(),
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
+  "hideFromPopular": zod.boolean().optional(),
   "uploadedAt": zod.coerce.date()
 })
 export const ListBooksResponse = zod.array(ListBooksResponseItem)
@@ -266,7 +267,8 @@ export const ListBooksResponse = zod.array(ListBooksResponseItem)
 export const UploadBookBody = zod.object({
   "cycleId": zod.number().optional(),
   "cycleName": zod.string().optional(),
-  "cycleNumber": zod.number().optional()
+  "cycleNumber": zod.number().optional(),
+  "hideFromPopular": zod.boolean().optional()
 })
 
 
@@ -303,6 +305,7 @@ export const GetBookResponse = zod.object({
   "readingStatus": zod.union([zod.literal('not_started'),zod.literal('reading'),zod.literal('finished'),zod.literal(null)]).nullish(),
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
+  "hideFromPopular": zod.boolean().optional(),
   "uploadedAt": zod.coerce.date()
 })
 
@@ -322,7 +325,8 @@ export const UpdateBookBody = zod.object({
   "publicationYear": zod.number().nullish(),
   "cycleId": zod.number().nullish(),
   "cycleNumber": zod.number().nullish(),
-  "genreIds": zod.array(zod.number()).optional()
+  "genreIds": zod.array(zod.number()).optional(),
+  "hideFromPopular": zod.boolean().optional()
 })
 
 export const UpdateBookResponse = zod.object({
@@ -351,6 +355,7 @@ export const UpdateBookResponse = zod.object({
   "readingStatus": zod.union([zod.literal('not_started'),zod.literal('reading'),zod.literal('finished'),zod.literal(null)]).nullish(),
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
+  "hideFromPopular": zod.boolean().optional(),
   "uploadedAt": zod.coerce.date()
 })
 
@@ -510,14 +515,20 @@ export const GetPopularBooksQueryParams = zod.object({
 })
 
 export const GetPopularBooksResponseItem = zod.object({
-  "id": zod.number(),
   "title": zod.string(),
   "author": zod.string().nullish(),
   "description": zod.string().nullish(),
-  "coverUrl": zod.string().nullish(),
-  "openCount": zod.number().optional()
+  "coverUrl": zod.string()
 })
 export const GetPopularBooksResponse = zod.array(GetPopularBooksResponseItem)
+
+
+/**
+ * @summary Get a generated cover for a currently popular book
+ */
+export const GetPopularBookCoverParams = zod.object({
+  "coverSeed": zod.coerce.string()
+})
 
 
 /**

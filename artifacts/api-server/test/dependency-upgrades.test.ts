@@ -3,8 +3,10 @@ import test from "node:test";
 import AdmZip from "adm-zip";
 import multer from "multer";
 import nodemailer from "nodemailer";
+import sharp from "sharp";
 import { optimizeImage } from "../src/lib/image-optimizer";
 import { parseBook, validateBookFile } from "../src/lib/parser";
+import { createPublicBookCover } from "../src/lib/public-book-cover-service";
 
 const fb2 = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
 <FictionBook>
@@ -84,6 +86,19 @@ test("optimizes SVG images to WebP", async () => {
   assert.equal(optimized.mimeType, "image/webp");
   assert.equal(optimized.extension, "webp");
   assert.ok(optimized.buffer.length > 0);
+});
+
+test("generates a WebP cover for long public book metadata", async () => {
+  const cover = await createPublicBookCover({
+    title: "Очень длинное название книги, которое должно уместиться на обложке",
+    author: "Анна-Мария де ла Крус и Александр Константинович Воронцов",
+    coverSeed: "0123456789abcdef0123456789abcdef",
+  });
+  const metadata = await sharp(cover).metadata();
+
+  assert.equal(metadata.format, "webp");
+  assert.equal(metadata.width, 900);
+  assert.equal(metadata.height, 1260);
 });
 
 test("creates an email without an external SMTP connection", async () => {

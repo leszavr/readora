@@ -1347,6 +1347,9 @@ if(bookUploadInput.cycleName !== undefined) {
 if(bookUploadInput.cycleNumber !== undefined) {
  formData.append(`cycleNumber`, bookUploadInput.cycleNumber.toString())
  }
+if(bookUploadInput.hideFromPopular !== undefined) {
+ formData.append(`hideFromPopular`, bookUploadInput.hideFromPopular.toString())
+ }
 
   return customFetch<Book>(getUploadBookUrl(),
   {
@@ -2294,6 +2297,83 @@ export function useGetPopularBooks<TData = Awaited<ReturnType<typeof getPopularB
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPopularBooksQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetPopularBookCoverUrl = (coverSeed: string,) => {
+
+
+
+
+  return `/api/public/popular-book-covers/${coverSeed}.webp`
+}
+
+/**
+ * @summary Get a generated cover for a currently popular book
+ */
+export const getPopularBookCover = async (coverSeed: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetPopularBookCoverUrl(coverSeed),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPopularBookCoverQueryKey = (coverSeed: string,) => {
+    return [
+    `/api/public/popular-book-covers/${coverSeed}.webp`
+    ] as const;
+    }
+
+
+export const getGetPopularBookCoverQueryOptions = <TData = Awaited<ReturnType<typeof getPopularBookCover>>, TError = ErrorType<void>>(coverSeed: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPopularBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPopularBookCoverQueryKey(coverSeed);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPopularBookCover>>> = ({ signal }) => getPopularBookCover(coverSeed, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(coverSeed), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPopularBookCover>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPopularBookCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getPopularBookCover>>>
+export type GetPopularBookCoverQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a generated cover for a currently popular book
+ */
+
+export function useGetPopularBookCover<TData = Awaited<ReturnType<typeof getPopularBookCover>>, TError = ErrorType<void>>(
+ coverSeed: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPopularBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPopularBookCoverQueryOptions(coverSeed,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -56,6 +56,9 @@ export default function RegisterPage() {
             <img src="/readora-wordmark.webp" alt="Readora" className="h-8 w-auto" loading="eager" decoding="async" />
           </div>
           <p className="text-muted-foreground text-sm mt-1">Создайте свою библиотеку</p>
+          <Link href="/" className="inline-block mt-3 text-sm text-primary hover:underline">
+            ← На главную
+          </Link>
         </div>
 
         <Card>
