@@ -1,4 +1,4 @@
-import { index, pgTable, text, serial, integer, timestamp, pgEnum, real } from "drizzle-orm/pg-core";
+import { index, pgTable, text, serial, integer, timestamp, pgEnum, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -28,6 +28,7 @@ export const booksTable = pgTable(
     status: bookStatusEnum("status").notNull().default("active"),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+    hideFromPopular: boolean("hide_from_popular").notNull().default(false),
   },
   (t) => [
     index("books_owner_user_id_idx").on(t.ownerUserId),

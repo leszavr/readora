@@ -5,12 +5,16 @@ import session from "express-session";
 import pgSession from "connect-pg-simple";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { pool } from "@workspace/db";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { emailService } from "./lib/email-service";
+import { getPopularBooks } from "./lib/popular-books-service";
+import { getPublicBaseUrl } from "./lib/public-url";
+import seoRouter from "./routes/seo";
 
 declare module "express-session" {
   interface SessionData {
@@ -27,8 +31,33 @@ if (isProduction && !sessionSecret) {
 }
 
 const PgSessionStore = pgSession(session);
-const clientDist = resolve("client");
-const hasClientDist = isProduction && existsSync(clientDist);
+const runtimeRoot = resolve(import.meta.dirname, "..");
+const clientDist = resolve(runtimeRoot, "client");
+const clientServerDist = resolve(runtimeRoot, "client-server");
+const hasClientDist = isProduction && existsSync(clientDist) && existsSync(clientServerDist);
+type HomeRenderer = {
+  renderHomeDocument(input: {
+    template: string;
+    publicBaseUrl: string;
+    popularBooks: Awaited<ReturnType<typeof getPopularBooks>>;
+  }): string;
+};
+const homeRenderer: HomeRenderer | null = hasClientDist
+  ? await import(pathToFileURL(resolve(clientServerDist, "entry-server.js")).href) as HomeRenderer
+  : null;
+const spaRoutes = [
+  /^\/login$/,
+  /^\/register$/,
+  /^\/verify\/[^/]+$/,
+  /^\/forgot-password$/,
+  /^\/reset-password\/[^/]+$/,
+  /^\/confirm-password-change\/[^/]+$/,
+  /^\/library$/,
+  /^\/book\/\d+$/,
+  /^\/reader\/\d+$/,
+  /^\/profile$/,
+  /^\/admin$/,
+];
 
 app.set("trust proxy", 1);
 
@@ -73,10 +102,7 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-if (hasClientDist) {
-  app.use(express.static(clientDist));
-}
+app.use(seoRouter);
 
 app.use(
   session({
@@ -112,9 +138,27 @@ app.use("/api", autoRestoreSession);
 
 app.use("/api", router);
 
-if (hasClientDist) {
-  app.get(/.*/, (_req, res) => {
-    res.sendFile(resolve(clientDist, "index.html"));
+if (hasClientDist && homeRenderer) {
+  const spaHtml = readFileSync(resolve(clientDist, "index.html"), "utf8").replace("<meta name=\"robots\" content=\"index, follow\" />", "<meta name=\"robots\" content=\"noindex, nofollow\" />");
+  app.get("/", async (_req, res, next) => {
+    try {
+      res.type("html").send(homeRenderer.renderHomeDocument({
+        template: spaHtml,
+        publicBaseUrl: getPublicBaseUrl(),
+        popularBooks: await getPopularBooks(6),
+      }));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.use(express.static(clientDist));
+  app.use((req, res) => {
+    if (req.method !== "GET" || req.path.startsWith("/api/")) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.status(spaRoutes.some((route) => route.test(req.path)) ? 200 : 404).type("html").send(spaHtml);
   });
 }
 

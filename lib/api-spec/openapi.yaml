@@ -654,6 +654,28 @@ paths:
                 items:
                   $ref: "#/components/schemas/PublicBook"
 
+  /public/popular-book-covers/{coverSeed}.webp:
+    get:
+      operationId: getPopularBookCover
+      tags: [books]
+      summary: Get a generated cover for a currently popular book
+      parameters:
+        - name: coverSeed
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Generated WebP cover
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Cover is not available
+
   /public/maintenance-status:
     get:
       operationId: getMaintenanceStatus
@@ -1231,6 +1253,8 @@ components:
         lastReadAt:
           type: ["string", "null"]
           format: date-time
+        hideFromPopular:
+          type: boolean
         uploadedAt:
           type: string
           format: date-time
@@ -1244,6 +1268,8 @@ components:
           type: string
         cycleNumber:
           type: number
+        hideFromPopular:
+          type: boolean
 
     BookUpdate:
       type: object
@@ -1266,6 +1292,8 @@ components:
           type: array
           items:
             type: integer
+        hideFromPopular:
+          type: boolean
 
     BulkDeleteInput:
       type: object
@@ -1285,10 +1313,8 @@ components:
 
     PublicBook:
       type: object
-      required: [id, title]
+      required: [title, coverUrl]
       properties:
-        id:
-          type: integer
         title:
           type: string
         author:
@@ -1296,9 +1322,7 @@ components:
         description:
           type: ["string", "null"]
         coverUrl:
-          type: ["string", "null"]
-        openCount:
-          type: integer
+          type: string
 
     # READER
     Chapter:

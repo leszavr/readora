@@ -176,6 +176,7 @@ export interface Book {
   progressPercent?: number | null;
   /** @nullable */
   lastReadAt?: string | null;
+  hideFromPopular?: boolean;
   uploadedAt: string;
 }
 
@@ -183,6 +184,7 @@ export interface BookUploadInput {
   cycleId?: number;
   cycleName?: string;
   cycleNumber?: number;
+  hideFromPopular?: boolean;
 }
 
 export interface BookUpdate {
@@ -200,6 +202,7 @@ export interface BookUpdate {
   /** @nullable */
   cycleNumber?: number | null;
   genreIds?: number[];
+  hideFromPopular?: boolean;
 }
 
 export interface BulkDeleteInput {
@@ -211,15 +214,12 @@ export interface BulkDeleteResult {
 }
 
 export interface PublicBook {
-  id: number;
   title: string;
   /** @nullable */
   author?: string | null;
   /** @nullable */
   description?: string | null;
-  /** @nullable */
-  coverUrl?: string | null;
-  openCount?: number;
+  coverUrl: string;
 }
 
 export interface Chapter {

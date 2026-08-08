@@ -6,8 +6,8 @@ ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
-# Нативные зависимости (bcrypt, sharp)
-RUN apt-get update && apt-get install -y --no-install-recommends make g++ python3 ca-certificates && rm -rf /var/lib/apt/lists/*
+# Нативные зависимости (bcrypt, sharp) и шрифты для генерации публичных обложек.
+RUN apt-get update && apt-get install -y --no-install-recommends make g++ python3 ca-certificates fontconfig fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN pnpm --config.minimumReleaseAge=0 --filter @workspace/api-server deploy --le
 # ─── Stage 2: production ────────────────────────────────────────────────────
 FROM node:24-bookworm-slim AS production
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates fontconfig fonts-dejavu-core && rm -rf /var/lib/apt/lists/* && \
     groupadd --gid 1001 nodejs && \
     useradd --uid 1001 --gid nodejs --create-home --shell /usr/sbin/nologin nodejs
 
@@ -42,6 +42,9 @@ COPY --from=builder /app/artifacts/api-server/email-templates ./email-templates
 
 # Статика фронтенда (сервируется Express в production)
 COPY --from=builder /app/artifacts/readora/dist/public ./client
+
+# SSR-бандл лендинга, выполняемый тем же Express-процессом.
+COPY --from=builder /app/artifacts/readora/dist/server ./client-server
 
 # Каталоги для загрузок с владельцем nodejs.
 # Создаём оба возможных пути (UPLOADS_DIR в проде = /captain/data/uploads),

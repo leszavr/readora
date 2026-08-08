@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, serial, integer, text, timestamp, real } from "drizzle-orm/pg-core";
+import { pgEnum, pgTable, serial, integer, text, timestamp, real, boolean } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { booksTable } from "./books";
 
@@ -23,6 +23,7 @@ export const bookUploadJobsTable = pgTable("book_upload_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  hideFromPopular: boolean("hide_from_popular").notNull().default(false),
 });
 
 export type BookUploadJob = typeof bookUploadJobsTable.$inferSelect;

@@ -96,6 +96,9 @@ export default function LoginPage() {
           <p className="text-muted-foreground text-sm mt-1">
             Войдите в свою библиотеку
           </p>
+          <Link href="/" className="inline-block mt-3 text-sm text-primary hover:underline">
+            ← На главную
+          </Link>
         </div>
 
         <Card>

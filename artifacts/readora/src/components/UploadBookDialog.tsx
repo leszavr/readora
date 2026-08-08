@@ -105,7 +105,7 @@ function applyMarkProcessing(
 }
 
 type UploadMutate = (
-  vars: { file: File; cycleId?: number; cycleNumber?: number },
+  vars: { file: File; cycleId?: number; cycleNumber?: number; hideFromPopular?: boolean },
   cbs: { onSuccess: (job: UploadJob) => void; onError: (err: unknown) => void },
 ) => void;
 
@@ -113,6 +113,7 @@ function uploadSingleFile(
   fileState: FileUploadState,
   cycleIdToUse: number | undefined,
   cycleNumber: number | undefined,
+  hideFromPopular: boolean,
   setFiles: React.Dispatch<React.SetStateAction<FileUploadState[]>>,
   upload: UploadMutate,
 ): Promise<void> {
@@ -128,7 +129,7 @@ function uploadSingleFile(
       resolve();
     };
     upload(
-      { file: fileState.file, cycleId: cycleIdToUse, cycleNumber },
+      { file: fileState.file, cycleId: cycleIdToUse, cycleNumber, hideFromPopular },
       { onSuccess: handleSuccess, onError: handleError },
     );
   });
@@ -147,6 +148,9 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
   const [newCycleName, setNewCycleName] = useState("");
   const [startNumber, setStartNumber] = useState("1");
   const [autoNumber, setAutoNumber] = useState(true);
+
+  // Hide from popular setting
+  const [hideFromPopular, setHideFromPopular] = useState(false);
 
   const { data: cycles = [] } = useListCycles();
   const { mutate: upload, invalidateBooks } = useUploadBook();
@@ -233,8 +237,9 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     fileState: FileUploadState,
     cycleIdToUse: number | undefined,
     cycleNumber: number | undefined,
+    hideFromPopular: boolean,
   ): Promise<void> {
-    return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload);
+    return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, hideFromPopular, setFiles, upload);
   }
 
   async function handleUploadAll() {
@@ -261,7 +266,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
 
     for (const fileState of files) {
       if (fileState.status !== "pending") continue;
-      await uploadOne(fileState, cycleIdToUse, currentNumber);
+      await uploadOne(fileState, cycleIdToUse, currentNumber, hideFromPopular);
       if (currentNumber !== undefined) currentNumber += 1;
     }
 
@@ -277,6 +282,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     setSelectedCycleId("");
     setNewCycleName("");
     setStartNumber("1");
+    setHideFromPopular(false);
   }
 
   const formatSize = (bytes: number) => {
@@ -344,6 +350,26 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
               e.target.value = "";
             }}
           />
+
+          {/* Hide from popular */}
+          {files.length > 0 && (
+            <div className="space-y-3 border rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="hide-from-popular"
+                  checked={hideFromPopular}
+                  onCheckedChange={(checked) => setHideFromPopular(checked === true)}
+                  disabled={hasActive}
+                />
+                <Label htmlFor="hide-from-popular" className="text-sm flex items-center gap-2">
+                  Не показывать книгу в разделе «Популярные книги»
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                При выключенной настройке могут отображаться название, автор и краткое описание. Текст, файл и исходная обложка не публикуются.
+              </p>
+            </div>
+          )}
 
           {/* Cycle settings */}
           {files.length > 0 && (

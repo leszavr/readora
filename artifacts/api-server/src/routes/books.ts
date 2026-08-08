@@ -4,13 +4,15 @@ import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, readEventsTable, chaptersTable, bookUploadJobsTable } from "@workspace/db";
+import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { parseBook } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
+import { getPopularBookCover, getPopularBooks, invalidatePopularBooksCache } from "../lib/popular-books-service";
+import { createPublicBookCover } from "../lib/public-book-cover-service";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
 
@@ -118,6 +120,13 @@ function parseNullableFloat(value: unknown): number | null | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function parseBoolean(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return undefined;
+}
+
 function parseGenreIds(value: unknown): number[] | undefined {
   if (value == null || value === "") return undefined;
 
@@ -163,6 +172,8 @@ async function applyBookUpdates(params: {
   const cycleId = parseNullableInt(body.cycleId);
   const cycleNumber = parseNullableFloat(body.cycleNumber);
   const genreIds = parseGenreIds(body.genreIds);
+  const hideFromPopular = parseBoolean(body.hideFromPopular);
+  if (hideFromPopular !== undefined) updates.hideFromPopular = hideFromPopular;
 
   if (publicationYear !== undefined) updates.publicationYear = publicationYear;
   if (cycleId !== undefined) updates.cycleId = cycleId;
@@ -173,6 +184,7 @@ async function applyBookUpdates(params: {
   }
 
   await db.update(booksTable).set(updates).where(eq(booksTable.id, book.id));
+  invalidatePopularBooksCache();
 
   if (genreIds !== undefined) {
     await db.delete(bookGenresTable).where(eq(bookGenresTable.bookId, book.id));
@@ -233,6 +245,7 @@ async function getBookWithDetails(bookId: number, userId: number) {
     progressPercent: progress?.progressPercent ?? null,
     lastReadAt: progress?.lastReadAt ?? null,
     uploadedAt: book.uploadedAt,
+    hideFromPopular: book.hideFromPopular,
   };
 }
 
@@ -294,6 +307,7 @@ async function processBookUploadJob(jobId: number): Promise<void> {
       cycleId: finalCycleId,
       cycleName: finalCycleName,
       cycleNumber: job.cycleNumber ?? null,
+      hideFromPopular: job.hideFromPopular,
     }).returning();
 
     if (parsed.chapters.length > 0) {
@@ -317,6 +331,7 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     }
 
     await updateUploadJob(jobId, { status: "completed", stage: "completed", progress: 100, bookId: book.id, completedAt: new Date() });
+    invalidatePopularBooksCache();
     fs.rmSync(tempPath, { force: true });
   } catch (e) {
     await updateUploadJob(jobId, {
@@ -514,6 +529,7 @@ router.post("/books/upload", requireAuth, upload.single("file"), async (req, res
     cycleId: req.body?.cycleId ? Number.parseInt(req.body.cycleId, 10) : null,
     cycleName: req.body?.cycleName || null,
     cycleNumber: req.body?.cycleNumber ? Number.parseFloat(req.body.cycleNumber) : null,
+    hideFromPopular: parseBoolean(req.body?.hideFromPopular) ?? false,
   }).returning();
 
   setImmediate(() => {
@@ -541,22 +557,6 @@ router.get("/books/upload-jobs/:id", requireAuth, async (req, res): Promise<void
   }
 
   res.json(toUploadJobResponse(job));
-});
-
-// GET /books/:id/cover-public (публичный endpoint для популярных книг)
-router.get("/books/:id/cover-public", async (req, res): Promise<void> => {
-  const id = Number.parseInt(String(req.params.id), 10);
-  const [book] = await db.select().from(booksTable).where(eq(booksTable.id, id));
-  if (!book?.coverPath) { res.status(404).json({ error: "Обложка не найдена" }); return; }
-  const coverFilePath = resolveUploadPath(book.coverPath);
-  if (!fs.existsSync(coverFilePath)) { res.status(404).json({ error: "Файл не найден" }); return; }
-  const ext = path.extname(coverFilePath).toLowerCase();
-  let mime = "image/jpeg";
-  if (ext === ".webp") mime = "image/webp";
-  else if (ext === ".png") mime = "image/png";
-  res.setHeader("Content-Type", mime);
-  res.setHeader("Cache-Control", "public, max-age=86400");
-  fs.createReadStream(coverFilePath).pipe(res);
 });
 
 // GET /books/:id/cover
@@ -610,6 +610,7 @@ router.delete("/books/:id", requireAuth, async (req, res): Promise<void> => {
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   await deleteStoredFilesIfUnreferenced(book);
   await db.delete(booksTable).where(eq(booksTable.id, id));
+  invalidatePopularBooksCache();
   res.sendStatus(204);
 });
 
@@ -631,37 +632,26 @@ router.post("/books/delete-bulk", requireAuth, async (req, res): Promise<void> =
     await deleteStoredFilesIfUnreferenced(book, deletingIds);
   }
   const result = await db.delete(booksTable).where(and(eq(booksTable.ownerUserId, user.id), inArray(booksTable.id, ids))).returning();
+  if (result.length > 0) invalidatePopularBooksCache();
   res.json({ deleted: result.length });
 });
 
 // GET /public/popular-books
 router.get("/public/popular-books", async (req, res): Promise<void> => {
-  const limit = Math.min(Number.parseInt(String(req.query.limit ?? "8"), 10), 20);
+  res.json(await getPopularBooks(req.query.limit));
+});
 
-  const popularBooks = await db
-    .select({
-      id: booksTable.id,
-      title: booksTable.title,
-      author: booksTable.author,
-      description: booksTable.description,
-      coverPath: booksTable.coverPath,
-      openCount: sql<number>`count(${readEventsTable.id})::int`,
-    })
-    .from(booksTable)
-    .leftJoin(readEventsTable, eq(readEventsTable.bookId, booksTable.id))
-    .where(eq(booksTable.status, "active"))
-    .groupBy(booksTable.id)
-    .orderBy(desc(sql`count(${readEventsTable.id})`))
-    .limit(limit);
+router.get("/public/popular-book-covers/:coverSeed.webp", async (req, res): Promise<void> => {
+  const coverSeed = String(req.params.coverSeed);
+  const book = await getPopularBookCover(coverSeed);
+  if (!book) {
+    res.sendStatus(404);
+    return;
+  }
 
-  res.json(popularBooks.map((b) => ({
-    id: b.id,
-    title: b.title,
-    author: b.author ?? null,
-    description: b.description ? b.description.slice(0, 200) : null,
-    coverUrl: b.coverPath ? buildCoverUrl(b.id, b.coverPath, true) : null,
-    openCount: b.openCount ?? 0,
-  })));
+  res.setHeader("Content-Type", "image/webp");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(await createPublicBookCover(book));
 });
 
 export default router;
