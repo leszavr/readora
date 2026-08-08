@@ -1,9 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AppProviders } from "@/components/AppProviders";
 import { AboutPage } from "@/components/AboutPage";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -19,15 +16,6 @@ const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const ConfirmPasswordChangePage = lazy(() => import("@/pages/ConfirmPasswordChangePage"));
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 1000 * 30,
-    },
-  },
-});
 
 function Router() {
   return (
@@ -54,16 +42,11 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}> 
-            <Router />
-          </WouterRouter>
-        </AuthProvider>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <AppProviders>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Router />
+      </WouterRouter>
+    </AppProviders>
   );
 }
 

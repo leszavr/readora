@@ -2,6 +2,8 @@ import { BookOpen, CheckCircle2, Library, LockKeyhole, Mail, ShieldCheck } from 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { PublicHeaderNavigation } from "@/components/PublicHeaderNavigation";
+import { useAuth } from "@/hooks/use-auth";
 
 export const aboutFaqItems = [
   {
@@ -27,6 +29,8 @@ export const aboutFaqItems = [
 ];
 
 export function AboutPage() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border shadow-xs">
@@ -35,10 +39,7 @@ export function AboutPage() {
             <img src="/readora-mark.webp" alt="" className="h-8 w-auto" loading="eager" decoding="async" />
             <img src="/readora-wordmark.webp" alt="Readora" className="h-5 w-auto" loading="eager" decoding="async" />
           </a>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" asChild><a href="/login">Войти</a></Button>
-            <Button size="sm" asChild><a href="/register">Регистрация</a></Button>
-          </div>
+          <PublicHeaderNavigation />
         </div>
       </header>
 
@@ -120,7 +121,7 @@ export function AboutPage() {
             <ShieldCheck className="w-8 h-8 text-primary mx-auto mb-4" aria-hidden="true" />
             <h2 className="text-2xl font-bold mb-3">Начните с личной библиотеки</h2>
             <p className="text-muted-foreground max-w-xl mx-auto mb-6">Создайте аккаунт, чтобы хранить и читать свои книги в одном месте.</p>
-            <Button size="lg" asChild><a href="/register">Создать аккаунт</a></Button>
+            <Button size="lg" asChild><a href={isAuthenticated ? "/library" : "/register"}>{isAuthenticated ? "Открыть библиотеку" : "Создать аккаунт"}</a></Button>
             <p className="text-sm text-muted-foreground mt-5">
               Вопросы о сервисе: <a className="text-primary hover:underline" href="mailto:admin@voxlibris.ru"><Mail className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />admin@voxlibris.ru</a>
             </p>

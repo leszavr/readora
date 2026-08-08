@@ -179,36 +179,6 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                 <br />
                 Удобно, безопасно, бесплатно.
               </p>
-
-              <div className="mt-3 pt-3 border-t border-border/60">
-                <p className="text-xs text-muted-foreground mb-2">
-                  Readora — бесплатная личная библиотека.
-                </p>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Нужна платформа для книжного клуба или издательства?
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Коммерческая версия
-                  {" "}
-                  <a
-                    href="https://voxlibris.ru"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-primary/90 hover:text-primary hover:underline"
-                  >
-                    Voxlibris
-                  </a>
-                  {" "}
-                  доступна для лицензирования:
-                  {" "}
-                  <a
-                    href="mailto:admin@voxlibris.ru"
-                    className="font-medium text-primary/90 hover:text-primary hover:underline"
-                  >
-                    admin@voxlibris.ru
-                  </a>
-                </p>
-              </div>
             </div>
 
             {/* Navigation */}
