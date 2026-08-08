@@ -41,6 +41,14 @@ type HomeRenderer = {
     publicBaseUrl: string;
     popularBooks: Awaited<ReturnType<typeof getPopularBooks>>;
   }): string;
+  renderAboutDocument(input: {
+    template: string;
+    publicBaseUrl: string;
+  }): string;
+  renderPrivateSpaDocument(input: {
+    template: string;
+    publicBaseUrl: string;
+  }): string;
 };
 const homeRenderer: HomeRenderer | null = hasClientDist
   ? await import(pathToFileURL(resolve(clientServerDist, "entry-server.js")).href) as HomeRenderer
@@ -140,13 +148,27 @@ app.use("/api", router);
 
 if (hasClientDist && homeRenderer) {
   const indexHtml = readFileSync(resolve(clientDist, "index.html"), "utf8");
-  const privateSpaHtml = indexHtml.replace("<meta name=\"robots\" content=\"index, follow\" />", "<meta name=\"robots\" content=\"noindex, nofollow\" />");
+  const privateSpaTemplate = indexHtml.replace("<meta name=\"robots\" content=\"index, follow\" />", "<meta name=\"robots\" content=\"noindex, nofollow\" />");
+  const privateSpaHtml = homeRenderer.renderPrivateSpaDocument({
+    template: privateSpaTemplate,
+    publicBaseUrl: getPublicBaseUrl(),
+  });
   app.get("/", async (_req, res, next) => {
     try {
       res.type("html").send(homeRenderer.renderHomeDocument({
         template: indexHtml,
         publicBaseUrl: getPublicBaseUrl(),
         popularBooks: await getPopularBooks(6),
+      }));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/about", (_req, res, next) => {
+    try {
+      res.type("html").send(homeRenderer.renderAboutDocument({
+        template: indexHtml,
+        publicBaseUrl: getPublicBaseUrl(),
       }));
     } catch (error) {
       next(error);

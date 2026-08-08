@@ -10,7 +10,7 @@ router.get("/robots.txt", (_req, res) => {
 
 router.get("/sitemap.xml", (_req, res) => {
   const baseUrl = getPublicBaseUrl();
-  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${baseUrl}/</loc></url></urlset>`);
+  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${baseUrl}/</loc></url><url><loc>${baseUrl}/about</loc></url></urlset>`);
 });
 
 export default router;
