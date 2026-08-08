@@ -20,21 +20,32 @@ function landingSsrPlugin(): Plugin {
     apply: "serve",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url || new URL(req.url, "http://localhost").pathname !== "/") {
+        if (!req.url) {
+          next();
+          return;
+        }
+
+        const pathname = new URL(req.url, "http://localhost").pathname;
+        if (pathname !== "/" && pathname !== "/about") {
           next();
           return;
         }
 
         try {
-          const popularBooks = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/popular-books?limit=6`)
-            .then(async (response) => response.ok ? response.json() : [])
-            .catch(() => []);
           const template = await readFile(path.resolve(import.meta.dirname, "index.html"), "utf8");
-          const transformedTemplate = await server.transformIndexHtml("/", template);
-          const { renderHomeDocument } = await server.ssrLoadModule("/src/entry-server.tsx");
+          const transformedTemplate = await server.transformIndexHtml(pathname, template);
+          const { renderAboutDocument, renderHomeDocument } = await server.ssrLoadModule("/src/entry-server.tsx");
           const publicBaseUrl = (process.env.PUBLIC_BASE_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
+          if (pathname === "/about") {
+            res.end(renderAboutDocument({ template: transformedTemplate, publicBaseUrl }));
+            return;
+          }
+
+          const popularBooks = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/popular-books?limit=6`)
+            .then(async (response) => response.ok ? response.json() : [])
+            .catch(() => []);
           res.end(renderHomeDocument({ template: transformedTemplate, publicBaseUrl, popularBooks }));
         } catch (error) {
           next(error);

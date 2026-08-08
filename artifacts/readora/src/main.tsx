@@ -1,5 +1,6 @@
 import { createRoot, hydrateRoot } from "react-dom/client";
 import App from "./App";
+import { AboutPage } from "@/components/AboutPage";
 import { LandingPage } from "@/components/LandingPage";
 import type { LandingData } from "@/landing-data";
 import "./index.css";
@@ -20,6 +21,8 @@ function readLandingData(): LandingData | null {
 const landingData = location.pathname === "/" ? readLandingData() : null;
 if (landingData) {
   hydrateRoot(root, <LandingPage popularBooks={landingData.popularBooks} />);
+} else if (location.pathname === "/about") {
+  hydrateRoot(root, <AboutPage />);
 } else {
   createRoot(root).render(<App />);
 }
