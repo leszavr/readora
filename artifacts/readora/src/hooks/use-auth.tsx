@@ -16,7 +16,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const { data, isLoading, refetch } = useGetMe({
-    query: { queryKey: getGetMeQueryKey(), retry: false, staleTime: 1000 * 60 * 5 },
+    query: {
+      queryKey: getGetMeQueryKey(),
+      enabled: typeof window !== "undefined",
+      retry: false,
+      staleTime: 1000 * 60 * 5,
+    },
   });
   const user = normalizeUser(data);
 

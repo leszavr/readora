@@ -44,6 +44,18 @@ const loginSchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
+function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   const parsed = registerSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -99,6 +111,7 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   }
 
   // Email verification disabled - create session immediately
+  await regenerateSession(req);
   req.session.userId = user.id;
   res.status(201).json({
     user: formatUser(user),
@@ -151,6 +164,9 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     .select()
     .from(appSettingsTable)
     .where(eq(appSettingsTable.key, MAINTENANCE_SESSION_VERSION_KEY));
+
+  // Новая сессия после аутентификации предотвращает session fixation.
+  await regenerateSession(req);
 
   // Устанавливаем userId и версию сессии
   req.session.userId = user.id;

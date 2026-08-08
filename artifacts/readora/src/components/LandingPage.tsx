@@ -5,8 +5,10 @@ import { LegalOverlay } from "@/components/LegalOverlay";
 import { CopyrightHoldersContent } from "@/components/legal/CopyrightHoldersContent";
 import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
+import { PublicHeaderNavigation } from "@/components/PublicHeaderNavigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/hooks/use-auth";
 import type { PopularBook } from "@/landing-data";
 
 const features = [
@@ -45,6 +47,7 @@ const features = [
 export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBook[] }>) {
   const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -54,10 +57,7 @@ export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBo
             <img src="/readora-mark.webp" alt="" className="h-8 w-auto" loading="eager" decoding="async" />
             <img src="/readora-wordmark.webp" alt="Readora" className="h-5 w-auto" loading="eager" decoding="async" />
           </a>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" asChild><a href="/login">Войти</a></Button>
-            <Button size="sm" asChild><a href="/register">Регистрация</a></Button>
-          </div>
+          <PublicHeaderNavigation />
         </div>
       </header>
 
@@ -74,10 +74,21 @@ export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBo
               Readora — удобное приложение для чтения книг в форматах FB2 и EPUB. Загружайте, читайте и отслеживайте прогресс без ограничений.
             </p>
             <div className="flex flex-wrap gap-3 justify-center mb-8">
-              <Button size="lg" className="gap-2 shadow-lg" asChild>
-                <a href="/register"><Sparkles className="w-5 h-5" /> Начать бесплатно</a>
-              </Button>
-              <Button size="lg" variant="outline" asChild><a href="/login">Войти</a></Button>
+              {isAuthenticated ? (
+                <>
+                  <Button size="lg" className="gap-2 shadow-lg" asChild>
+                    <a href="/library"><Library className="w-5 h-5" /> Открыть библиотеку</a>
+                  </Button>
+                  <Button size="lg" variant="outline" asChild><a href="/profile">Профиль</a></Button>
+                </>
+              ) : (
+                <>
+                  <Button size="lg" className="gap-2 shadow-lg" asChild>
+                    <a href="/register"><Sparkles className="w-5 h-5" /> Начать бесплатно</a>
+                  </Button>
+                  <Button size="lg" variant="outline" asChild><a href="/login">Войти</a></Button>
+                </>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">Бесплатно • Без рекламы • Личные данные остаются вашими</p>
           </div>
@@ -130,7 +141,10 @@ export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBo
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Начните читать прямо сейчас</h2>
             <p className="text-muted-foreground mb-8 max-w-xl mx-auto">Создайте бесплатный аккаунт и загрузите свою первую книгу. Это займёт меньше минуты.</p>
             <Button size="lg" className="gap-2 shadow-lg" asChild>
-              <a href="/register"><Sparkles className="w-5 h-5" /> Зарегистрироваться бесплатно</a>
+              <a href={isAuthenticated ? "/library" : "/register"}>
+                {isAuthenticated ? <Library className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                {isAuthenticated ? "Перейти в библиотеку" : "Зарегистрироваться бесплатно"}
+              </a>
             </Button>
           </div>
         </section>

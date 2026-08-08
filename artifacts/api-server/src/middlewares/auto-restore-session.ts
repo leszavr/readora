@@ -6,6 +6,18 @@ import { logger } from "../lib/logger";
 
 const REMEMBER_TOKEN_COOKIE_NAME = "readora.remember";
 
+function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 /**
  * Middleware для автоматического восстановления сессии из remember token
  * Должен быть установлен ПЕРЕД любыми защищенными роутами
@@ -51,6 +63,10 @@ export async function autoRestoreSession(
       return;
     }
 
+    // Выдаем новый session ID, чтобы токен долгого хранения не мог
+    // продолжить анонимную или скомпрометированную сессию.
+    await regenerateSession(req);
+
     // ✅ Восстанавливаем сессию
     req.session.userId = userId;
 
@@ -61,7 +77,7 @@ export async function autoRestoreSession(
       .where(eq(usersTable.id, userId));
 
     logger.info(
-      { userId, email: user.email },
+      { userId },
       "Session auto-restored from remember token",
     );
 

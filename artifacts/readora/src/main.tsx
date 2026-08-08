@@ -1,6 +1,7 @@
 import { createRoot, hydrateRoot } from "react-dom/client";
 import App from "./App";
 import { AboutPage } from "@/components/AboutPage";
+import { AppProviders } from "@/components/AppProviders";
 import { LandingPage } from "@/components/LandingPage";
 import type { LandingData } from "@/landing-data";
 import "./index.css";
@@ -20,9 +21,19 @@ function readLandingData(): LandingData | null {
 
 const landingData = location.pathname === "/" ? readLandingData() : null;
 if (landingData) {
-  hydrateRoot(root, <LandingPage popularBooks={landingData.popularBooks} />);
+  hydrateRoot(
+    root,
+    <AppProviders>
+      <LandingPage popularBooks={landingData.popularBooks} />
+    </AppProviders>,
+  );
 } else if (location.pathname === "/about") {
-  hydrateRoot(root, <AboutPage />);
+  hydrateRoot(
+    root,
+    <AppProviders>
+      <AboutPage />
+    </AppProviders>,
+  );
 } else {
   createRoot(root).render(<App />);
 }

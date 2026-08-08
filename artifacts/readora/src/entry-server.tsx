@@ -1,5 +1,6 @@
 import { renderToString } from "react-dom/server";
 import { AboutPage, aboutFaqItems } from "@/components/AboutPage";
+import { AppProviders } from "@/components/AppProviders";
 import { LandingPage } from "@/components/LandingPage";
 import type { LandingData } from "@/landing-data";
 
@@ -43,7 +44,7 @@ function renderTemplate(template: string, publicBaseUrl: string, metadata: PageM
 
 function renderDocument(template: string, publicBaseUrl: string, metadata: PageMetadata, page: React.ReactNode, data = "", structuredData = ""): string {
   return renderTemplate(template, publicBaseUrl, metadata, structuredData)
-    .replace("<!--app-html-->", renderToString(page))
+    .replace("<!--app-html-->", renderToString(<AppProviders>{page}</AppProviders>))
     .replace("<!--landing-data-->", data);
 }
 
