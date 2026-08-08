@@ -255,6 +255,11 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
               <h4 className="font-semibold mb-3 text-sm">Информация</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
+                  <Link href="/about" className="hover:text-foreground transition-colors">
+                    О сервисе
+                  </Link>
+                </li>
+                <li>
                   <button
                     onClick={() => setActiveLegalPage("terms")}
                     className="hover:text-foreground transition-colors text-left"

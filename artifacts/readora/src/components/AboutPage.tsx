@@ -1,6 +1,7 @@
 import { BookOpen, CheckCircle2, Library, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export const aboutFaqItems = [
   {
@@ -101,14 +102,18 @@ export function AboutPage() {
 
           <section>
             <h2 className="text-2xl font-bold mb-6">Частые вопросы</h2>
-            <dl className="divide-y divide-border border-y border-border">
-              {aboutFaqItems.map((item) => (
-                <div key={item.question} className="py-5">
-                  <dt className="font-semibold">{item.question}</dt>
-                  <dd className="mt-2 text-muted-foreground leading-relaxed">{item.answer}</dd>
-                </div>
+            <Accordion type="single" collapsible className="border-t border-border">
+              {aboutFaqItems.map((item, index) => (
+                <AccordionItem key={item.question} value={`faq-${index}`}>
+                  <AccordionTrigger className="py-5 text-base font-semibold hover:no-underline">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent forceMount className="text-base text-muted-foreground leading-relaxed">
+                    {item.answer}
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </dl>
+            </Accordion>
           </section>
 
           <section className="rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center">
