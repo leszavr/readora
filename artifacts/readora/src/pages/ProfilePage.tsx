@@ -9,7 +9,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, BookOpen, BookMarked, Clock, Eye, EyeOff } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Save, BookOpen, BookMarked, Clock, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 
@@ -33,6 +43,11 @@ export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: books = [] } = useListBooks();
 
@@ -93,6 +108,46 @@ export default function ProfilePage() {
       setPasswordError("Не удалось изменить пароль");
     } finally {
       setPasswordPending(false);
+    }
+  }
+
+  function handleDeleteDialogOpenChange(open: boolean) {
+    if (deletePending) return;
+    setDeleteDialogOpen(open);
+    if (!open) {
+      setDeletePassword("");
+      setDeleteConfirmation("");
+      setDeleteError(null);
+    }
+  }
+
+  async function handleDeleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleteError(null);
+    setDeletePending(true);
+
+    try {
+      const res = await fetch("/api/auth/me/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: deletePassword,
+          confirmation: deleteConfirmation,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+
+      if (!res.ok) {
+        setDeleteError(data.error ?? "Не удалось удалить учётную запись");
+        return;
+      }
+
+      qc.clear();
+      globalThis.location.assign("/");
+    } catch {
+      setDeleteError("Не удалось удалить учётную запись");
+    } finally {
+      setDeletePending(false);
     }
   }
 
@@ -235,6 +290,80 @@ export default function ProfilePage() {
                   Обновить пароль
                 </Button>
               </form>
+            </CardContent>
+          </Card>
+
+          <Card className="border-destructive/40">
+            <CardHeader>
+              <CardTitle className="text-base text-destructive">Удаление учётной записи</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {user?.role === "admin" ? (
+                <p className="text-sm text-muted-foreground">
+                  Администратор не может удалить свою учётную запись самостоятельно, чтобы не потерять доступ к управлению сервисом.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Будут безвозвратно удалены профиль, книги, прогресс чтения и доступ на всех устройствах. Это действие нельзя отменить.
+                  </p>
+                  <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" className="gap-2">
+                        <Trash2 className="w-4 h-4" />
+                        Удалить учётную запись
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <form onSubmit={handleDeleteAccount} className="space-y-4">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Удалить учётную запись?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Все ваши книги и данные чтения будут удалены без возможности восстановления.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="space-y-2">
+                          <Label htmlFor="delete-account-password">Текущий пароль</Label>
+                          <Input
+                            id="delete-account-password"
+                            type="password"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            autoComplete="current-password"
+                            disabled={deletePending}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="delete-account-confirmation">Введите «УДАЛИТЬ»</Label>
+                          <Input
+                            id="delete-account-confirmation"
+                            value={deleteConfirmation}
+                            onChange={(e) => setDeleteConfirmation(e.target.value)}
+                            autoComplete="off"
+                            disabled={deletePending}
+                            required
+                          />
+                        </div>
+                        {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+                        <AlertDialogFooter>
+                          <AlertDialogCancel type="button" disabled={deletePending}>
+                            Отмена
+                          </AlertDialogCancel>
+                          <Button
+                            type="submit"
+                            variant="destructive"
+                            disabled={deletePending || !deletePassword || deleteConfirmation !== "УДАЛИТЬ"}
+                          >
+                            {deletePending && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+                            Удалить навсегда
+                          </Button>
+                        </AlertDialogFooter>
+                      </form>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
             </CardContent>
           </Card>
 

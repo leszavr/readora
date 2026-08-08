@@ -1,9 +1,11 @@
 import { Router } from "express";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import {
   db,
   usersTable,
@@ -11,10 +13,16 @@ import {
   passwordResetTokensTable,
   passwordChangeTokensTable,
   appSettingsTable,
+  booksTable,
+  bookUploadJobsTable,
+  userSessionsTable,
   MAINTENANCE_SESSION_VERSION_KEY,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { emailService } from "../lib/email-service";
+import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
+import { invalidatePopularBooksCache } from "../lib/popular-books-service";
+import { resolveUploadPath } from "../lib/storage";
 import type { Request } from "express";
 
 const router = Router();
@@ -279,6 +287,87 @@ router.post(
     }
 
     res.json({ message: "Мы отправили письмо с подтверждением смены пароля" });
+  },
+);
+
+router.post(
+  "/auth/me/delete",
+  requireAuth,
+  authLimiter,
+  async (req, res): Promise<void> => {
+    const user = (req as Request & { user: typeof usersTable.$inferSelect })
+      .user;
+    const schema = z.object({
+      currentPassword: z.string().min(1).max(1024),
+      confirmation: z.literal("УДАЛИТЬ"),
+    });
+    const parsed = schema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({
+        error: 'Введите текущий пароль и фразу «УДАЛИТЬ»',
+      });
+      return;
+    }
+
+    if (user.role === "admin") {
+      res.status(403).json({
+        error:
+          "Администратор не может удалить свою учётную запись самостоятельно",
+      });
+      return;
+    }
+
+    const valid = await bcrypt.compare(
+      parsed.data.currentPassword,
+      user.passwordHash,
+    );
+    if (!valid) {
+      res.status(400).json({ error: "Текущий пароль неверный" });
+      return;
+    }
+
+    const [books, uploadJobs] = await Promise.all([
+      db.select().from(booksTable).where(eq(booksTable.ownerUserId, user.id)),
+      db
+        .select()
+        .from(bookUploadJobsTable)
+        .where(eq(bookUploadJobsTable.ownerUserId, user.id)),
+    ]);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(userSessionsTable)
+        .where(sql`${userSessionsTable.sess}->>'userId' = ${String(user.id)}`);
+      await tx.delete(usersTable).where(eq(usersTable.id, user.id));
+    });
+
+    await new Promise<void>((resolve) => {
+      req.session.destroy(() => resolve());
+    });
+    res.clearCookie("readora.sid");
+    res.clearCookie("readora.remember");
+    invalidatePopularBooksCache();
+
+    for (const book of books) {
+      try {
+        await deleteStoredFilesIfUnreferenced(book);
+      } catch {
+        console.error("Failed to delete an account book file");
+      }
+    }
+
+    for (const job of uploadJobs) {
+      try {
+        fs.rmSync(
+          resolveUploadPath(path.join("tmp", job.tempStorageKey)),
+          { force: true },
+        );
+      } catch {
+        console.error("Failed to delete an account temporary upload");
+      }
+    }
+
+    res.sendStatus(204);
   },
 );
 

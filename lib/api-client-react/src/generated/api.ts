@@ -38,6 +38,7 @@ import type {
   ClearSavedEmails200,
   Cycle,
   CycleInput,
+  DeleteAccountInput,
   ErrorResponse,
   Genre,
   GenreInput,
@@ -514,6 +515,77 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
 
 
 
+
+export const getDeleteAccountUrl = () => {
+
+
+
+
+  return `/api/auth/me/delete`
+}
+
+/**
+ * @summary Permanently delete the current user account and its data
+ */
+export const deleteAccount = async (deleteAccountInput: DeleteAccountInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      deleteAccountInput,)
+  }
+);}
+
+
+
+
+export const getDeleteAccountMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,{data: BodyType<DeleteAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,{data: BodyType<DeleteAccountInput>}, TContext> => {
+
+const mutationKey = ['deleteAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAccount>>, {data: BodyType<DeleteAccountInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  deleteAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAccount>>>
+    export type DeleteAccountMutationBody = BodyType<DeleteAccountInput>
+    export type DeleteAccountMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Permanently delete the current user account and its data
+ */
+export const useDeleteAccount = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,{data: BodyType<DeleteAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAccount>>,
+        TError,
+        {data: BodyType<DeleteAccountInput>},
+        TContext
+      > => {
+      return useMutation(getDeleteAccountMutationOptions(options));
+    }
 
 export const getUpdateProfileUrl = () => {
 

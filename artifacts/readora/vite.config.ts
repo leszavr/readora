@@ -13,6 +13,19 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 const basePath = process.env.BASE_PATH ?? "/";
+const spaRoutes = [
+  /^\/login$/,
+  /^\/register$/,
+  /^\/verify\/[^/]+$/,
+  /^\/forgot-password$/,
+  /^\/reset-password\/[^/]+$/,
+  /^\/confirm-password-change\/[^/]+$/,
+  /^\/library$/,
+  /^\/book\/\d+$/,
+  /^\/reader\/\d+$/,
+  /^\/profile$/,
+  /^\/admin$/,
+];
 
 function landingSsrPlugin(): Plugin {
   return {
@@ -26,7 +39,7 @@ function landingSsrPlugin(): Plugin {
         }
 
         const pathname = new URL(req.url, "http://localhost").pathname;
-        if (pathname !== "/" && pathname !== "/about") {
+        if (pathname !== "/" && pathname !== "/about" && !spaRoutes.some((route) => route.test(pathname))) {
           next();
           return;
         }
@@ -34,12 +47,17 @@ function landingSsrPlugin(): Plugin {
         try {
           const template = await readFile(path.resolve(import.meta.dirname, "index.html"), "utf8");
           const transformedTemplate = await server.transformIndexHtml(pathname, template);
-          const { renderAboutDocument, renderHomeDocument } = await server.ssrLoadModule("/src/entry-server.tsx");
+          const { renderAboutDocument, renderHomeDocument, renderPrivateSpaDocument } = await server.ssrLoadModule("/src/entry-server.tsx");
           const publicBaseUrl = (process.env.PUBLIC_BASE_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           if (pathname === "/about") {
             res.end(renderAboutDocument({ template: transformedTemplate, publicBaseUrl }));
+            return;
+          }
+
+          if (spaRoutes.some((route) => route.test(pathname))) {
+            res.end(renderPrivateSpaDocument({ template: transformedTemplate, publicBaseUrl }));
             return;
           }
 

@@ -86,6 +86,15 @@ export const GetMeResponse = zod.object({
 
 
 /**
+ * @summary Permanently delete the current user account and its data
+ */
+export const DeleteAccountBody = zod.object({
+  "currentPassword": zod.string(),
+  "confirmation": zod.enum(['УДАЛИТЬ'])
+})
+
+
+/**
  * @summary Update profile
  */
 export const UpdateProfileBody = zod.object({

@@ -213,6 +213,18 @@ export interface BulkDeleteResult {
   deleted: number;
 }
 
+export type DeleteAccountInputConfirmation = typeof DeleteAccountInputConfirmation[keyof typeof DeleteAccountInputConfirmation];
+
+
+export const DeleteAccountInputConfirmation = {
+  УДАЛИТЬ: 'УДАЛИТЬ',
+} as const;
+
+export interface DeleteAccountInput {
+  currentPassword: string;
+  confirmation: DeleteAccountInputConfirmation;
+}
+
 export interface PublicBook {
   title: string;
   /** @nullable */

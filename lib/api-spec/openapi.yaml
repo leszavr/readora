@@ -146,6 +146,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me/delete:
+    post:
+      operationId: deleteAccount
+      tags: [auth]
+      summary: Permanently delete the current user account and its data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountInput"
+      responses:
+        "204":
+          description: Account deleted
+        "400":
+          description: Invalid confirmation or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/me/settings:
     patch:
       operationId: updateProfile
@@ -1310,6 +1343,16 @@ components:
       properties:
         deleted:
           type: integer
+
+    DeleteAccountInput:
+      type: object
+      required: [currentPassword, confirmation]
+      properties:
+        currentPassword:
+          type: string
+        confirmation:
+          type: string
+          enum: [УДАЛИТЬ]
 
     PublicBook:
       type: object
