@@ -117,7 +117,10 @@ app.use(
     store: new PgSessionStore({
       pool,
       tableName: "user_sessions",
-      createTableIfMissing: true,
+      // Таблица user_sessions создаётся миграцией 0001, а не приложением:
+      // в собранном бандле нет table.sql из connect-pg-simple, поэтому
+      // автосоздание всё равно падало с ENOENT при каждой очистке сессий.
+      createTableIfMissing: false,
       // Автоматическая очистка просроченных сессий каждые 15 минут
       pruneSessionInterval: 15 * 60,
     }),
