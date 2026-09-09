@@ -116,32 +116,49 @@ class EmailService {
       const settingsMap = new Map(settingsFromDb.map((s) => [s.key, s.value]));
 
       const enabled = settingsMap.get("smtp_enabled") === "true";
-      if (!enabled) {
-        console.log("[EmailService] SMTP disabled in settings");
-        return;
-      }
-
       const host = settingsMap.get("smtp_host");
       const port = settingsMap.get("smtp_port");
       const user = settingsMap.get("smtp_user");
       const password = settingsMap.get("smtp_password");
       const from = settingsMap.get("smtp_from");
       const appBaseUrl = settingsMap.get("app_base_url") ?? null;
+      const secure = settingsMap.get("smtp_secure") === "true";
+      const saveToFiles = settingsMap.get("email_save_to_files") === "true";
+      const portNumber = port ? Number.parseInt(port, 10) : 0;
+
+      if (saveToFiles) {
+        this.settings = {
+          host: host ?? "",
+          port: Number.isFinite(portNumber) ? portNumber : 0,
+          secure,
+          user: user ?? "",
+          password: password ?? "",
+          from: from || "noreply@readora.local",
+          appBaseUrl,
+          enabled,
+          saveToFiles: true,
+        };
+        await this.ensureEmailsDirectory();
+        console.log("[EmailService] Saving emails to files");
+        return;
+      }
+
+      if (!enabled) {
+        console.log("[EmailService] SMTP disabled in settings");
+        return;
+      }
 
       if (!host || !port || !from) {
         console.warn("[EmailService] SMTP settings incomplete, email disabled");
         return;
       }
 
-      const portNumber = Number.parseInt(port, 10);
       if (!Number.isFinite(portNumber) || portNumber <= 0 || portNumber > 65535) {
         console.warn("[EmailService] SMTP port is invalid, email disabled");
         return;
       }
 
-      const secure = settingsMap.get("smtp_secure") === "true";
       const hasAuth = Boolean(user && password);
-      const saveToFiles = settingsMap.get("email_save_to_files") === "true";
 
       this.settings = {
         host,
@@ -152,13 +169,8 @@ class EmailService {
         from,
         appBaseUrl,
         enabled: true,
-        saveToFiles,
+        saveToFiles: false,
       };
-
-      // Создаём папку для сохранения писем если включена опция
-      if (saveToFiles) {
-        await this.ensureEmailsDirectory();
-      }
 
       this.transporter = nodemailer.createTransport({
         host: this.settings.host,
@@ -210,12 +222,28 @@ class EmailService {
     return id;
   }
 
-  async sendEmail(options: EmailOptions): Promise<boolean> {
+  private async sendThroughTransport(options: EmailOptions): Promise<void> {
     if (!this.transporter || !this.settings) {
+      throw new Error("SMTP не настроен или отключен");
+    }
+
+    const info = await this.transporter.sendMail({
+      from: this.settings.from,
+      to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+
+    console.log(`[EmailService] Email sent: ${info.messageId}`);
+  }
+
+  async sendEmail(options: EmailOptions): Promise<boolean> {
+    if (!this.settings) {
       await this.initialize();
     }
 
-    if (!this.transporter || !this.settings) {
+    if (!this.settings) {
       console.warn("[EmailService] Email not configured, skipping send");
       return false;
     }
@@ -233,15 +261,7 @@ class EmailService {
 
     // Обычная отправка через SMTP
     try {
-      const info = await this.transporter.sendMail({
-        from: this.settings.from,
-        to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-      });
-
-      console.log(`[EmailService] Email sent: ${info.messageId}`);
+      await this.sendThroughTransport(options);
       return true;
     } catch (error) {
       console.error("[EmailService] Failed to send email:", error);
@@ -341,7 +361,7 @@ class EmailService {
   }
 
   isEnabled(): boolean {
-    return this.transporter !== null && this.settings !== null;
+    return this.settings !== null && (this.transporter !== null || this.settings.saveToFiles);
   }
 
   isSavingToFiles(): boolean {
@@ -441,11 +461,11 @@ class EmailService {
 
   async sendTestEmail(to: string): Promise<SmtpTestResult> {
     try {
-      if (!this.transporter || !this.settings) {
+      if (!this.settings) {
         await this.initialize();
       }
 
-      if (!this.transporter || !this.settings) {
+      if (!this.settings) {
         return { success: false, error: "SMTP не настроен или отключен" };
       }
 
@@ -454,19 +474,20 @@ class EmailService {
         ? `<p><img src="${publicBaseUrl}/readora-wordmark.webp" alt="Readora" style="height:28px;width:auto"></p>`
         : "";
 
-      // Используем sendEmail чтобы учитывался флаг saveToFiles
-      const sent = await this.sendEmail({
+      const email = {
         to,
         subject: "Тестовое письмо — Readora",
         text: "Это тестовое письмо от Readora. Если вы его получили — SMTP настроен корректно.",
         html: `${logoHtml}<p>Это тестовое письмо от <strong>Readora</strong>.</p><p>Если вы его получили — SMTP настроен корректно.</p>`,
-      });
+      };
 
-      if (sent) {
-        return { success: true, messageId: this.settings.saveToFiles ? "saved-to-file" : undefined };
-      } else {
-        return { success: false, error: "Не удалось отправить письмо" };
+      if (this.settings.saveToFiles) {
+        await this.saveEmailToFile(email);
+        return { success: true, messageId: "saved-to-file" };
       }
+
+      await this.sendThroughTransport(email);
+      return { success: true };
     } catch (error) {
       const formatted = formatSmtpError(error);
       console.error("[EmailService] Failed to send test email:", error);
