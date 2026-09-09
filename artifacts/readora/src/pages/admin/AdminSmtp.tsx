@@ -294,7 +294,7 @@ export function AdminSmtp() {
                 }
               />
               <p className="text-xs text-muted-foreground">
-                587 (STARTTLS) или 465 (SSL)
+                STARTTLS: 587 + выключить SSL/TLS. SSL: 465 + включить SSL/TLS.
               </p>
             </div>
           </div>
@@ -380,7 +380,7 @@ export function AdminSmtp() {
             <div className="space-y-1">
               <Label htmlFor="smtp-secure">Использовать SSL/TLS</Label>
               <p className="text-sm text-muted-foreground">
-                Шифрованное подключение (обычно для порта 465)
+                Для STARTTLS используйте порт 587 и выключите этот переключатель. Для SSL используйте порт 465 и включите его.
               </p>
             </div>
             <Switch
@@ -436,12 +436,12 @@ export function AdminSmtp() {
               placeholder="test@example.com"
               value={testEmail}
               onChange={(e) => setTestEmail(e.target.value)}
-              disabled={!local.enabled}
+              disabled={!local.enabled && !local.saveToFiles}
             />
             <Button
               type="button"
               onClick={handleSendTest}
-              disabled={testMutation.isPending || !local.enabled || !testEmail.trim()}
+              disabled={testMutation.isPending || (!local.enabled && !local.saveToFiles) || !testEmail.trim()}
             >
               {testMutation.isPending ? (
                 <>
@@ -457,11 +457,20 @@ export function AdminSmtp() {
             </Button>
           </div>
 
-          {!local.enabled && (
+          {!local.enabled && !local.saveToFiles && (
             <div className="flex items-center gap-2 p-3 bg-yellow-50 text-yellow-800 rounded-lg">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span className="text-sm">
                 SMTP отключён. Включите SMTP и сохраните настройки, чтобы отправить тестовое письмо.
+              </span>
+            </div>
+          )}
+
+          {!local.enabled && local.saveToFiles && (
+            <div className="flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span className="text-sm">
+                SMTP отключён: тестовое письмо будет сохранено в файл и не будет отправлено.
               </span>
             </div>
           )}
