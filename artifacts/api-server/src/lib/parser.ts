@@ -502,6 +502,21 @@ function isStructuralFb2SectionTitle(title: string): boolean {
   return isArabicOrRomanSectionMarker(marker) || STRUCTURAL_FB2_SECTION_ORDINALS.has(marker);
 }
 
+function getFb2InlineChapterTitle(node: Fb2Node): string | null {
+  if (nodeName(node) !== "p") return null;
+
+  const elements = childElements(node);
+  if (elements.length !== 1 || nodeName(elements[0]) !== "strong") return null;
+  if ((node.children ?? []).some((child) => child.type === "text" && child.data?.trim())) return null;
+
+  const title = renderTextFromNode(elements[0]).trim();
+  const normalized = title.replace(/\s+/g, " ").toLowerCase();
+  const marker = normalized.match(/^глава\s+(\S+)/)?.[1];
+  return marker && (isArabicOrRomanSectionMarker(marker) || STRUCTURAL_FB2_SECTION_ORDINALS.has(marker))
+    ? title
+    : null;
+}
+
 function getFb2SectionTitle(section: Fb2Node): string | null {
   const title = childElements(section, "title")[0];
   if (!title) return null;
@@ -559,6 +574,32 @@ function appendFb2Chapter(chapters: ParsedChapter[], title: string, htmlContent:
   });
 }
 
+function appendFb2InlineChapters(
+  section: Fb2Node,
+  chapters: ParsedChapter[],
+  binaryMap: Map<string, string>,
+): boolean {
+  const children = section.children ?? [];
+  const headings = children
+    .map((child, index) => ({ index, title: getFb2InlineChapterTitle(child) }))
+    .filter((heading): heading is { index: number; title: string } => Boolean(heading.title));
+
+  if (headings.length < 2) return false;
+
+  for (const [headingIndex, heading] of headings.entries()) {
+    const nextHeading = headings[headingIndex + 1];
+    const content = children
+      .slice(heading.index + 1, nextHeading?.index)
+      .filter(isElementNode)
+      .map((child) => renderFb2BlockElement(child, binaryMap))
+      .join("");
+
+    appendFb2Chapter(chapters, heading.title, `<h2>${escapeHtml(heading.title)}</h2>\n${content}`);
+  }
+
+  return true;
+}
+
 function appendFb2SectionChapters(
   section: Fb2Node,
   chapters: ParsedChapter[],
@@ -589,6 +630,10 @@ function appendFb2SectionChapters(
     }
 
     return chapterIndex;
+  }
+
+  if (childSections.length === 0 && appendFb2InlineChapters(section, chapters, binaryMap)) {
+    return chapters.length;
   }
 
   const content = renderFb2SectionContent(section, binaryMap);
