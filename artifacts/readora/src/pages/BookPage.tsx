@@ -19,7 +19,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   BookOpen, Edit2, Trash2, ArrowLeft, Calendar, Globe,
@@ -64,7 +63,6 @@ export default function BookPage() {
   const [editCycleNumber, setEditCycleNumber] = useState("");
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null);
-  const [editHideFromPopular, setEditHideFromPopular] = useState(false);
 
   useEffect(() => {
     const description = descriptionRef.current;
@@ -126,7 +124,6 @@ export default function BookPage() {
     setEditCycleNumber(book.cycleNumber == null ? "" : String(book.cycleNumber));
     setEditCoverFile(null);
     setEditCoverPreview(null);
-    setEditHideFromPopular(!!book.hideFromPopular);
     setEditOpen(true);
   }
 
@@ -211,7 +208,6 @@ export default function BookPage() {
         cycleId,
         cycleNumber,
         genreIds: editGenreIds,
-        hideFromPopular: editHideFromPopular,
       },
     });
   }
@@ -226,7 +222,6 @@ export default function BookPage() {
     formData.append("cycleId", cycleId == null ? "null" : String(cycleId));
     formData.append("cycleNumber", cycleNumber == null ? "null" : String(cycleNumber));
     formData.append("genreIds", JSON.stringify(editGenreIds));
-    formData.append("hideFromPopular", String(editHideFromPopular));
     formData.append("cover", editCoverFile as File);
 
     const response = await fetch(`/api/books/${bookId}`, {
@@ -533,19 +528,6 @@ export default function BookPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="hide-from-popular"
-                  checked={editHideFromPopular}
-                  onCheckedChange={(checked) => setEditHideFromPopular(checked === true)}
-                />
-              <Label htmlFor="hide-from-popular" className="text-sm">
-                Не показывать книгу в разделе «Популярные книги»
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              При выключенной настройке могут отображаться название, автор и краткое описание. Текст, файл и исходная обложка не публикуются.
-            </p>
               <div className="space-y-2">
                 <Label>Название</Label>
                 <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />

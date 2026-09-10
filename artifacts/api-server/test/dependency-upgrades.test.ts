@@ -58,6 +58,22 @@ test("parses FB2 content after dependency upgrades", () => {
   assert.match(book.chapters[0]?.htmlContent ?? "", /readable chapter/i);
 });
 
+test("splits FB2 chapters marked by standalone bold paragraphs", () => {
+  const book = parseBook(Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+    <FictionBook><description><title-info><book-title>Inline chapters</book-title></title-info></description>
+    <body><section>
+      <empty-line/><p><strong>Глава 1</strong></p><empty-line/>
+      <p>Первый текст главы.</p>
+      <empty-line/><p><strong>Глава 2</strong></p><empty-line/>
+      <p>Второй текст главы.</p>
+    </section></body></FictionBook>`), "fb2");
+
+  assert.deepEqual(book.chapters.map((chapter) => chapter.title), ["Глава 1", "Глава 2"]);
+  assert.match(book.chapters[0]?.htmlContent ?? "", /Первый текст главы/);
+  assert.doesNotMatch(book.chapters[0]?.htmlContent ?? "", /Второй текст главы/);
+  assert.match(book.chapters[1]?.htmlContent ?? "", /Второй текст главы/);
+});
+
 test("parses EPUB content and removes unsafe URI schemes", () => {
   const book = parseBook(createEpub(), "epub");
 
