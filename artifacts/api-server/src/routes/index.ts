@@ -8,6 +8,7 @@ import cyclesRouter from "./cycles";
 import adminRouter from "./admin";
 import pwaRouter from "./pwa";
 import feedbackRouter from "./feedback";
+import landingBooksRouter from "./landing-books";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(cyclesRouter);
 router.use(adminRouter);
 router.use(pwaRouter);
 router.use(feedbackRouter);
+router.use(landingBooksRouter);
 
 export default router;

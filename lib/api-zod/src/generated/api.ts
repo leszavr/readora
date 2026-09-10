@@ -533,10 +533,10 @@ export const GetPopularBooksResponse = zod.array(GetPopularBooksResponseItem)
 
 
 /**
- * @summary Get a generated cover for a currently popular book
+ * @summary Get a published landing book cover
  */
-export const GetPopularBookCoverParams = zod.object({
-  "coverSeed": zod.coerce.string()
+export const GetLandingBookCoverParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 
@@ -799,6 +799,105 @@ export const ToggleBlockBookResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List landing books (admin)
+ */
+export const ListLandingBooksResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string(),
+  "sortOrder": zod.number(),
+  "isPublished": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListLandingBooksResponse = zod.array(ListLandingBooksResponseItem)
+
+
+/**
+ * @summary Extract metadata from a book file and create a landing book (admin)
+ */
+export const CreateLandingBookBody = zod.object({
+  "bookFile": zod.instanceof(File),
+  "cover": zod.instanceof(File)
+})
+
+
+/**
+ * @summary Update landing book metadata and publication state (admin)
+ */
+export const UpdateLandingBookParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateLandingBookBodySortOrderMin = 0;
+export const updateLandingBookBodySortOrderMax = 10000;
+
+
+
+export const UpdateLandingBookBody = zod.object({
+  "title": zod.string().optional(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "sortOrder": zod.number().min(updateLandingBookBodySortOrderMin).max(updateLandingBookBodySortOrderMax).optional(),
+  "isPublished": zod.boolean().optional()
+})
+
+export const UpdateLandingBookResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string(),
+  "sortOrder": zod.number(),
+  "isPublished": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a landing book (admin)
+ */
+export const DeleteLandingBookParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get a landing book cover (admin)
+ */
+export const GetAdminLandingBookCoverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Replace a landing book cover (admin)
+ */
+export const UpdateLandingBookCoverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLandingBookCoverBody = zod.object({
+  "cover": zod.instanceof(File)
+})
+
+export const UpdateLandingBookCoverResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string(),
+  "sortOrder": zod.number(),
+  "isPublished": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

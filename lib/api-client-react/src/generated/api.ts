@@ -45,6 +45,10 @@ import type {
   GenreUpdate,
   GetPopularBooksParams,
   HealthStatus,
+  LandingBook,
+  LandingBookCoverUploadInput,
+  LandingBookUpdate,
+  LandingBookUploadInput,
   ListAdminBooksParams,
   ListAdminUsersParams,
   ListBooksParams,
@@ -2381,20 +2385,20 @@ export function useGetPopularBooks<TData = Awaited<ReturnType<typeof getPopularB
 
 
 
-export const getGetPopularBookCoverUrl = (coverSeed: string,) => {
+export const getGetLandingBookCoverUrl = (id: number,) => {
 
 
 
 
-  return `/api/public/popular-book-covers/${coverSeed}.webp`
+  return `/api/public/landing-book-covers/${id}`
 }
 
 /**
- * @summary Get a generated cover for a currently popular book
+ * @summary Get a published landing book cover
  */
-export const getPopularBookCover = async (coverSeed: string, options?: RequestInit): Promise<Blob> => {
+export const getLandingBookCover = async (id: number, options?: RequestInit): Promise<Blob> => {
 
-  return customFetch<Blob>(getGetPopularBookCoverUrl(coverSeed),
+  return customFetch<Blob>(getGetLandingBookCoverUrl(id),
   {
     ...options,
     method: 'GET'
@@ -2407,45 +2411,45 @@ export const getPopularBookCover = async (coverSeed: string, options?: RequestIn
 
 
 
-export const getGetPopularBookCoverQueryKey = (coverSeed: string,) => {
+export const getGetLandingBookCoverQueryKey = (id: number,) => {
     return [
-    `/api/public/popular-book-covers/${coverSeed}.webp`
+    `/api/public/landing-book-covers/${id}`
     ] as const;
     }
 
 
-export const getGetPopularBookCoverQueryOptions = <TData = Awaited<ReturnType<typeof getPopularBookCover>>, TError = ErrorType<void>>(coverSeed: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPopularBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetLandingBookCoverQueryOptions = <TData = Awaited<ReturnType<typeof getLandingBookCover>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLandingBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetPopularBookCoverQueryKey(coverSeed);
+  const queryKey =  queryOptions?.queryKey ?? getGetLandingBookCoverQueryKey(id);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPopularBookCover>>> = ({ signal }) => getPopularBookCover(coverSeed, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLandingBookCover>>> = ({ signal }) => getLandingBookCover(id, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(coverSeed), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPopularBookCover>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLandingBookCover>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetPopularBookCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getPopularBookCover>>>
-export type GetPopularBookCoverQueryError = ErrorType<void>
+export type GetLandingBookCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getLandingBookCover>>>
+export type GetLandingBookCoverQueryError = ErrorType<void>
 
 
 /**
- * @summary Get a generated cover for a currently popular book
+ * @summary Get a published landing book cover
  */
 
-export function useGetPopularBookCover<TData = Awaited<ReturnType<typeof getPopularBookCover>>, TError = ErrorType<void>>(
- coverSeed: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPopularBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetLandingBookCover<TData = Awaited<ReturnType<typeof getLandingBookCover>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLandingBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetPopularBookCoverQueryOptions(coverSeed,options)
+  const queryOptions = getGetLandingBookCoverQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -3496,6 +3500,450 @@ export const useToggleBlockBook = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getToggleBlockBookMutationOptions(options));
+    }
+
+export const getListLandingBooksUrl = () => {
+
+
+
+
+  return `/api/admin/landing-books`
+}
+
+/**
+ * @summary List landing books (admin)
+ */
+export const listLandingBooks = async ( options?: RequestInit): Promise<LandingBook[]> => {
+
+  return customFetch<LandingBook[]>(getListLandingBooksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLandingBooksQueryKey = () => {
+    return [
+    `/api/admin/landing-books`
+    ] as const;
+    }
+
+
+export const getListLandingBooksQueryOptions = <TData = Awaited<ReturnType<typeof listLandingBooks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLandingBooks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLandingBooksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLandingBooks>>> = ({ signal }) => listLandingBooks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLandingBooks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLandingBooksQueryResult = NonNullable<Awaited<ReturnType<typeof listLandingBooks>>>
+export type ListLandingBooksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List landing books (admin)
+ */
+
+export function useListLandingBooks<TData = Awaited<ReturnType<typeof listLandingBooks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLandingBooks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLandingBooksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateLandingBookUrl = () => {
+
+
+
+
+  return `/api/admin/landing-books`
+}
+
+/**
+ * @summary Extract metadata from a book file and create a landing book (admin)
+ */
+export const createLandingBook = async (landingBookUploadInput: LandingBookUploadInput, options?: RequestInit): Promise<LandingBook> => {
+    const formData = new FormData();
+formData.append(`bookFile`, landingBookUploadInput.bookFile);
+formData.append(`cover`, landingBookUploadInput.cover);
+
+  return customFetch<LandingBook>(getCreateLandingBookUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getCreateLandingBookMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLandingBook>>, TError,{data: BodyType<LandingBookUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLandingBook>>, TError,{data: BodyType<LandingBookUploadInput>}, TContext> => {
+
+const mutationKey = ['createLandingBook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLandingBook>>, {data: BodyType<LandingBookUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLandingBook(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLandingBookMutationResult = NonNullable<Awaited<ReturnType<typeof createLandingBook>>>
+    export type CreateLandingBookMutationBody = BodyType<LandingBookUploadInput>
+    export type CreateLandingBookMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Extract metadata from a book file and create a landing book (admin)
+ */
+export const useCreateLandingBook = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLandingBook>>, TError,{data: BodyType<LandingBookUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLandingBook>>,
+        TError,
+        {data: BodyType<LandingBookUploadInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLandingBookMutationOptions(options));
+    }
+
+export const getUpdateLandingBookUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/landing-books/${id}`
+}
+
+/**
+ * @summary Update landing book metadata and publication state (admin)
+ */
+export const updateLandingBook = async (id: number,
+    landingBookUpdate: LandingBookUpdate, options?: RequestInit): Promise<LandingBook> => {
+
+  return customFetch<LandingBook>(getUpdateLandingBookUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      landingBookUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateLandingBookMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLandingBook>>, TError,{id: number;data: BodyType<LandingBookUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLandingBook>>, TError,{id: number;data: BodyType<LandingBookUpdate>}, TContext> => {
+
+const mutationKey = ['updateLandingBook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLandingBook>>, {id: number;data: BodyType<LandingBookUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLandingBook(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLandingBookMutationResult = NonNullable<Awaited<ReturnType<typeof updateLandingBook>>>
+    export type UpdateLandingBookMutationBody = BodyType<LandingBookUpdate>
+    export type UpdateLandingBookMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update landing book metadata and publication state (admin)
+ */
+export const useUpdateLandingBook = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLandingBook>>, TError,{id: number;data: BodyType<LandingBookUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLandingBook>>,
+        TError,
+        {id: number;data: BodyType<LandingBookUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateLandingBookMutationOptions(options));
+    }
+
+export const getDeleteLandingBookUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/landing-books/${id}`
+}
+
+/**
+ * @summary Delete a landing book (admin)
+ */
+export const deleteLandingBook = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteLandingBookUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteLandingBookMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLandingBook>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLandingBook>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteLandingBook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLandingBook>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteLandingBook(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLandingBookMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLandingBook>>>
+
+    export type DeleteLandingBookMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a landing book (admin)
+ */
+export const useDeleteLandingBook = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLandingBook>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLandingBook>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteLandingBookMutationOptions(options));
+    }
+
+export const getGetAdminLandingBookCoverUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/landing-books/${id}/cover`
+}
+
+/**
+ * @summary Get a landing book cover (admin)
+ */
+export const getAdminLandingBookCover = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetAdminLandingBookCoverUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminLandingBookCoverQueryKey = (id: number,) => {
+    return [
+    `/api/admin/landing-books/${id}/cover`
+    ] as const;
+    }
+
+
+export const getGetAdminLandingBookCoverQueryOptions = <TData = Awaited<ReturnType<typeof getAdminLandingBookCover>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminLandingBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminLandingBookCoverQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminLandingBookCover>>> = ({ signal }) => getAdminLandingBookCover(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminLandingBookCover>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminLandingBookCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminLandingBookCover>>>
+export type GetAdminLandingBookCoverQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a landing book cover (admin)
+ */
+
+export function useGetAdminLandingBookCover<TData = Awaited<ReturnType<typeof getAdminLandingBookCover>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminLandingBookCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminLandingBookCoverQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateLandingBookCoverUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/landing-books/${id}/cover`
+}
+
+/**
+ * @summary Replace a landing book cover (admin)
+ */
+export const updateLandingBookCover = async (id: number,
+    landingBookCoverUploadInput: LandingBookCoverUploadInput, options?: RequestInit): Promise<LandingBook> => {
+    const formData = new FormData();
+formData.append(`cover`, landingBookCoverUploadInput.cover);
+
+  return customFetch<LandingBook>(getUpdateLandingBookCoverUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getUpdateLandingBookCoverMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLandingBookCover>>, TError,{id: number;data: BodyType<LandingBookCoverUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLandingBookCover>>, TError,{id: number;data: BodyType<LandingBookCoverUploadInput>}, TContext> => {
+
+const mutationKey = ['updateLandingBookCover'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLandingBookCover>>, {id: number;data: BodyType<LandingBookCoverUploadInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLandingBookCover(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLandingBookCoverMutationResult = NonNullable<Awaited<ReturnType<typeof updateLandingBookCover>>>
+    export type UpdateLandingBookCoverMutationBody = BodyType<LandingBookCoverUploadInput>
+    export type UpdateLandingBookCoverMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Replace a landing book cover (admin)
+ */
+export const useUpdateLandingBookCover = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLandingBookCover>>, TError,{id: number;data: BodyType<LandingBookCoverUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLandingBookCover>>,
+        TError,
+        {id: number;data: BodyType<LandingBookCoverUploadInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateLandingBookCoverMutationOptions(options));
     }
 
 export const getGetAppSettingsUrl = () => {

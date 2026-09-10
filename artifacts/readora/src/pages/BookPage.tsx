@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import {
   useGetBook,
@@ -47,6 +47,9 @@ export default function BookPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const [descriptionTruncated, setDescriptionTruncated] = useState(false);
+  const descriptionRef = useRef<HTMLButtonElement>(null);
 
   // Edit form state
   const [editTitle, setEditTitle] = useState("");
@@ -62,6 +65,24 @@ export default function BookPage() {
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null);
   const [editHideFromPopular, setEditHideFromPopular] = useState(false);
+
+  useEffect(() => {
+    const description = descriptionRef.current;
+    if (!description) {
+      setDescriptionTruncated(false);
+      return;
+    }
+
+    const updateTruncation = () => {
+      setDescriptionTruncated(description.scrollHeight > description.clientHeight);
+    };
+
+    updateTruncation();
+    const observer = new ResizeObserver(updateTruncation);
+    observer.observe(description);
+
+    return () => observer.disconnect();
+  }, [book?.description]);
 
   function invalidateBookQueries() {
     qc.invalidateQueries({ queryKey: getListBooksQueryKey() });
@@ -401,7 +422,16 @@ export default function BookPage() {
 
               {/* Description */}
               {book.description && (
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-4">{book.description}</p>
+                <button
+                  ref={descriptionRef}
+                  type="button"
+                  disabled={!descriptionTruncated}
+                  onClick={() => setDescriptionOpen(true)}
+                  className="mb-4 line-clamp-4 text-left text-sm leading-relaxed text-muted-foreground disabled:cursor-default"
+                  title={descriptionTruncated ? "Открыть полное описание" : undefined}
+                >
+                  {book.description}
+                </button>
               )}
 
               {/* Cycle */}
@@ -422,6 +452,17 @@ export default function BookPage() {
             </div>
           </div>
         </div>
+
+        <Dialog open={descriptionOpen} onOpenChange={setDescriptionOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Описание</DialogTitle>
+            </DialogHeader>
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+              {book.description}
+            </p>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>

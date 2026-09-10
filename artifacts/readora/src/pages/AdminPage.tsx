@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -11,11 +11,13 @@ const AdminGenres = lazy(() => import("@/pages/admin/AdminGenres"));
 const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
 const AdminSmtp = lazy(() => import("@/pages/admin/AdminSmtp").then(({ AdminSmtp }) => ({ default: AdminSmtp })));
 const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
+const AdminLandingBooks = lazy(() => import("@/pages/admin/AdminLandingBooks"));
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
   { id: "users", label: "Пользователи", icon: Users },
   { id: "books", label: "Книги", icon: BookCopy },
+  { id: "landing-books", label: "Лендинг", icon: PanelsTopLeft },
   { id: "genres", label: "Жанры", icon: Tags },
   { id: "email", label: "Email", icon: Mail },
   { id: "saved-emails", label: "Письма", icon: Inbox },
@@ -64,6 +66,7 @@ export default function AdminPage() {
             {tab === "stats" && <AdminStats />}
             {tab === "users" && <AdminUsers />}
             {tab === "books" && <AdminBooks />}
+            {tab === "landing-books" && <AdminLandingBooks />}
             {tab === "genres" && <AdminGenres />}
             {tab === "email" && <AdminSmtp />}
             {tab === "saved-emails" && <AdminEmails />}

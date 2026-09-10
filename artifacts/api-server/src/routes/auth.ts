@@ -21,7 +21,6 @@ import {
 import { requireAuth } from "../middlewares/auth";
 import { emailService } from "../lib/email-service";
 import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
-import { invalidatePopularBooksCache } from "../lib/popular-books-service";
 import { resolveUploadPath } from "../lib/storage";
 import type { Request } from "express";
 
@@ -362,7 +361,6 @@ router.post(
     });
     res.clearCookie("readora.sid");
     res.clearCookie("readora.remember");
-    invalidatePopularBooksCache();
 
     for (const book of books) {
       try {

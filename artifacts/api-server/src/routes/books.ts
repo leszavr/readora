@@ -11,8 +11,6 @@ import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
-import { getPopularBookCover, getPopularBooks, invalidatePopularBooksCache } from "../lib/popular-books-service";
-import { createPublicBookCover } from "../lib/public-book-cover-service";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
 
@@ -184,7 +182,6 @@ async function applyBookUpdates(params: {
   }
 
   await db.update(booksTable).set(updates).where(eq(booksTable.id, book.id));
-  invalidatePopularBooksCache();
 
   if (genreIds !== undefined) {
     await db.delete(bookGenresTable).where(eq(bookGenresTable.bookId, book.id));
@@ -331,7 +328,6 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     }
 
     await updateUploadJob(jobId, { status: "completed", stage: "completed", progress: 100, bookId: book.id, completedAt: new Date() });
-    invalidatePopularBooksCache();
     fs.rmSync(tempPath, { force: true });
   } catch (e) {
     await updateUploadJob(jobId, {
@@ -610,7 +606,6 @@ router.delete("/books/:id", requireAuth, async (req, res): Promise<void> => {
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   await deleteStoredFilesIfUnreferenced(book);
   await db.delete(booksTable).where(eq(booksTable.id, id));
-  invalidatePopularBooksCache();
   res.sendStatus(204);
 });
 
@@ -632,26 +627,13 @@ router.post("/books/delete-bulk", requireAuth, async (req, res): Promise<void> =
     await deleteStoredFilesIfUnreferenced(book, deletingIds);
   }
   const result = await db.delete(booksTable).where(and(eq(booksTable.ownerUserId, user.id), inArray(booksTable.id, ids))).returning();
-  if (result.length > 0) invalidatePopularBooksCache();
   res.json({ deleted: result.length });
 });
 
 // GET /public/popular-books
 router.get("/public/popular-books", async (req, res): Promise<void> => {
+  const { getPopularBooks } = await import("../lib/popular-books-service");
   res.json(await getPopularBooks(req.query.limit));
-});
-
-router.get("/public/popular-book-covers/:coverSeed.webp", async (req, res): Promise<void> => {
-  const coverSeed = String(req.params.coverSeed);
-  const book = await getPopularBookCover(coverSeed);
-  if (!book) {
-    res.sendStatus(404);
-    return;
-  }
-
-  res.setHeader("Content-Type", "image/webp");
-  res.setHeader("Cache-Control", "no-store");
-  res.send(await createPublicBookCover(book));
 });
 
 export default router;
