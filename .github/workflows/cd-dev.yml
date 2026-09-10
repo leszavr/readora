@@ -75,9 +75,49 @@ jobs:
       - name: Запустить тесты (если настроены)
         run: pnpm -r --if-present run test
 
+  migrations:
+    name: "🗃️ Проверка миграций"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: readora_ci
+          POSTGRES_USER: readora
+          POSTGRES_PASSWORD: readora
+        options: >-
+          --health-cmd "pg_isready -U readora -d readora_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://readora:readora@localhost:5432/readora_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Настроить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Использовать npm registry
+        run: pnpm config set registry https://registry.npmjs.org
+      - name: Установить зависимости
+        run: pnpm install --frozen-lockfile
+      - name: Применить миграции к чистой БД
+        run: pnpm run db:migrate
+      - name: Проверить повторный запуск миграций
+        run: pnpm run db:migrate
+      - name: Убедиться в отсутствии ожидающих миграций
+        run: |
+          pnpm run db:migrate:status | tee migration-status.log
+          ! grep -q ': pending' migration-status.log
+
   build:
     name: "🏗️ Сборка"
-    needs: [quality, security, test]
+    needs: [quality, security, test, migrations]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

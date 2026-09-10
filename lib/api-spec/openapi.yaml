@@ -687,20 +687,20 @@ paths:
                 items:
                   $ref: "#/components/schemas/PublicBook"
 
-  /public/popular-book-covers/{coverSeed}.webp:
+  /public/landing-book-covers/{id}:
     get:
-      operationId: getPopularBookCover
+      operationId: getLandingBookCover
       tags: [books]
-      summary: Get a generated cover for a currently popular book
+      summary: Get a published landing book cover
       parameters:
-        - name: coverSeed
+        - name: id
           in: path
           required: true
           schema:
-            type: string
+            type: integer
       responses:
         "200":
-          description: Generated WebP cover
+          description: WebP cover
           content:
             image/webp:
               schema:
@@ -971,6 +971,151 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminBook"
+
+  /admin/landing-books:
+    get:
+      operationId: listLandingBooks
+      tags: [admin]
+      summary: List landing books (admin)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LandingBook"
+    post:
+      operationId: createLandingBook
+      tags: [admin]
+      summary: Extract metadata from a book file and create a landing book (admin)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/LandingBookUploadInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingBook"
+        "400":
+          description: Invalid upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/landing-books/{id}:
+    patch:
+      operationId: updateLandingBook
+      tags: [admin]
+      summary: Update landing book metadata and publication state (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LandingBookUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingBook"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteLandingBook
+      tags: [admin]
+      summary: Delete a landing book (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/landing-books/{id}/cover:
+    get:
+      operationId: getAdminLandingBookCover
+      tags: [admin]
+      summary: Get a landing book cover (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: WebP cover
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+    post:
+      operationId: updateLandingBookCover
+      tags: [admin]
+      summary: Replace a landing book cover (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/LandingBookCoverUploadInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandingBook"
+        "400":
+          description: Invalid upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /admin/settings:
     get:
@@ -1366,6 +1511,66 @@ components:
           type: ["string", "null"]
         coverUrl:
           type: string
+
+    LandingBook:
+      type: object
+      required: [id, title, coverUrl, sortOrder, isPublished, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        coverUrl:
+          type: string
+        sortOrder:
+          type: integer
+        isPublished:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LandingBookUploadInput:
+      type: object
+      required: [bookFile, cover]
+      properties:
+        bookFile:
+          type: string
+          format: binary
+        cover:
+          type: string
+          format: binary
+
+    LandingBookCoverUploadInput:
+      type: object
+      required: [cover]
+      properties:
+        cover:
+          type: string
+          format: binary
+
+    LandingBookUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        isPublished:
+          type: boolean
 
     # READER
     Chapter:

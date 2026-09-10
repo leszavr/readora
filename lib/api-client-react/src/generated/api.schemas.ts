@@ -234,6 +234,43 @@ export interface PublicBook {
   coverUrl: string;
 }
 
+export interface LandingBook {
+  id: number;
+  title: string;
+  /** @nullable */
+  author?: string | null;
+  /** @nullable */
+  description?: string | null;
+  coverUrl: string;
+  sortOrder: number;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LandingBookUploadInput {
+  bookFile: Blob;
+  cover: Blob;
+}
+
+export interface LandingBookCoverUploadInput {
+  cover: Blob;
+}
+
+export interface LandingBookUpdate {
+  title?: string;
+  /** @nullable */
+  author?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  sortOrder?: number;
+  isPublished?: boolean;
+}
+
 export interface Chapter {
   id: number;
   bookId: number;
