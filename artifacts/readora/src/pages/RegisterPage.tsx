@@ -8,11 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useRegistrationStatus } from "@/hooks/use-registration-status";
 
 export default function RegisterPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { isAuthenticated } = useAuth();
+  const {
+    data: registrationStatus,
+    isLoading: isRegistrationStatusLoading,
+    isError: isRegistrationStatusError,
+  } = useRegistrationStatus();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -64,66 +70,82 @@ export default function RegisterPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle>Регистрация</CardTitle>
-            <CardDescription>Заполните данные для создания аккаунта</CardDescription>
+            <CardDescription>
+              {registrationStatus?.enabled === true
+                ? "Заполните данные для создания аккаунта"
+                : "Создание новых аккаунтов временно недоступно."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Имя пользователя</Label>
-                <Input
-                  id="username"
-                  placeholder="Иван Иванов"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
+            {isRegistrationStatusLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Пароль</Label>
-                <div className="relative">
+            ) : registrationStatus?.enabled !== true ? (
+              <p className="text-center text-sm text-muted-foreground">
+                {isRegistrationStatusError
+                  ? "Не удалось проверить доступность регистрации. Попробуйте позже."
+                  : "Регистрация отключена администратором."}
+              </p>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Имя пользователя</Label>
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Минимум 8 символов"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    id="username"
+                    placeholder="Иван Иванов"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     required
-                    minLength={8}
-                    autoComplete="new-password"
-                    className="pr-10"
                   />
-                  <button
-                    type="button"
-                    aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Пароль</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Минимум 8 символов"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
 
-              {errorMsg && (
-                <p className="text-sm text-destructive">{errorMsg}</p>
-              )}
+                {errorMsg && (
+                  <p className="text-sm text-destructive">{errorMsg}</p>
+                )}
 
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Создать аккаунт
-              </Button>
-            </form>
+                <Button type="submit" className="w-full" disabled={isPending}>
+                  {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Создать аккаунт
+                </Button>
+              </form>
+            )}
 
             <p className="text-center text-sm text-muted-foreground mt-4">
               Уже есть аккаунт?{" "}

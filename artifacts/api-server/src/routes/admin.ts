@@ -11,7 +11,6 @@ import {
   readEventsTable,
   appSettingsTable,
   MAINTENANCE_MODE_KEY,
-  MAINTENANCE_SESSION_VERSION_KEY,
   MAINTENANCE_REASON_KEY,
   MAINTENANCE_ETA_KEY,
   MAINTENANCE_MESSAGE_KEY,
@@ -21,6 +20,8 @@ import { formatUser } from "./auth";
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
+import { getMaintenanceStatus } from "../lib/maintenance-status";
+import { isRegistrationEnabled } from "../lib/registration-status";
 
 const router = Router();
 
@@ -541,7 +542,6 @@ router.patch(
   async (req, res): Promise<void> => {
     const updates = req.body ?? {};
     let smtpTouched = false;
-    let maintenanceModeActivated = false;
 
     for (const [key, value] of Object.entries(updates)) {
       const strVal = normalizeSettingValue(value);
@@ -552,11 +552,6 @@ router.patch(
       // camelCase -> snake_case для некоторых ключей
       let dbKey = key;
       if (key === "emailSaveToFiles") dbKey = "email_save_to_files";
-
-      // Проверяем, включается ли режим обслуживания
-      if (key === "maintenanceMode" && strVal === "true") {
-        maintenanceModeActivated = true;
-      }
 
       await db
         .insert(appSettingsTable)
@@ -571,26 +566,6 @@ router.patch(
         key === "emailSaveToFiles"
       )
         smtpTouched = true;
-    }
-
-    // Если режим обслуживания активирован - генерируем новую версию сессии
-    // Это приведёт к принудительному логауту всех обычных пользователей
-    if (maintenanceModeActivated) {
-      const newSessionVersion = Date.now().toString();
-      await db
-        .insert(appSettingsTable)
-        .values({
-          key: MAINTENANCE_SESSION_VERSION_KEY,
-          value: newSessionVersion,
-        })
-        .onConflictDoUpdate({
-          target: appSettingsTable.key,
-          set: { value: newSessionVersion },
-        });
-      logger.info(
-        { newSessionVersion },
-        "Maintenance mode activated, session version updated",
-      );
     }
 
     // Переинициализируем emailService, чтобы изменения вступили в силу без перезапуска
@@ -628,17 +603,11 @@ router.patch(
 
 // GET /public/maintenance-status - публичный endpoint для проверки режима обслуживания
 router.get("/public/maintenance-status", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(appSettingsTable);
-  const map: Record<string, string | null> = {};
-  for (const r of rows) {
-    map[r.key] = r.value;
-  }
-  res.json({
-    enabled: map.maintenanceMode === "true",
-    reason: map.maintenanceReason ?? null,
-    eta: map.maintenanceEta ?? null,
-    message: map.maintenanceMessage ?? null,
-  });
+  res.json(await getMaintenanceStatus());
+});
+
+router.get("/public/registration-status", async (_req, res): Promise<void> => {
+  res.json({ enabled: await isRegistrationEnabled() });
 });
 
 // POST /admin/smtp/test — отправить тестовое письмо текущими настройками из БД

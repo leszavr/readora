@@ -12,8 +12,10 @@ import { pool } from "@workspace/db";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { emailService } from "./lib/email-service";
+import { getMaintenanceStatus } from "./lib/maintenance-status";
 import { getPopularBooks } from "./lib/popular-books-service";
 import { getPublicBaseUrl } from "./lib/public-url";
+import { isRegistrationEnabled } from "./lib/registration-status";
 import seoRouter from "./routes/seo";
 
 declare module "express-session" {
@@ -40,6 +42,8 @@ type HomeRenderer = {
     template: string;
     publicBaseUrl: string;
     popularBooks: Awaited<ReturnType<typeof getPopularBooks>>;
+    maintenanceStatus: Awaited<ReturnType<typeof getMaintenanceStatus>>;
+    registrationStatus: { enabled: boolean };
   }): string;
   renderAboutDocument(input: {
     template: string;
@@ -162,6 +166,8 @@ if (hasClientDist && homeRenderer) {
         template: indexHtml,
         publicBaseUrl: getPublicBaseUrl(),
         popularBooks: await getPopularBooks(6),
+        maintenanceStatus: await getMaintenanceStatus(),
+        registrationStatus: { enabled: await isRegistrationEnabled() },
       }));
     } catch (error) {
       next(error);

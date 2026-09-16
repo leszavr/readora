@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BookOpen, Library, LogOut, User as UserIcon, ShieldCheck, MessageSquare } from "lucide-react";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
-import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
+import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { LegalOverlay } from "@/components/LegalOverlay";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
@@ -38,13 +38,11 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [location, navigate] = useLocation();
   const qc = useQueryClient();
   const { data: maintenanceStatus } = useMaintenanceStatus();
+  const { data: registrationStatus } = useRegistrationStatus();
   
   // State для управления оверлеями и модалами
   const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  
-  // Проверяем, находимся ли мы на странице логина (исключаем из проверки режима обслуживания)
-  const isLoginPage = location === "/login" || location.startsWith("/login");
   
   // Показываем баннер админу при активном режиме обслуживания
   const showAdminMaintenanceBanner = isAdmin && maintenanceStatus?.enabled;
@@ -61,7 +59,6 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <MaintenanceOverlay status={maintenanceStatus ?? null} isLoginPage={isLoginPage} />
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border shadow-xs">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2">
@@ -138,9 +135,11 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                 <Link href="/login">
                   <Button variant="ghost" size="sm">Войти</Button>
                 </Link>
-                <Link href="/register">
-                  <Button size="sm">Регистрация</Button>
-                </Link>
+                {registrationStatus?.enabled === true && (
+                  <Link href="/register">
+                    <Button size="sm">Регистрация</Button>
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -210,11 +209,13 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                         Войти
                       </Link>
                     </li>
-                    <li>
-                      <Link href="/register" className="hover:text-foreground transition-colors">
-                        Регистрация
-                      </Link>
-                    </li>
+                    {registrationStatus?.enabled === true && (
+                      <li>
+                        <Link href="/register" className="hover:text-foreground transition-colors">
+                          Регистрация
+                        </Link>
+                      </li>
+                    )}
                   </>
                 )}
               </ul>

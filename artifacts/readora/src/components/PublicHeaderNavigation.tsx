@@ -11,16 +11,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { useRegistrationStatus } from "@/hooks/use-registration-status";
 
-export function PublicHeaderNavigation() {
+export function PublicHeaderNavigation({
+  registrationStatus,
+}: Readonly<{ registrationStatus?: { enabled: boolean } }>) {
   const { user, isAuthenticated, isModerator } = useAuth();
   const queryClient = useQueryClient();
+  const { data } = useRegistrationStatus(registrationStatus);
 
   if (!isAuthenticated) {
     return (
       <div className="ml-auto flex items-center gap-2">
         <Button variant="ghost" size="sm" asChild><a href="/login">Войти</a></Button>
-        <Button size="sm" asChild><a href="/register">Регистрация</a></Button>
+        {data?.enabled === true && (
+          <Button size="sm" asChild><a href="/register">Регистрация</a></Button>
+        )}
       </div>
     );
   }

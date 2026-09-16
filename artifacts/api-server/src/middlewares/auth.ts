@@ -4,12 +4,11 @@ import {
   usersTable,
   appSettingsTable,
   MAINTENANCE_MODE_KEY,
-  MAINTENANCE_SESSION_VERSION_KEY,
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { emailService } from "../lib/email-service";
 
-// Helper function to check maintenance mode and session version
+// Helper function to check maintenance mode
 async function checkMaintenanceMode(
   req: Request,
   user: { role: string; id: number },
@@ -25,23 +24,9 @@ async function checkMaintenanceMode(
     .from(appSettingsTable)
     .where(eq(appSettingsTable.key, MAINTENANCE_MODE_KEY));
 
-  const sessionVersionSetting = await db
-    .select()
-    .from(appSettingsTable)
-    .where(eq(appSettingsTable.key, MAINTENANCE_SESSION_VERSION_KEY));
-
   const maintenanceMode = settings[0]?.value === "true";
 
-  if (!maintenanceMode) {
-    return { blocked: false };
-  }
-
-  // Проверяем версию сессии
-  const currentSessionVersion = sessionVersionSetting[0]?.value || "0";
-  const userSessionVersion =
-    (req.session as { maintenanceVersion?: string }).maintenanceVersion || "0";
-
-  if (userSessionVersion < currentSessionVersion) {
+  if (maintenanceMode) {
     return { blocked: true, reason: "maintenance_mode" };
   }
 

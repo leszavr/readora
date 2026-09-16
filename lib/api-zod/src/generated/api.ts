@@ -552,6 +552,14 @@ export const GetMaintenanceStatusResponse = zod.object({
 
 
 /**
+ * @summary Get registration availability (public)
+ */
+export const GetRegistrationStatusResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
  * @summary Admin dashboard stats
  */
 export const GetAdminStatsResponse = zod.object({

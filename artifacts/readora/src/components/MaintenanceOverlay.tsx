@@ -1,16 +1,9 @@
 import { useEffect } from "react";
-import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { AlertTriangle, Clock, Info, LogIn } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-interface MaintenanceStatus {
-  enabled: boolean;
-  reason: string | null;
-  eta: string | null;
-  message: string | null;
-}
+import type { MaintenanceStatus } from "@/hooks/use-maintenance-status";
 
 interface MaintenanceOverlayProps {
   status: MaintenanceStatus | null;
@@ -108,12 +101,12 @@ export function MaintenanceOverlay({ status, isLoginPage }: MaintenanceOverlayPr
           
           {/* Кнопка входа для администраторов */}
           <div className="pt-2">
-            <Link href="/login">
-              <Button variant="outline" className="gap-2 w-full">
+            <Button variant="outline" className="gap-2 w-full" asChild>
+              <a href="/login">
                 <LogIn className="w-4 h-4" />
                 Войти в админ-панель
-              </Button>
-            </Link>
+              </a>
+            </Button>
             <p className="text-xs text-muted-foreground mt-2">
               Только для администраторов
             </p>
