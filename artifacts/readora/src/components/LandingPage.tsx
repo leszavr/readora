@@ -165,6 +165,9 @@ export function LandingPage({
                 </a>
               </Button>
             )}
+            {!isAuthenticated && currentRegistrationStatus?.enabled === false && (
+              <p className="text-sm text-muted-foreground">Регистрация временно отключена. Попробуйте позже.</p>
+            )}
           </div>
         </section>
       </main>
