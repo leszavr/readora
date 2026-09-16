@@ -57,6 +57,7 @@ export function LandingPage({
   registrationStatus?: LandingData["registrationStatus"];
 }>) {
   const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
+  const [legalStack, setLegalStack] = useState<Array<"terms" | "copyright" | "privacy">>([]);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const { isAuthenticated } = useAuth();
   const { data: currentMaintenanceStatus } = useMaintenanceStatus(maintenanceStatus);
@@ -215,13 +216,13 @@ export function LandingPage({
         </div>
       </footer>
 
-      <LegalOverlay isOpen={activeLegalPage === "terms"} onClose={() => setActiveLegalPage(null)} title="Правила пользования">
+      <LegalOverlay isOpen={activeLegalPage === "terms"} onClose={() => { const prev = legalStack[legalStack.length - 1]; setLegalStack((s) => s.slice(0, -1)); setActiveLegalPage(prev ?? null); }} title="Правила пользования">
         <TermsOfServiceContent />
       </LegalOverlay>
-      <LegalOverlay isOpen={activeLegalPage === "copyright"} onClose={() => setActiveLegalPage(null)} title="Информация для правообладателей">
-        <CopyrightHoldersContent />
+      <LegalOverlay isOpen={activeLegalPage === "copyright"} onClose={() => { const prev = legalStack[legalStack.length - 1]; setLegalStack((s) => s.slice(0, -1)); setActiveLegalPage(prev ?? null); }} title="Информация для правообладателей">
+        <CopyrightHoldersContent onOpenPrivacy={() => { setLegalStack((s) => [...s, "copyright"]); setActiveLegalPage("privacy"); }} />
       </LegalOverlay>
-      <LegalOverlay isOpen={activeLegalPage === "privacy"} onClose={() => setActiveLegalPage(null)} title="Политика обработки персональных данных">
+      <LegalOverlay isOpen={activeLegalPage === "privacy"} onClose={() => { const prev = legalStack[legalStack.length - 1]; setLegalStack((s) => s.slice(0, -1)); setActiveLegalPage(prev ?? null); }} title="Политика обработки персональных данных">
         <PrivacyPolicyContent />
       </LegalOverlay>
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
