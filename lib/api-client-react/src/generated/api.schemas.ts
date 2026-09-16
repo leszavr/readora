@@ -537,6 +537,10 @@ export interface MaintenanceStatus {
   message?: string | null;
 }
 
+export interface RegistrationStatus {
+  enabled: boolean;
+}
+
 export interface SavedEmailSummary {
   id: string;
   to: string;

@@ -61,6 +61,7 @@ import type {
   ReaderSettingsInput,
   ReadingProgress,
   RegisterInput,
+  RegistrationStatus,
   ResendVerification200,
   ResendVerificationBody,
   RevokeAllTrustedDevices200,
@@ -2527,6 +2528,83 @@ export function useGetMaintenanceStatus<TData = Awaited<ReturnType<typeof getMai
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMaintenanceStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetRegistrationStatusUrl = () => {
+
+
+
+
+  return `/api/public/registration-status`
+}
+
+/**
+ * @summary Get registration availability (public)
+ */
+export const getRegistrationStatus = async ( options?: RequestInit): Promise<RegistrationStatus> => {
+
+  return customFetch<RegistrationStatus>(getGetRegistrationStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRegistrationStatusQueryKey = () => {
+    return [
+    `/api/public/registration-status`
+    ] as const;
+    }
+
+
+export const getGetRegistrationStatusQueryOptions = <TData = Awaited<ReturnType<typeof getRegistrationStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRegistrationStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRegistrationStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRegistrationStatus>>> = ({ signal }) => getRegistrationStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRegistrationStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRegistrationStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getRegistrationStatus>>>
+export type GetRegistrationStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get registration availability (public)
+ */
+
+export function useGetRegistrationStatus<TData = Awaited<ReturnType<typeof getRegistrationStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRegistrationStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRegistrationStatusQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -16,12 +16,13 @@ import {
   booksTable,
   bookUploadJobsTable,
   userSessionsTable,
-  MAINTENANCE_SESSION_VERSION_KEY,
+  MAINTENANCE_MODE_KEY,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { emailService } from "../lib/email-service";
 import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
+import { isRegistrationEnabled } from "../lib/registration-status";
 import type { Request } from "express";
 
 const router = Router();
@@ -55,7 +56,21 @@ function regenerateSession(req: Request): Promise<void> {
   });
 }
 
+async function getSettingValue(key: string): Promise<string | null> {
+  const [setting] = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, key));
+
+  return setting?.value ?? null;
+}
+
 router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
+  if (!(await isRegistrationEnabled())) {
+    res.status(403).json({ error: "Регистрация временно закрыта" });
+    return;
+  }
+
   const parsed = registerSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({
@@ -153,24 +168,28 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     return;
   }
 
+  if (
+    user.role !== "admin" &&
+    user.role !== "moderator" &&
+    (await getSettingValue(MAINTENANCE_MODE_KEY)) === "true"
+  ) {
+    res.status(403).json({
+      error: "Вход временно недоступен из-за технического обслуживания",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+
   await db
     .update(usersTable)
     .set({ lastLoginAt: new Date() })
     .where(eq(usersTable.id, user.id));
 
-  // Получаем текущую версию сессии для режима обслуживания
-  const [sessionVersionSetting] = await db
-    .select()
-    .from(appSettingsTable)
-    .where(eq(appSettingsTable.key, MAINTENANCE_SESSION_VERSION_KEY));
-
   // Новая сессия после аутентификации предотвращает session fixation.
   await regenerateSession(req);
 
-  // Устанавливаем userId и версию сессии
+  // Устанавливаем userId.
   req.session.userId = user.id;
-  (req.session as { maintenanceVersion?: string }).maintenanceVersion =
-    sessionVersionSetting?.value || "0";
 
   // ✅ Создаем remember token если пользователь выбрал "Запомнить меня"
   if (rememberMe) {

@@ -64,7 +64,13 @@ function landingSsrPlugin(): Plugin {
           const popularBooks = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/popular-books?limit=6`)
             .then(async (response) => response.ok ? response.json() : [])
             .catch(() => []);
-          res.end(renderHomeDocument({ template: transformedTemplate, publicBaseUrl, popularBooks }));
+          const maintenanceStatus = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/maintenance-status`)
+            .then(async (response) => response.ok ? response.json() : { enabled: false, reason: null, eta: null, message: null })
+            .catch(() => ({ enabled: false, reason: null, eta: null, message: null }));
+          const registrationStatus = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/registration-status`)
+            .then(async (response) => response.ok ? response.json() : { enabled: true })
+            .catch(() => ({ enabled: true }));
+          res.end(renderHomeDocument({ template: transformedTemplate, publicBaseUrl, popularBooks, maintenanceStatus, registrationStatus }));
         } catch (error) {
           next(error);
         }

@@ -9,7 +9,10 @@ import { PublicHeaderNavigation } from "@/components/PublicHeaderNavigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
-import type { PopularBook } from "@/landing-data";
+import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
+import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
+import { useRegistrationStatus } from "@/hooks/use-registration-status";
+import type { LandingData, PopularBook } from "@/landing-data";
 
 const features = [
   {
@@ -44,20 +47,31 @@ const features = [
   },
 ];
 
-export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBook[] }>) {
+export function LandingPage({
+  popularBooks,
+  maintenanceStatus,
+  registrationStatus,
+}: Readonly<{
+  popularBooks: PopularBook[];
+  maintenanceStatus?: LandingData["maintenanceStatus"];
+  registrationStatus?: LandingData["registrationStatus"];
+}>) {
   const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const { isAuthenticated } = useAuth();
+  const { data: currentMaintenanceStatus } = useMaintenanceStatus(maintenanceStatus);
+  const { data: currentRegistrationStatus } = useRegistrationStatus(registrationStatus);
 
   return (
     <div className="min-h-screen flex flex-col">
+      <MaintenanceOverlay status={currentMaintenanceStatus ?? null} />
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border shadow-xs">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2" aria-label="Readora">
             <img src="/readora-mark.webp" alt="" className="h-8 w-auto" loading="eager" decoding="async" />
             <img src="/readora-wordmark.webp" alt="Readora" className="h-5 w-auto" loading="eager" decoding="async" />
           </a>
-          <PublicHeaderNavigation />
+          <PublicHeaderNavigation registrationStatus={currentRegistrationStatus} />
         </div>
       </header>
 
@@ -83,9 +97,11 @@ export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBo
                 </>
               ) : (
                 <>
-                  <Button size="lg" className="gap-2 shadow-lg" asChild>
-                    <a href="/register"><Sparkles className="w-5 h-5" /> Начать бесплатно</a>
-                  </Button>
+                  {currentRegistrationStatus?.enabled === true && (
+                    <Button size="lg" className="gap-2 shadow-lg" asChild>
+                      <a href="/register"><Sparkles className="w-5 h-5" /> Начать бесплатно</a>
+                    </Button>
+                  )}
                   <Button size="lg" variant="outline" asChild><a href="/login">Войти</a></Button>
                 </>
               )}
@@ -140,12 +156,14 @@ export function LandingPage({ popularBooks }: Readonly<{ popularBooks: PopularBo
           <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 md:p-12">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Начните читать прямо сейчас</h2>
             <p className="text-muted-foreground mb-8 max-w-xl mx-auto">Создайте бесплатный аккаунт и загрузите свою первую книгу. Это займёт меньше минуты.</p>
-            <Button size="lg" className="gap-2 shadow-lg" asChild>
-              <a href={isAuthenticated ? "/library" : "/register"}>
-                {isAuthenticated ? <Library className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-                {isAuthenticated ? "Перейти в библиотеку" : "Зарегистрироваться бесплатно"}
-              </a>
-            </Button>
+            {(isAuthenticated || currentRegistrationStatus?.enabled === true) && (
+              <Button size="lg" className="gap-2 shadow-lg" asChild>
+                <a href={isAuthenticated ? "/library" : "/register"}>
+                  {isAuthenticated ? <Library className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                  {isAuthenticated ? "Перейти в библиотеку" : "Зарегистрироваться бесплатно"}
+                </a>
+              </Button>
+            )}
           </div>
         </section>
       </main>

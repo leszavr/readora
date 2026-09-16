@@ -2,6 +2,9 @@ import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { AppProviders } from "@/components/AppProviders";
 import { AboutPage } from "@/components/AboutPage";
+import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
+import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
+import { useLocation } from "wouter";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const HomePage = lazy(() => import("@/pages/HomePage"));
@@ -40,10 +43,19 @@ function Router() {
   );
 }
 
+function MaintenanceGate() {
+  const [location] = useLocation();
+  const { data: status } = useMaintenanceStatus();
+  const isLoginPage = location === "/login" || location.startsWith("/login");
+
+  return <MaintenanceOverlay status={status ?? null} isLoginPage={isLoginPage} />;
+}
+
 function App() {
   return (
     <AppProviders>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <MaintenanceGate />
         <Router />
       </WouterRouter>
     </AppProviders>

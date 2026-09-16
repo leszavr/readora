@@ -17,11 +17,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
 import { EmailVerificationModal } from "@/components/EmailVerificationModal";
+import { useRegistrationStatus } from "@/hooks/use-registration-status";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { isAuthenticated } = useAuth();
+  const { data: registrationStatus } = useRegistrationStatus();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -205,15 +207,17 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <p className="text-center text-sm text-muted-foreground mt-4">
-              Нет аккаунта?{" "}
-              <Link
-                href="/register"
-                className="text-primary hover:underline font-medium"
-              >
-                Зарегистрироваться
-              </Link>
-            </p>
+            {registrationStatus?.enabled === true && (
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                Нет аккаунта?{" "}
+                <Link
+                  href="/register"
+                  className="text-primary hover:underline font-medium"
+                >
+                  Зарегистрироваться
+                </Link>
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

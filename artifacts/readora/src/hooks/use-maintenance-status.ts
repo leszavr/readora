@@ -15,10 +15,11 @@ async function fetchMaintenanceStatus(): Promise<MaintenanceStatus> {
   return response.json();
 }
 
-export function useMaintenanceStatus() {
+export function useMaintenanceStatus(initialData?: MaintenanceStatus) {
   return useQuery({
     queryKey: ["maintenance-status"],
     queryFn: fetchMaintenanceStatus,
+    initialData,
     staleTime: 1000 * 60 * 5, // 5 минут
     refetchInterval: 1000 * 60 * 2, // Обновляем каждые 2 минуты
     retry: 2,

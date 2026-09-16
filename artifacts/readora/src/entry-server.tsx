@@ -20,6 +20,8 @@ type HomeDocumentInput = {
   template: string;
   publicBaseUrl: string;
   popularBooks: LandingData["popularBooks"];
+  maintenanceStatus: LandingData["maintenanceStatus"];
+  registrationStatus: LandingData["registrationStatus"];
 };
 
 type PageMetadata = typeof homePageMetadata | typeof aboutPageMetadata;
@@ -48,9 +50,9 @@ function renderDocument(template: string, publicBaseUrl: string, metadata: PageM
     .replace("<!--landing-data-->", data);
 }
 
-export function renderHomeDocument({ template, publicBaseUrl, popularBooks }: HomeDocumentInput): string {
-  const data = { popularBooks };
-  return renderDocument(template, publicBaseUrl, homePageMetadata, <LandingPage popularBooks={popularBooks} />, `<script id="landing-data" type="application/json">${serializeJson(data)}</script>`);
+export function renderHomeDocument({ template, publicBaseUrl, popularBooks, maintenanceStatus, registrationStatus }: HomeDocumentInput): string {
+  const data = { popularBooks, maintenanceStatus, registrationStatus };
+  return renderDocument(template, publicBaseUrl, homePageMetadata, <LandingPage popularBooks={popularBooks} maintenanceStatus={maintenanceStatus} registrationStatus={registrationStatus} />, `<script id="landing-data" type="application/json">${serializeJson(data)}</script>`);
 }
 
 export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "popularBooks">): string {

@@ -60,6 +60,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Registration is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Email already exists
           content:
@@ -87,6 +93,12 @@ paths:
                 $ref: "#/components/schemas/AuthResult"
         "401":
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Login is unavailable during maintenance
           content:
             application/json:
               schema:
@@ -721,6 +733,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MaintenanceStatus"
+
+  /public/registration-status:
+    get:
+      operationId: getRegistrationStatus
+      tags: [health]
+      summary: Get registration availability (public)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationStatus"
 
   # ADMIN
   /admin/stats:
@@ -1853,6 +1878,13 @@ components:
           type: ["string", "null"]
         message:
           type: ["string", "null"]
+
+    RegistrationStatus:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
 
     SavedEmailSummary:
       type: object
