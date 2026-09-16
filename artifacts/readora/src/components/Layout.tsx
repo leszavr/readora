@@ -42,6 +42,7 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   
   // State для управления оверлеями и модалами
   const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
+  const [legalStack, setLegalStack] = useState<Array<"terms" | "copyright" | "privacy">>([]);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   
   // Показываем баннер админу при активном режиме обслуживания
@@ -276,7 +277,11 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
       {/* Legal Overlays */}
       <LegalOverlay
         isOpen={activeLegalPage === "terms"}
-        onClose={() => setActiveLegalPage(null)}
+        onClose={() => {
+          const prev = legalStack[legalStack.length - 1];
+          setLegalStack((s) => s.slice(0, -1));
+          setActiveLegalPage(prev ?? null);
+        }}
         title="Правила пользования"
       >
         <TermsOfServiceContent />
@@ -284,15 +289,23 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
 
       <LegalOverlay
         isOpen={activeLegalPage === "copyright"}
-        onClose={() => setActiveLegalPage(null)}
+        onClose={() => {
+          const prev = legalStack[legalStack.length - 1];
+          setLegalStack((s) => s.slice(0, -1));
+          setActiveLegalPage(prev ?? null);
+        }}
         title="Информация для правообладателей"
       >
-        <CopyrightHoldersContent />
+        <CopyrightHoldersContent onOpenPrivacy={() => { setLegalStack((s) => [...s, "copyright"]); setActiveLegalPage("privacy"); }} />
       </LegalOverlay>
 
       <LegalOverlay
         isOpen={activeLegalPage === "privacy"}
-        onClose={() => setActiveLegalPage(null)}
+        onClose={() => {
+          const prev = legalStack[legalStack.length - 1];
+          setLegalStack((s) => s.slice(0, -1));
+          setActiveLegalPage(prev ?? null);
+        }}
         title="Политика обработки персональных данных"
       >
         <PrivacyPolicyContent />

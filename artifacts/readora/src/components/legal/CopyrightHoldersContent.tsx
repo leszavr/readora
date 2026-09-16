@@ -1,4 +1,4 @@
-export function CopyrightHoldersContent() {
+export function CopyrightHoldersContent({ onOpenPrivacy }: Readonly<{ onOpenPrivacy?: () => void }>) {
   return (
     <>
       <p className="text-sm text-muted-foreground mb-6">
@@ -23,7 +23,14 @@ export function CopyrightHoldersContent() {
         </p>
         <p className="mt-4">
           <strong>Персональные данные.</strong> Платформа обрабатывает персональные данные пользователей в порядке, описанном в{" "}
-          <span className="text-primary">Политике обработки персональных данных</span> (доступна в подвале сайта).
+          <button
+            type="button"
+            onClick={onOpenPrivacy}
+            className="text-primary hover:underline cursor-pointer"
+          >
+            Политике обработки персональных данных
+          </button>
+          .
         </p>
 
       <h3 className="text-lg font-semibold mt-6 mb-3">Что делать, если вы обнаружили нарушение</h3>
