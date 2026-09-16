@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LegalOverlay } from "@/components/LegalOverlay";
+import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 
@@ -23,6 +26,8 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) navigate("/library");
@@ -47,6 +52,7 @@ export default function RegisterPage() {
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!consent) return;
     doRegister({ data: { email, username, password } });
   }
 
@@ -140,7 +146,34 @@ export default function RegisterPage() {
                   <p className="text-sm text-destructive">{errorMsg}</p>
                 )}
 
-                <Button type="submit" className="w-full" disabled={isPending}>
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="consent"
+                    checked={consent}
+                    onCheckedChange={(checked) => setConsent(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <Label htmlFor="consent" className="text-sm font-normal leading-snug">
+                    Я даю согласие на обработку моих персональных данных в соответствии с{" "}
+                    <button
+                      type="button"
+                      className="text-primary hover:underline cursor-pointer"
+                      onClick={() => setIsPrivacyOpen(true)}
+                    >
+                      Политикой обработки персональных данных
+                    </button>
+                  </Label>
+                </div>
+
+                <LegalOverlay
+                  isOpen={isPrivacyOpen}
+                  onClose={() => setIsPrivacyOpen(false)}
+                  title="Политика обработки персональных данных"
+                >
+                  <PrivacyPolicyContent />
+                </LegalOverlay>
+
+                <Button type="submit" className="w-full" disabled={isPending || !consent}>
                   {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Создать аккаунт
                 </Button>
