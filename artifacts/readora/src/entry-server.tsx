@@ -64,7 +64,7 @@ export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocume
       name: item.question,
       acceptedAnswer: {
         "@type": "Answer",
-        text: item.answer,
+        text: typeof item.answer === "string" ? item.answer : "Да. Readora распространяется как open-source проект — исходный код доступен в репозитории на GitHub (https://github.com/leszavr/readora).",
       },
     })),
   };
