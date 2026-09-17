@@ -26,6 +26,23 @@ export const aboutFaqItems = [
     question: "Как удалить учётную запись и книги?",
     answer: "Учётную запись можно удалить в настройках профиля. Вместе с ней удаляются связанные данные, включая адрес электронной почты и загруженные файлы книг.",
   },
+  {
+    question: "Можно ли запустить Readora на своем сервере?",
+    answer: (
+      <>
+        Да. Readora распространяется как open-source проект — исходный код доступен в{" "}
+        <a
+          href="https://github.com/leszavr/readora"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          репозитории на GitHub
+        </a>
+        .
+      </>
+    ),
+  },
 ];
 
 export function AboutPage() {
