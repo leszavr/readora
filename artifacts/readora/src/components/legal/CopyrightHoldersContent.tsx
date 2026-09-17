@@ -33,6 +33,17 @@ export function CopyrightHoldersContent({ onOpenPrivacy }: Readonly<{ onOpenPriv
           .
         </p>
 
+      <h3 className="text-lg font-semibold mt-6 mb-3">Реквизиты владельца Платформы</h3>
+      <p className="mb-2">
+        Владелец и оператор Платформы:
+      </p>
+      <ul className="list-disc pl-6 space-y-1 mb-6">
+        <li>ФИО: Верещагин Сергей Владимирович</li>
+        <li>ИНН: 250702385207</li>
+        <li>E-mail: svv@8ls.ru</li>
+        <li>Сайт: https://readora.ru</li>
+      </ul>
+
       <h3 className="text-lg font-semibold mt-6 mb-3">Что делать, если вы обнаружили нарушение</h3>
       <p>
         Несмотря на принятые технические меры, мы понимаем, что абсолютная защита не существует, и относимся к обращениям правообладателей со всей серьёзностью.
