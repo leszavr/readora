@@ -10,6 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogCancel,
   AlertDialogContent,
@@ -22,6 +30,8 @@ import {
 import { Loader2, Save, BookOpen, BookMarked, Clock, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
+import { Switch } from "@/components/ui/switch";
+import { clearAnalyticsQueue } from "@/lib/analytics";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
@@ -69,6 +79,11 @@ export default function ProfilePage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     updateProfile({ data: { username } });
+  }
+
+  async function handleAnalyticsOptInChange(analyticsOptIn: boolean) {
+    if (!analyticsOptIn && user) await clearAnalyticsQueue(user.id);
+    updateProfile({ data: { analyticsOptIn } });
   }
 
   async function handleChangePassword(e: React.FormEvent) {
@@ -182,6 +197,44 @@ export default function ProfilePage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="analytics-opt-in">Я помогаю улучшать Readora</Label>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button type="button" className="block text-xs text-primary underline-offset-4 hover:underline">
+                          Подробнее
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Помогите улучшать Readora</DialogTitle>
+                          <DialogDescription>
+                            Сбор статистики включён для новых аккаунтов и его можно отключить в любое время.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3 text-sm">
+                          <p>
+                            Мы собираем обезличенную статистику использования: открытие приложения и библиотеки, загрузку книг, начало и длительность чтения, сохранение прогресса, тип устройства и изменения настроек читалки.
+                          </p>
+                          <p>
+                            Это помогает понять, какие функции полезны и где нужны улучшения.
+                          </p>
+                          <p className="text-muted-foreground">
+                            Содержимое и названия книг, текст, поисковые запросы, точная позиция чтения, IP-адрес, данные браузера и личные заметки не собираются.
+                          </p>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <Switch
+                    id="analytics-opt-in"
+                    checked={user?.analyticsOptIn === true}
+                    disabled={isPending}
+                    onCheckedChange={handleAnalyticsOptInChange}
                   />
                 </div>
                 <div className="space-y-2">

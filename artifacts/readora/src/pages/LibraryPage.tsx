@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import { ShelfView } from "@/components/ShelfView";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
+import { trackLibraryViewed } from "@/lib/analytics";
 
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
@@ -156,6 +157,11 @@ export default function LibraryPage() {
   useEffect(() => {
     if (location.includes("upload=1")) setUploadOpen(true);
   }, [location]);
+
+  useEffect(() => {
+    const filterCount = [search, statusFilter !== "all", genreFilter !== "all", sortBy !== "uploadedAt", groupBy !== "none"].filter(Boolean).length;
+    trackLibraryViewed(librarySection === "shelf" ? "shelf" : viewMode, filterCount, search.trim().length > 0);
+  }, [librarySection, viewMode, search, statusFilter, genreFilter, sortBy, groupBy]);
 
   useEffect(() => {
     setSelectedBooks(new Set());

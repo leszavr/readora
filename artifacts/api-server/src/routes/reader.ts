@@ -4,11 +4,13 @@ import { db, chaptersTable, readingProgressTable, readerSettingsTable, booksTabl
 import { requireAuth } from "../middlewares/auth";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
+import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
 type DeviceMode = "desktop" | "mobile";
 type ReaderTheme = "light" | "sepia" | "dark";
+const knownFontFamilies = new Set(["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"]);
 
 function parseDeviceMode(value: unknown): DeviceMode {
   return value === "mobile" ? "mobile" : "desktop";
@@ -38,6 +40,11 @@ function normalizeReaderSettings(input: Record<string, unknown>, deviceMode: Dev
     theme,
     contentWidth: Math.round(clampNumber(input.contentWidth, 50, 95, fallback.contentWidth)),
   };
+}
+
+function readerSettingValueBucket(setting: string, value: string | number): string | number {
+  if (setting === "font_family") return knownFontFamilies.has(String(value)) ? String(value) : "custom";
+  return value;
 }
 
 // GET /books/:id/chapters — table of contents
@@ -119,6 +126,8 @@ router.get("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
 router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
+  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const { currentChapterId, currentPosition, progressPercent, readingStatus } = req.body ?? {};
   const normalizedCurrentChapterId = typeof currentChapterId === "number" && Number.isInteger(currentChapterId)
     ? currentChapterId
@@ -156,6 +165,11 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
     completedAt: normalizedReadingStatus === "finished" ? new Date() : null,
   };
 
+  const [previous] = await db
+    .select({ readingStatus: readingProgressTable.readingStatus })
+    .from(readingProgressTable)
+    .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
+
   await db
     .insert(readingProgressTable)
     .values(values)
@@ -170,6 +184,22 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
         completedAt: values.completedAt,
       },
     });
+
+  const previousStatus = previous?.readingStatus ?? "not_started";
+  if (previousStatus !== normalizedReadingStatus) {
+    await recordServerAnalyticsEvent(user, {
+      bookId,
+      eventName: "book_status_changed",
+      properties: { from: previousStatus, to: normalizedReadingStatus },
+    });
+    if (normalizedReadingStatus === "finished") {
+      await recordServerAnalyticsEvent(user, {
+        bookId,
+        eventName: "book_completed",
+        properties: { completionMode: normalizedProgressPercent !== null && normalizedProgressPercent >= 99 ? "auto_progress" : "manual_status" },
+      });
+    }
+  }
 
   const [saved] = await db
     .select()
@@ -221,6 +251,7 @@ router.put("/reader/settings", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const deviceMode = parseDeviceMode(req.query.deviceMode ?? req.body?.deviceMode);
   const normalized = normalizeReaderSettings(req.body ?? {}, deviceMode);
+  const [previous] = await db.select().from(readerSettingsTable).where(and(eq(readerSettingsTable.userId, user.id), eq(readerSettingsTable.deviceMode, deviceMode)));
 
   await db
     .insert(readerSettingsTable)
@@ -231,6 +262,23 @@ router.put("/reader/settings", requireAuth, async (req, res): Promise<void> => {
         ...normalized,
       },
     });
+
+  const fallback = normalizeReaderSettings({}, deviceMode);
+  const prior = previous ?? fallback;
+  const changedSettings = [
+    ["font_size", prior.fontSize, normalized.fontSize],
+    ["font_family", prior.fontFamily, normalized.fontFamily],
+    ["line_height", prior.lineHeight, normalized.lineHeight],
+    ["theme", prior.theme, normalized.theme],
+    ["content_width", prior.contentWidth, normalized.contentWidth],
+  ] as const;
+  await Promise.all(changedSettings
+    .filter(([, before, after]) => before !== after)
+    .map(([setting, , value]) => recordServerAnalyticsEvent(user, {
+      eventName: "reader_setting_changed",
+      deviceMode,
+      properties: { setting, valueBucket: readerSettingValueBucket(setting, value), deviceMode },
+    })));
 
   const [settings] = await db.select().from(readerSettingsTable).where(and(eq(readerSettingsTable.userId, user.id), eq(readerSettingsTable.deviceMode, deviceMode)));
   res.json({ userId: user.id, deviceMode, fontSize: settings.fontSize, fontFamily: settings.fontFamily, lineHeight: settings.lineHeight, theme: settings.theme, contentWidth: settings.contentWidth });

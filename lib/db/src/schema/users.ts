@@ -15,6 +15,8 @@ export const usersTable = pgTable("users", {
   avatar: text("avatar"),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  analyticsOptIn: boolean("analytics_opt_in").notNull().default(true),
+  referralSource: text("referral_source"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),

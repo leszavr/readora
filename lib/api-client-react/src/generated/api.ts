@@ -20,11 +20,14 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminAnalytics,
   AdminBook,
   AdminStats,
   AdminUser,
   AdminUserCreate,
   AdminUserUpdate,
+  AnalyticsEventsBatchInput,
+  AnalyticsEventsBatchResult,
   AppSettings,
   AppSettingsUpdate,
   AuthResult,
@@ -43,6 +46,7 @@ import type {
   Genre,
   GenreInput,
   GenreUpdate,
+  GetAdminAnalyticsParams,
   GetPopularBooksParams,
   HealthStatus,
   LandingBook,
@@ -661,6 +665,77 @@ export const useUpdateProfile = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateProfileMutationOptions(options));
+    }
+
+export const getSubmitAnalyticsEventsBatchUrl = () => {
+
+
+
+
+  return `/api/analytics/events/batch`
+}
+
+/**
+ * @summary Submit a private analytics event batch
+ */
+export const submitAnalyticsEventsBatch = async (analyticsEventsBatchInput: AnalyticsEventsBatchInput, options?: RequestInit): Promise<AnalyticsEventsBatchResult | void> => {
+
+  return customFetch<AnalyticsEventsBatchResult | void>(getSubmitAnalyticsEventsBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      analyticsEventsBatchInput,)
+  }
+);}
+
+
+
+
+export const getSubmitAnalyticsEventsBatchMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalyticsEventsBatch>>, TError,{data: BodyType<AnalyticsEventsBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitAnalyticsEventsBatch>>, TError,{data: BodyType<AnalyticsEventsBatchInput>}, TContext> => {
+
+const mutationKey = ['submitAnalyticsEventsBatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitAnalyticsEventsBatch>>, {data: BodyType<AnalyticsEventsBatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitAnalyticsEventsBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitAnalyticsEventsBatchMutationResult = NonNullable<Awaited<ReturnType<typeof submitAnalyticsEventsBatch>>>
+    export type SubmitAnalyticsEventsBatchMutationBody = BodyType<AnalyticsEventsBatchInput>
+    export type SubmitAnalyticsEventsBatchMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Submit a private analytics event batch
+ */
+export const useSubmitAnalyticsEventsBatch = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalyticsEventsBatch>>, TError,{data: BodyType<AnalyticsEventsBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitAnalyticsEventsBatch>>,
+        TError,
+        {data: BodyType<AnalyticsEventsBatchInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitAnalyticsEventsBatchMutationOptions(options));
     }
 
 export const getGetTrustedDevicesUrl = () => {
@@ -2682,6 +2757,90 @@ export function useGetAdminStats<TData = Awaited<ReturnType<typeof getAdminStats
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetAdminAnalyticsUrl = (params?: GetAdminAnalyticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/analytics?${stringifiedParams}` : `/api/admin/analytics`
+}
+
+/**
+ * @summary Aggregated system analytics (system admins only)
+ */
+export const getAdminAnalytics = async (params?: GetAdminAnalyticsParams, options?: RequestInit): Promise<AdminAnalytics> => {
+
+  return customFetch<AdminAnalytics>(getGetAdminAnalyticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminAnalyticsQueryKey = (params?: GetAdminAnalyticsParams,) => {
+    return [
+    `/api/admin/analytics`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminAnalyticsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminAnalytics>>, TError = ErrorType<ErrorResponse>>(params?: GetAdminAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminAnalyticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminAnalytics>>> = ({ signal }) => getAdminAnalytics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminAnalytics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminAnalyticsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminAnalytics>>>
+export type GetAdminAnalyticsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Aggregated system analytics (system admins only)
+ */
+
+export function useGetAdminAnalytics<TData = Awaited<ReturnType<typeof getAdminAnalytics>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetAdminAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminAnalyticsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

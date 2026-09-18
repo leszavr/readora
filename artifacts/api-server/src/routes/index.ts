@@ -9,6 +9,7 @@ import adminRouter from "./admin";
 import pwaRouter from "./pwa";
 import feedbackRouter from "./feedback";
 import landingBooksRouter from "./landing-books";
+import analyticsRouter from "./analytics";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(adminRouter);
 router.use(pwaRouter);
 router.use(feedbackRouter);
 router.use(landingBooksRouter);
+router.use(analyticsRouter);
 
 export default router;

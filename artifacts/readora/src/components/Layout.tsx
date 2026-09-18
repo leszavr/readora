@@ -20,6 +20,7 @@ import { FeedbackModal } from "@/components/FeedbackModal";
 import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
 import { CopyrightHoldersContent } from "@/components/legal/CopyrightHoldersContent";
 import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
+import { clearAnalyticsQueue } from "@/lib/analytics";
 
 function BrandWordmark({ className }: Readonly<{ className?: string }>) {
   return (
@@ -49,6 +50,7 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const showAdminMaintenanceBanner = isAdmin && maintenanceStatus?.enabled;
   
   async function handleLogout() {
+    if (user) await clearAnalyticsQueue(user.id);
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     qc.setQueryData(getGetMeQueryKey(), null);
     qc.clear();

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, inArray, sql, desc } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import os from "node:os";
 import { statfs } from "node:fs/promises";
@@ -14,8 +14,11 @@ import {
   MAINTENANCE_REASON_KEY,
   MAINTENANCE_ETA_KEY,
   MAINTENANCE_MESSAGE_KEY,
+  analyticsDailyBookActivityTable,
+  analyticsDailyUserActivityTable,
+  readingProgressTable,
 } from "@workspace/db";
-import { requireAdmin } from "../middlewares/auth";
+import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
@@ -24,6 +27,7 @@ import { getMaintenanceStatus } from "../lib/maintenance-status";
 import { isRegistrationEnabled } from "../lib/registration-status";
 
 const router = Router();
+const PWA_INSTALL_ACCEPTED_KEY = "pwa_install_accepted_count";
 
 // GET /admin/system-metrics
 router.get(
@@ -131,6 +135,229 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
   });
 });
 
+// GET /admin/analytics?days=7|30|90
+router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<void> => {
+  const requestedDays = req.query.days;
+  const days = requestedDays === undefined ? 30 : ({ "7": 7, "30": 30, "90": 90 } as const)[
+    typeof requestedDays === "string" ? requestedDays : ""
+  ];
+  if (days === undefined) {
+    res.status(400).json({ error: "Период должен быть равен 7, 30 или 90 дням" });
+    return;
+  }
+
+  const end = new Date();
+  end.setUTCDate(end.getUTCDate() - 1);
+  const rangeEnd = end.toISOString().slice(0, 10);
+  end.setUTCDate(end.getUTCDate() - days + 1);
+  const rangeStart = end.toISOString().slice(0, 10);
+  const periodStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const inRange = sql`${analyticsDailyUserActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyUserActivityTable.activityDate} <= ${rangeEnd}::date`;
+  const bookInRange = sql`${analyticsDailyBookActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyBookActivityTable.activityDate} <= ${rangeEnd}::date`;
+
+  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows] = await Promise.all([
+    db
+      .select({
+        activeUsers: sql<number>`count(distinct ${analyticsDailyUserActivityTable.userId})::int`,
+        appOpens: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.appOpens}), 0)::double precision`,
+        readerSessions: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.readerSessions}), 0)::double precision`,
+        activeReadingMs: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.activeReadingMs}), 0)::double precision`,
+        booksStarted: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.booksStarted}), 0)::double precision`,
+        booksCompleted: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.booksCompleted}), 0)::double precision`,
+        syncAttempts: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.syncAttempts}), 0)::double precision`,
+        syncSuccesses: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.syncSuccesses}), 0)::double precision`,
+      })
+      .from(analyticsDailyUserActivityTable)
+      .where(inRange),
+    db
+      .select({
+        activityDate: analyticsDailyUserActivityTable.activityDate,
+        activeUsers: sql<number>`count(distinct ${analyticsDailyUserActivityTable.userId})::int`,
+        appOpens: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.appOpens}), 0)::double precision`,
+        readerSessions: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.readerSessions}), 0)::double precision`,
+        activeReadingMs: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.activeReadingMs}), 0)::double precision`,
+        booksCompleted: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.booksCompleted}), 0)::double precision`,
+        syncAttempts: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.syncAttempts}), 0)::double precision`,
+        syncSuccesses: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.syncSuccesses}), 0)::double precision`,
+      })
+      .from(analyticsDailyUserActivityTable)
+      .where(inRange)
+      .groupBy(analyticsDailyUserActivityTable.activityDate)
+      .orderBy(asc(analyticsDailyUserActivityTable.activityDate)),
+    db
+      .select({
+        trackedBooks: sql<number>`count(distinct ${analyticsDailyBookActivityTable.bookId})::int`,
+      })
+      .from(analyticsDailyBookActivityTable)
+      .where(bookInRange),
+    db
+      .select({ totalUsers: sql<number>`count(*)::int` })
+      .from(usersTable),
+    db
+      .select({ totalBooks: sql<number>`count(*)::int` })
+      .from(booksTable),
+    db
+      .select({
+        activeReaders: sql<number>`count(distinct ${readEventsTable.userId})::int`,
+        bookOpens: sql<number>`count(*)::int`,
+      })
+      .from(readEventsTable)
+      .where(sql`${readEventsTable.createdAt} > ${periodStart}`),
+    db
+      .select({ value: appSettingsTable.value })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.key, PWA_INSTALL_ACCEPTED_KEY))
+      .limit(1),
+    db
+      .select({
+        registrations: sql<number>`count(*)::int`,
+        verifiedUsers: sql<number>`count(*) filter (where ${usersTable.emailVerifiedAt} is not null)::int`,
+        usersWithBooks: sql<number>`count(*) filter (where exists (
+          select 1 from ${booksTable} as uploaded_book where uploaded_book.owner_user_id = ${usersTable.id}
+        ))::int`,
+      })
+      .from(usersTable)
+      .where(sql`${usersTable.createdAt} >= ${rangeStart}::date and ${usersTable.createdAt} < (${rangeEnd}::date + interval '1 day')`),
+    db
+      .select({
+        weekStart: sql<string>`date_trunc('week', ${usersTable.createdAt} at time zone 'UTC')::date::text`,
+        registrations: sql<number>`count(*)::int`,
+      })
+      .from(usersTable)
+      .where(sql`${usersTable.createdAt} >= date_trunc('week', now() at time zone 'UTC') - interval '7 weeks'`)
+      .groupBy(sql`date_trunc('week', ${usersTable.createdAt} at time zone 'UTC')::date`)
+      .orderBy(sql`date_trunc('week', ${usersTable.createdAt} at time zone 'UTC')::date asc`),
+    db
+      .select({
+        source: sql<string>`coalesce(${usersTable.referralSource}, 'unknown')`,
+        registrations: sql<number>`count(*)::int`,
+      })
+      .from(usersTable)
+      .where(sql`${usersTable.createdAt} >= ${rangeStart}::date and ${usersTable.createdAt} < (${rangeEnd}::date + interval '1 day')`)
+      .groupBy(sql`coalesce(${usersTable.referralSource}, 'unknown')`)
+      .orderBy(sql`count(*) desc`, sql`coalesce(${usersTable.referralSource}, 'unknown') asc`)
+      .limit(5),
+    db.execute(sql`
+      select
+        count(*) filter (
+          where registered_at <= current_utc_date - 7
+            and exists (
+              select 1 from read_events as day_zero_event
+              where day_zero_event.user_id = cohort_user.id
+                and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
+            )
+        )::int as "d7EligibleUsers",
+        count(*) filter (
+          where registered_at <= current_utc_date - 7
+            and exists (
+              select 1 from read_events as day_zero_event
+              where day_zero_event.user_id = cohort_user.id
+                and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
+            )
+            and exists (
+              select 1 from read_events as return_event
+              where return_event.user_id = cohort_user.id
+                and (return_event.created_at at time zone 'UTC')::date > registered_at
+                and (return_event.created_at at time zone 'UTC')::date <= registered_at + 7
+            )
+        )::int as "d7RetainedUsers",
+        count(*) filter (
+          where registered_at <= current_utc_date - 30
+            and exists (
+              select 1 from read_events as day_zero_event
+              where day_zero_event.user_id = cohort_user.id
+                and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
+            )
+        )::int as "d30EligibleUsers",
+        count(*) filter (
+          where registered_at <= current_utc_date - 30
+            and exists (
+              select 1 from read_events as day_zero_event
+              where day_zero_event.user_id = cohort_user.id
+                and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
+            )
+            and exists (
+              select 1 from read_events as return_event
+              where return_event.user_id = cohort_user.id
+                and (return_event.created_at at time zone 'UTC')::date > registered_at
+                and (return_event.created_at at time zone 'UTC')::date <= registered_at + 30
+            )
+        )::int as "d30RetainedUsers"
+      from (
+        select id, (created_at at time zone 'UTC')::date as registered_at,
+          (now() at time zone 'UTC')::date as current_utc_date
+        from users
+      ) as cohort_user
+    `),
+    db
+      .select({ completedBooks: sql<number>`count(distinct ${readingProgressTable.bookId}) filter (where ${readingProgressTable.completedAt} is not null)::int` })
+      .from(readingProgressTable),
+  ]);
+
+  const summary = summaryRows[0];
+  const marketing = marketingRows[0];
+  const retention = retentionRows.rows[0] as {
+    d7EligibleUsers: number;
+    d7RetainedUsers: number;
+    d30EligibleUsers: number;
+    d30RetainedUsers: number;
+  } | undefined ?? {
+    d7EligibleUsers: 0,
+    d7RetainedUsers: 0,
+    d30EligibleUsers: 0,
+    d30RetainedUsers: 0,
+  };
+  const pwaInstallAccepted = Number.parseInt(pwaRows[0]?.value ?? "0", 10);
+  const syncSuccessRate = summary.syncAttempts === 0
+    ? 0
+    : Number(((summary.syncSuccesses / summary.syncAttempts) * 100).toFixed(1));
+  const toRate = (numerator: number, denominator: number): number => denominator === 0 ? 0 : Number(((numerator / denominator) * 100).toFixed(1));
+  const toRatio = (numerator: number, denominator: number): number => denominator === 0 ? 0 : Number((numerator / denominator).toFixed(1));
+  const completedBooks = completionRows[0].completedBooks;
+
+  res.json({
+    days,
+    rangeStart,
+    rangeEnd,
+    systemSummary: {
+      totalUsers: totalUserRows[0].totalUsers,
+      totalBooks: totalBookRows[0].totalBooks,
+      activeReaders: readingRows[0].activeReaders,
+      bookOpens: readingRows[0].bookOpens,
+      pwaInstallAccepted: Number.isFinite(pwaInstallAccepted) ? pwaInstallAccepted : 0,
+      booksPerUser: toRatio(totalBookRows[0].totalBooks, totalUserRows[0].totalUsers),
+      readEventsPerActiveReader: toRatio(readingRows[0].bookOpens, readingRows[0].activeReaders),
+      completedBooks,
+      completedBooksRate: toRate(completedBooks, totalBookRows[0].totalBooks),
+    },
+    summary: {
+      ...summary,
+      syncSuccessRate,
+      trackedBooks: bookSummaryRows[0].trackedBooks,
+      averageSessionReadingMs: summary.readerSessions === 0 ? 0 : Math.round(summary.activeReadingMs / summary.readerSessions),
+    },
+    marketing: {
+      registrations: marketing.registrations,
+      verifiedUsers: marketing.verifiedUsers,
+      emailVerificationRate: toRate(marketing.verifiedUsers, marketing.registrations),
+      usersWithBooks: marketing.usersWithBooks,
+      firstBookUploadRate: toRate(marketing.usersWithBooks, marketing.registrations),
+      retention: {
+        d7EligibleUsers: retention.d7EligibleUsers,
+        d7RetainedUsers: retention.d7RetainedUsers,
+        d7Rate: toRate(retention.d7RetainedUsers, retention.d7EligibleUsers),
+        d30EligibleUsers: retention.d30EligibleUsers,
+        d30RetainedUsers: retention.d30RetainedUsers,
+        d30Rate: toRate(retention.d30RetainedUsers, retention.d30EligibleUsers),
+      },
+      registrationTrend,
+      referralSources,
+    },
+    trend,
+  });
+});
+
 // GET /admin/users
 router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
   const { search, role, status } = req.query as Record<string, string>;
@@ -179,6 +406,7 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
       role: role ?? "user",
       emailVerified: true,
       emailVerifiedAt: new Date(),
+      analyticsOptIn: true,
     })
     .returning();
   const [{ count }] = await db

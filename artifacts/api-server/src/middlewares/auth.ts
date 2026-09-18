@@ -132,3 +132,18 @@ export async function requireAdmin(
     next();
   });
 }
+
+export async function requireSystemAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  await requireAuth(req, res, async () => {
+    const user = (req as Request & { user: { role: string } }).user;
+    if (!user || user.role !== "admin") {
+      res.status(403).json({ error: "Доступ запрещён" });
+      return;
+    }
+    next();
+  });
+}

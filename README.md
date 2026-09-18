@@ -20,7 +20,7 @@
 - **Циклы и серии** — объединение книг автора в серии с порядковыми номерами
 - **Роли пользователей** — `user`, `moderator`, `admin`
 - **Подтверждение email и сброс пароля** через настраиваемый SMTP
-- **Админ-панель** — статистика, управление пользователями, книгами, жанрами и SMTP
+- **Админ-панель** — статистика, маркетинговые агрегаты, управление пользователями, книгами, жанрами и SMTP
 - **Cookie-сессии** в Postgres, bcrypt cost 12, защита от прямого доступа к файлам книг
 
 ## Технологический стек
@@ -190,6 +190,7 @@ pnpm --filter @workspace/scripts run superadmin
 | `pnpm run db:migrate` | Применить миграции к БД |
 | `pnpm run db:sync` | `drizzle-kit push` для быстрых dev-итераций |
 | `pnpm --filter @workspace/scripts run superadmin` | Создать/обновить администратора по `ADMIN_*` переменным |
+| `pnpm --filter @workspace/scripts run analytics:rollup -- YYYY-MM-DD` | Повторно безопасно пересчитать день аналитики |
 
 ## Переменные окружения
 
@@ -202,6 +203,7 @@ pnpm --filter @workspace/scripts run superadmin
 | `SESSION_SECRET` | — | Секрет для cookie-сессий (обязательно в проде) |
 | `UPLOADS_DIR` | `./uploads` | Каталог хранения файлов книг |
 | `LOG_LEVEL` | `info` | Уровень pino-логов |
+| `ANALYTICS_ROLLUP_ENABLED` | `true` | Встроенный планировщик агрегации аналитики; установить `false` только для отдельного worker-процесса |
 | `BASE_PATH` | `/` | Префикс фронта при деплое в подпапке |
 
 **SMTP** настраивается через админ-панель, а не через env (хранится в БД).
@@ -214,6 +216,8 @@ pnpm --filter @workspace/scripts run superadmin
 - **Sharp для обложек** — конвертация в WebP с фиксированной шириной
 - **OpenAPI → код** — Zod-схемы и React Query хуки генерируются Orval, обеспечивая end-to-end типобезопасность
 - **Versioned миграции** Drizzle — БД-схема всегда воспроизводима
+- **Аналитика без внешнего cron** — PostgreSQL ведёт очередь дней для пересчёта, а API-реплики координируются блокировкой advisory lock; подробности в [docs/analytics.md](./docs/analytics.md)
+- **Приватные источники регистраций** — сохраняется только категория из allowlist, без referrer, URL и UTM-меток
 
 ## Roadmap
 

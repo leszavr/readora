@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
+import { clearAnalyticsQueue } from "@/lib/analytics";
 
 export function PublicHeaderNavigation({
   registrationStatus,
@@ -35,6 +36,7 @@ export function PublicHeaderNavigation({
   const initials = displayName.slice(0, 2).toUpperCase();
 
   async function handleLogout() {
+    if (user) await clearAnalyticsQueue(user.id);
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     queryClient.setQueryData(getGetMeQueryKey(), null);
     queryClient.clear();

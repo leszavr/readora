@@ -28,7 +28,8 @@ export const registerBodyUsernameMin = 2;
 export const RegisterBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(registerBodyPasswordMin),
-  "username": zod.string().min(registerBodyUsernameMin)
+  "username": zod.string().min(registerBodyUsernameMin),
+  "referralSource": zod.enum(['direct', 'telegram', 'habr', 'productradar', 'show_hn', 'reddit', 'vk', 'seo', 'other']).optional()
 })
 
 
@@ -51,6 +52,7 @@ export const LoginResponse = zod.object({
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
   "avatar": zod.string().nullish(),
+  "analyticsOptIn": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 }),
@@ -80,6 +82,7 @@ export const GetMeResponse = zod.object({
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
   "avatar": zod.string().nullish(),
+  "analyticsOptIn": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
@@ -99,7 +102,8 @@ export const DeleteAccountBody = zod.object({
  */
 export const UpdateProfileBody = zod.object({
   "username": zod.string().optional(),
-  "avatar": zod.string().nullish()
+  "avatar": zod.string().nullish(),
+  "analyticsOptIn": zod.boolean().optional()
 })
 
 export const UpdateProfileResponse = zod.object({
@@ -109,8 +113,42 @@ export const UpdateProfileResponse = zod.object({
   "role": zod.enum(['user', 'moderator', 'admin']),
   "status": zod.enum(['active', 'blocked']),
   "avatar": zod.string().nullish(),
+  "analyticsOptIn": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Submit a private analytics event batch
+ */
+export const submitAnalyticsEventsBatchBodyEventsItemAppVersionMax = 64;
+
+export const submitAnalyticsEventsBatchBodyEventsMax = 50;
+
+
+
+export const SubmitAnalyticsEventsBatchBody = zod.object({
+  "events": zod.array(zod.object({
+  "eventId": zod.string().uuid(),
+  "eventName": zod.enum(['app_opened', 'library_viewed', 'book_upload_started', 'reader_session_started', 'reader_session_ended', 'reading_progressed', 'chapter_opened', 'progress_sync_finished']),
+  "occurredAt": zod.coerce.date(),
+  "localDate": zod.coerce.date(),
+  "sessionId": zod.string().uuid().optional(),
+  "clientId": zod.string().uuid(),
+  "platform": zod.enum(['web']),
+  "deviceMode": zod.enum(['desktop', 'mobile', 'unknown']),
+  "appVersion": zod.string().max(submitAnalyticsEventsBatchBodyEventsItemAppVersionMax).optional(),
+  "bookId": zod.number().optional(),
+  "properties": zod.object({
+
+}).passthrough()
+})).min(1).max(submitAnalyticsEventsBatchBodyEventsMax)
+})
+
+export const SubmitAnalyticsEventsBatchResponse = zod.object({
+  "acceptedEventIds": zod.array(zod.string().uuid()),
+  "rejectedEventIds": zod.array(zod.string().uuid())
 })
 
 
@@ -589,6 +627,79 @@ export const GetAdminStatsResponse = zod.object({
   "bookCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+}))
+})
+
+
+/**
+ * @summary Aggregated system analytics (system admins only)
+ */
+export const getAdminAnalyticsQueryDaysDefault = 30;
+
+export const GetAdminAnalyticsQueryParams = zod.object({
+  "days": zod.union([zod.literal(7),zod.literal(30),zod.literal(90)]).default(getAdminAnalyticsQueryDaysDefault)
+})
+
+export const GetAdminAnalyticsResponse = zod.object({
+  "days": zod.union([zod.literal(7),zod.literal(30),zod.literal(90)]),
+  "rangeStart": zod.coerce.date(),
+  "rangeEnd": zod.coerce.date(),
+  "systemSummary": zod.object({
+  "totalUsers": zod.number(),
+  "totalBooks": zod.number(),
+  "activeReaders": zod.number(),
+  "bookOpens": zod.number(),
+  "pwaInstallAccepted": zod.number(),
+  "booksPerUser": zod.number(),
+  "readEventsPerActiveReader": zod.number(),
+  "completedBooks": zod.number(),
+  "completedBooksRate": zod.number()
+}),
+  "summary": zod.object({
+  "activeUsers": zod.number(),
+  "appOpens": zod.number(),
+  "readerSessions": zod.number(),
+  "activeReadingMs": zod.number(),
+  "booksStarted": zod.number(),
+  "booksCompleted": zod.number(),
+  "syncAttempts": zod.number(),
+  "syncSuccesses": zod.number(),
+  "syncSuccessRate": zod.number(),
+  "trackedBooks": zod.number(),
+  "averageSessionReadingMs": zod.number()
+}),
+  "marketing": zod.object({
+  "registrations": zod.number(),
+  "verifiedUsers": zod.number(),
+  "emailVerificationRate": zod.number(),
+  "usersWithBooks": zod.number(),
+  "firstBookUploadRate": zod.number(),
+  "retention": zod.object({
+  "d7EligibleUsers": zod.number(),
+  "d7RetainedUsers": zod.number(),
+  "d7Rate": zod.number(),
+  "d30EligibleUsers": zod.number(),
+  "d30RetainedUsers": zod.number(),
+  "d30Rate": zod.number()
+}),
+  "registrationTrend": zod.array(zod.object({
+  "weekStart": zod.coerce.date(),
+  "registrations": zod.number()
+})),
+  "referralSources": zod.array(zod.object({
+  "source": zod.enum(['direct', 'telegram', 'habr', 'productradar', 'show_hn', 'reddit', 'vk', 'seo', 'other', 'unknown']),
+  "registrations": zod.number()
+}))
+}),
+  "trend": zod.array(zod.object({
+  "activityDate": zod.coerce.date(),
+  "activeUsers": zod.number(),
+  "appOpens": zod.number(),
+  "readerSessions": zod.number(),
+  "activeReadingMs": zod.number(),
+  "booksCompleted": zod.number(),
+  "syncAttempts": zod.number(),
+  "syncSuccesses": zod.number()
 }))
 })
 

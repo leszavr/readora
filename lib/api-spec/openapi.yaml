@@ -20,6 +20,8 @@ tags:
     description: Genre management
   - name: admin
     description: Admin panel
+  - name: analytics
+    description: Private analytics operations
 
 paths:
   /healthz:
@@ -209,6 +211,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+
+  /analytics/events/batch:
+    post:
+      operationId: submitAnalyticsEventsBatch
+      tags: [analytics]
+      summary: Submit a private analytics event batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyticsEventsBatchInput"
+      responses:
+        "200":
+          description: Accepted and rejected event identifiers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsEventsBatchResult"
+        "204":
+          description: Analytics is disabled for the current user
+        "400":
+          description: Invalid event batch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Event batch exceeds the size limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/trusted-devices:
     get:
@@ -761,6 +802,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminStats"
 
+  /admin/analytics:
+    get:
+      operationId: getAdminAnalytics
+      tags: [admin]
+      summary: Aggregated system analytics (system admins only)
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            enum: [7, 30, 90]
+            default: 30
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAnalytics"
+        "403":
+          description: System administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Unsupported analytics period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -1269,6 +1342,9 @@ components:
         username:
           type: string
           minLength: 2
+        referralSource:
+          type: string
+          enum: [direct, telegram, habr, productradar, show_hn, reddit, vk, seo, other]
 
     LoginInput:
       type: object
@@ -1298,10 +1374,12 @@ components:
           type: string
         avatar:
           type: ["string", "null"]
+        analyticsOptIn:
+          type: boolean
 
     User:
       type: object
-      required: [id, email, username, role, status, createdAt]
+      required: [id, email, username, role, status, analyticsOptIn, createdAt]
       properties:
         id:
           type: integer
@@ -1317,12 +1395,78 @@ components:
           enum: [active, blocked]
         avatar:
           type: ["string", "null"]
+        analyticsOptIn:
+          type: boolean
         createdAt:
           type: string
           format: date-time
         lastLoginAt:
           type: ["string", "null"]
           format: date-time
+
+    AnalyticsEventsBatchInput:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AnalyticsClientEvent"
+
+    AnalyticsClientEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, eventName, occurredAt, localDate, clientId, platform, deviceMode, properties]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventName:
+          type: string
+          enum: [app_opened, library_viewed, book_upload_started, reader_session_started, reader_session_ended, reading_progressed, chapter_opened, progress_sync_finished]
+        occurredAt:
+          type: string
+          format: date-time
+        localDate:
+          type: string
+          format: date
+        sessionId:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [web]
+        deviceMode:
+          type: string
+          enum: [desktop, mobile, unknown]
+        appVersion:
+          type: string
+          maxLength: 64
+        bookId:
+          type: integer
+        properties:
+          type: object
+
+    AnalyticsEventsBatchResult:
+      type: object
+      required: [acceptedEventIds, rejectedEventIds]
+      properties:
+        acceptedEventIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        rejectedEventIds:
+          type: array
+          items:
+            type: string
+            format: uuid
 
     TrustedDevice:
       type: object
@@ -1721,6 +1865,164 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminUser"
+
+    AdminAnalytics:
+      type: object
+      required: [days, rangeStart, rangeEnd, systemSummary, summary, marketing, trend]
+      properties:
+        days:
+          type: integer
+          enum: [7, 30, 90]
+        rangeStart:
+          type: string
+          format: date
+        rangeEnd:
+          type: string
+          format: date
+        systemSummary:
+          $ref: "#/components/schemas/AdminAnalyticsSystemSummary"
+        summary:
+          $ref: "#/components/schemas/AdminAnalyticsSummary"
+        marketing:
+          $ref: "#/components/schemas/AdminAnalyticsMarketing"
+        trend:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsDailyTrend"
+
+    AdminAnalyticsSystemSummary:
+      type: object
+      required: [totalUsers, totalBooks, activeReaders, bookOpens, pwaInstallAccepted, booksPerUser, readEventsPerActiveReader, completedBooks, completedBooksRate]
+      properties:
+        totalUsers:
+          type: integer
+        totalBooks:
+          type: integer
+        activeReaders:
+          type: integer
+        bookOpens:
+          type: integer
+        pwaInstallAccepted:
+          type: integer
+        booksPerUser:
+          type: number
+        readEventsPerActiveReader:
+          type: number
+        completedBooks:
+          type: integer
+        completedBooksRate:
+          type: number
+
+    AdminAnalyticsSummary:
+      type: object
+      required: [activeUsers, appOpens, readerSessions, activeReadingMs, booksStarted, booksCompleted, syncAttempts, syncSuccesses, syncSuccessRate, trackedBooks, averageSessionReadingMs]
+      properties:
+        activeUsers:
+          type: integer
+        appOpens:
+          type: number
+        readerSessions:
+          type: number
+        activeReadingMs:
+          type: number
+        booksStarted:
+          type: number
+        booksCompleted:
+          type: number
+        syncAttempts:
+          type: number
+        syncSuccesses:
+          type: number
+        syncSuccessRate:
+          type: number
+        trackedBooks:
+          type: integer
+        averageSessionReadingMs:
+          type: number
+
+    AdminAnalyticsMarketing:
+      type: object
+      required: [registrations, verifiedUsers, emailVerificationRate, usersWithBooks, firstBookUploadRate, retention, registrationTrend, referralSources]
+      properties:
+        registrations:
+          type: integer
+        verifiedUsers:
+          type: integer
+        emailVerificationRate:
+          type: number
+        usersWithBooks:
+          type: integer
+        firstBookUploadRate:
+          type: number
+        retention:
+          $ref: "#/components/schemas/AdminAnalyticsRetention"
+        registrationTrend:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsRegistrationWeek"
+        referralSources:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsReferralSource"
+
+    AdminAnalyticsRetention:
+      type: object
+      required: [d7EligibleUsers, d7RetainedUsers, d7Rate, d30EligibleUsers, d30RetainedUsers, d30Rate]
+      properties:
+        d7EligibleUsers:
+          type: integer
+        d7RetainedUsers:
+          type: integer
+        d7Rate:
+          type: number
+        d30EligibleUsers:
+          type: integer
+        d30RetainedUsers:
+          type: integer
+        d30Rate:
+          type: number
+
+    AdminAnalyticsRegistrationWeek:
+      type: object
+      required: [weekStart, registrations]
+      properties:
+        weekStart:
+          type: string
+          format: date
+        registrations:
+          type: integer
+
+    AdminAnalyticsReferralSource:
+      type: object
+      required: [source, registrations]
+      properties:
+        source:
+          type: string
+          enum: [direct, telegram, habr, productradar, show_hn, reddit, vk, seo, other, unknown]
+        registrations:
+          type: integer
+
+    AdminAnalyticsDailyTrend:
+      type: object
+      required: [activityDate, activeUsers, appOpens, readerSessions, activeReadingMs, booksCompleted, syncAttempts, syncSuccesses]
+      properties:
+        activityDate:
+          type: string
+          format: date
+        activeUsers:
+          type: integer
+        appOpens:
+          type: number
+        readerSessions:
+          type: number
+        activeReadingMs:
+          type: number
+        booksCompleted:
+          type: number
+        syncAttempts:
+          type: number
+        syncSuccesses:
+          type: number
 
     AdminUser:
       type: object
