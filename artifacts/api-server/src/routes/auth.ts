@@ -23,6 +23,7 @@ import { emailService } from "../lib/email-service";
 import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
 import { isRegistrationEnabled } from "../lib/registration-status";
+import { logger } from "../lib/logger";
 import type { Request } from "express";
 
 const router = Router();
@@ -166,6 +167,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
     return;
   }
 
+  if (!user.passwordHash) {
+    res.status(401).json({ error: "Неверный email или пароль" });
+    return;
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     res.status(401).json({ error: "Неверный email или пароль" });
@@ -284,6 +290,10 @@ router.post(
     }
 
     const { currentPassword, newPassword } = parsed.data;
+    if (!user.passwordHash) {
+      res.status(400).json({ error: "Пароль не задан для этой учётной записи" });
+      return;
+    }
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) {
       res.status(400).json({ error: "Текущий пароль неверный" });
@@ -363,6 +373,11 @@ router.post(
         error:
           "Администратор не может удалить свою учётную запись самостоятельно",
       });
+      return;
+    }
+
+    if (!user.passwordHash) {
+      res.status(400).json({ error: "Пароль не задан для этой учётной записи" });
       return;
     }
 
@@ -680,6 +695,224 @@ router.post(
     res.json({ message: "Пароль успешно обновлен" });
   },
 );
+
+// --- Yandex OAuth ---
+
+const YANDEX_AUTH_BASE = "https://oauth.yandex.ru";
+const YANDEX_TOKEN_URL = `${YANDEX_AUTH_BASE}/token`;
+const YANDEX_USER_INFO_URL = "https://login.yandex.ru/info";
+const YANDEX_REDIRECT_PATH = "/api/auth/yandex/callback";
+
+interface YandexTokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope: string;
+  error?: string;
+}
+
+interface YandexUserInfo {
+  id: string;
+  login: string;
+  default_email?: string;
+  emails?: string[];
+}
+
+function getYandexEnv(): { clientId: string; clientSecret: string } | null {
+  const clientId = process.env.YANDEX_CLIENT_ID;
+  const clientSecret = process.env.YANDEX_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}
+
+function getYandexRedirectUri(): string {
+  const appOrigin = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  return `${appOrigin.replace(/\/$/, "")}${YANDEX_REDIRECT_PATH}`;
+}
+
+function getYandexTokenErrorMessage(providerError?: string): string {
+  switch (providerError) {
+    case "invalid_client":
+      return "Яндекс отклонил Client ID или Client secret. Проверьте значения и перезапустите сервер.";
+    case "invalid_grant":
+      return "Код входа Яндекса истёк или уже был использован. Начните вход заново.";
+    case "invalid_scope":
+      return "Настройки разрешений Яндекс ID изменились. Начните вход заново.";
+    case "unauthorized_client":
+      return "Приложение Яндекс ID недоступно или ожидает модерации.";
+    default:
+      return "Не удалось получить токен Яндекса. Повторите вход.";
+  }
+}
+
+router.get("/auth/yandex", (req, res): void => {
+  const env = getYandexEnv();
+  if (!env) {
+    res.status(503).json({ error: "Вход через Яндекс не настроен" });
+    return;
+  }
+
+  const state = crypto.randomBytes(32).toString("base64url");
+  req.session.yandexOAuthState = state;
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: env.clientId,
+    redirect_uri: getYandexRedirectUri(),
+    scope: "login:email",
+    state,
+  });
+  res.redirect(`${YANDEX_AUTH_BASE}/authorize?${params.toString()}`);
+});
+
+router.get("/auth/yandex/callback", async (req, res): Promise<void> => {
+  const env = getYandexEnv();
+  if (!env) {
+    res.status(503).json({ error: "Вход через Яндекс не настроен" });
+    return;
+  }
+
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  if (!code) {
+    res.status(400).json({ error: "Код подтверждения отсутствует" });
+    return;
+  }
+
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+  if (!state || state !== req.session.yandexOAuthState) {
+    res.status(400).json({ error: "Недействительный запрос авторизации" });
+    return;
+  }
+
+  let tokenData: YandexTokenResponse;
+  try {
+    const tokenRes = await fetch(YANDEX_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({ grant_type: "authorization_code", code }).toString(),
+    });
+    const tokenResponse = (await tokenRes.json()) as YandexTokenResponse;
+    if (!tokenRes.ok || !tokenResponse.access_token) {
+      logger.warn(
+        { statusCode: tokenRes.status, providerError: tokenResponse.error ?? "missing_access_token" },
+        "Yandex OAuth token exchange failed",
+      );
+      res.status(502).json({ error: getYandexTokenErrorMessage(tokenResponse.error) });
+      return;
+    }
+    tokenData = tokenResponse;
+  } catch (error) {
+    logger.warn({ err: error }, "Yandex OAuth token request failed");
+    res.status(502).json({ error: "Не удалось получить токен Яндекса" });
+    return;
+  }
+
+  let yandexUser: YandexUserInfo;
+  try {
+    const infoRes = await fetch(`${YANDEX_USER_INFO_URL}?format=json`, {
+      headers: { Authorization: `OAuth ${tokenData.access_token}` },
+    });
+    if (!infoRes.ok) {
+      logger.warn({ statusCode: infoRes.status }, "Yandex OAuth user-info request failed");
+      res.status(502).json({ error: "Не удалось получить данные пользователя Яндекса" });
+      return;
+    }
+    yandexUser = (await infoRes.json()) as YandexUserInfo;
+  } catch {
+    res.status(502).json({ error: "Не удалось получить данные пользователя Яндекса" });
+    return;
+  }
+
+  if (!yandexUser.id || !yandexUser.login) {
+    logger.warn("Yandex OAuth user-info response is missing required identity fields");
+    res.status(502).json({ error: "Яндекс ID вернул неполные данные пользователя" });
+    return;
+  }
+
+  const email = (yandexUser.default_email ?? yandexUser.emails?.[0] ?? "").toLowerCase().trim();
+  if (!email) {
+    res.status(400).json({ error: "Яндекс ID не вернул email. Добавьте разрешение login:email в настройках приложения." });
+    return;
+  }
+
+  const [existingByYandexId] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.externalProvider, "yandex"), eq(usersTable.externalId, yandexUser.id)));
+  const [existingByEmail] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email));
+  const existing = existingByYandexId ?? existingByEmail;
+
+  if (!existing && !(await isRegistrationEnabled())) {
+    res.status(403).json({ error: "Регистрация временно закрыта" });
+    return;
+  }
+
+  const maintenanceMode = (await getSettingValue(MAINTENANCE_MODE_KEY)) === "true";
+  if (maintenanceMode && (!existing || (existing.role !== "admin" && existing.role !== "moderator"))) {
+    res.status(403).json({
+      error: "Вход временно недоступен из-за технического обслуживания",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+
+  let user;
+  if (existing) {
+    if (existing.externalProvider === "yandex" && existing.externalId === yandexUser.id) {
+      user = existing;
+    } else if (existing.externalProvider !== null || existing.externalId !== null) {
+      res.status(409).json({ error: "Email уже привязан к другой учётной записи" });
+      return;
+    } else {
+      await db
+        .update(usersTable)
+        .set({ externalProvider: "yandex", externalId: yandexUser.id })
+        .where(eq(usersTable.id, existing.id));
+      const [updated] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, existing.id));
+      user = updated;
+    }
+  } else {
+    const [created] = await db
+      .insert(usersTable)
+      .values({
+        email,
+        username: yandexUser.login,
+        passwordHash: null,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+        externalProvider: "yandex",
+        externalId: yandexUser.id,
+        referralSource: "direct",
+      })
+      .returning();
+    user = created;
+  }
+
+  if (user.status === "blocked") {
+    res.status(401).json({ error: "Аккаунт заблокирован" });
+    return;
+  }
+
+  await db
+    .update(usersTable)
+    .set({ lastLoginAt: new Date() })
+    .where(eq(usersTable.id, user.id));
+
+  await regenerateSession(req);
+  req.session.userId = user.id;
+
+  const appOrigin = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  res.redirect(appOrigin.replace(/\/$/, "") + "/library");
+});
 
 function formatUser(u: typeof usersTable.$inferSelect) {
   return {
