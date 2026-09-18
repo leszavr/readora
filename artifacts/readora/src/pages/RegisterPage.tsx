@@ -187,11 +187,15 @@ export default function RegisterPage() {
               <div className="h-px flex-1 bg-border" />
             </div>
 
-            <a href="/api/auth/yandex" className="block w-full">
-              <Button variant="outline" className="w-full">
+            {consent ? (
+              <Button variant="outline" className="w-full" asChild>
+                <a href="/api/auth/yandex">Войти через Яндекс</a>
+              </Button>
+            ) : (
+              <Button variant="outline" className="w-full" disabled title="Сначала дайте согласие на обработку персональных данных">
                 Войти через Яндекс
               </Button>
-            </a>
+            )}
 
             <p className="text-center text-sm text-muted-foreground mt-4">
               Уже есть аккаунт?{" "}
