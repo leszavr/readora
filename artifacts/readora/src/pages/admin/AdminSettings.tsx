@@ -13,6 +13,7 @@ export default function AdminSettings() {
   const [siteName, setSiteName] = useState("");
   const [allowReg, setAllowReg] = useState(true);
   const [maxSize, setMaxSize] = useState(50);
+  const [libraryStorageLimit, setLibraryStorageLimit] = useState(1024);
   const [maintenance, setMaintenance] = useState(false);
   const [maintenanceReason, setMaintenanceReason] = useState("");
   const [maintenanceEta, setMaintenanceEta] = useState("");
@@ -24,6 +25,7 @@ export default function AdminSettings() {
       setSiteName(settings.siteName ?? "Readora");
       setAllowReg(settings.allowRegistration ?? true);
       setMaxSize(settings.maxFileSizeMb ?? 50);
+      setLibraryStorageLimit(settings.libraryStorageLimitMb ?? 1024);
       setMaintenance(settings.maintenanceMode ?? false);
       setMaintenanceReason(settings.maintenanceReason ?? "");
       setMaintenanceEta(settings.maintenanceEta ?? "");
@@ -42,11 +44,13 @@ export default function AdminSettings() {
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (libraryStorageLimit < maxSize) return;
     updateSettings({
       data: {
         siteName,
         allowRegistration: allowReg,
         maxFileSizeMb: maxSize,
+        libraryStorageLimitMb: libraryStorageLimit,
         maintenanceMode: maintenance,
         maintenanceReason: maintenanceReason || null,
         maintenanceEta: maintenanceEta || null,
@@ -76,8 +80,25 @@ export default function AdminSettings() {
             <Input
               type="number" min={1} max={500}
               value={maxSize}
-                onChange={(e) => setMaxSize(Number.parseInt(e.target.value, 10) || 50)}
+              onChange={(e) => setMaxSize(Number.parseInt(e.target.value, 10) || 50)}
             />
+            <p className="text-xs text-muted-foreground">Не применяется к администраторам.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Максимальный размер пространства библиотеки (МБ)</Label>
+            <Input
+              type="number"
+              min={maxSize}
+              max={102400}
+              value={libraryStorageLimit}
+              onChange={(e) => setLibraryStorageLimit(Number.parseInt(e.target.value, 10) || maxSize)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Суммарный размер книг пользователя. Не применяется к администраторам.
+            </p>
+            {libraryStorageLimit < maxSize && (
+              <p className="text-xs text-destructive">Лимит библиотеки не может быть меньше максимального размера одной книги.</p>
+            )}
           </div>
           <div className="flex items-center justify-between py-2">
             <div>
@@ -154,7 +175,7 @@ export default function AdminSettings() {
 
       {saved && <p className="text-sm text-green-600">Настройки сохранены</p>}
 
-      <Button type="submit" disabled={isPending} className="gap-2">
+      <Button type="submit" disabled={isPending || libraryStorageLimit < maxSize} className="gap-2">
         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         Сохранить настройки
       </Button>

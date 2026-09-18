@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchUploadJob, type UploadJob, useUploadBook } from "@/hooks/use-upload-book";
-import { useListCycles } from "@workspace/api-client-react";
+import { getGetStorageQuotaQueryKey, useGetStorageQuota, useListCycles } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -25,15 +27,23 @@ interface FileUploadState {
   error: string | null;
 }
 
-function validateFile(file: File): string | null {
+function validateFile(file: File, quota: { maxFileSizeBytes?: number | null; availableBytes?: number | null } | undefined): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext !== "fb2" && ext !== "epub") {
     return "Поддерживаются только форматы FB2 и EPUB";
   }
-  if (file.size > 50 * 1024 * 1024) {
-    return "Файл слишком большой. Максимум 50 МБ";
+  if (quota?.maxFileSizeBytes != null && file.size > quota.maxFileSizeBytes) {
+    return `Файл слишком большой. Максимум ${formatSize(quota.maxFileSizeBytes)}`;
+  }
+  if (quota?.availableBytes != null && file.size > quota.availableBytes) {
+    return `Недостаточно свободного места. Доступно ${formatSize(quota.availableBytes)}`;
   }
   return null;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(0, Math.floor(bytes / 1024))} КБ`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
 function getJobStatus(jobStatus: string): "completed" | "failed" | "processing" {
@@ -74,6 +84,7 @@ async function pollJob(
   fileState: FileUploadState,
   setFiles: React.Dispatch<React.SetStateAction<FileUploadState[]>>,
   invalidateBooks: () => void,
+  invalidateQuota: () => void,
   isCancelled: () => boolean,
 ): Promise<void> {
   if (!fileState.job) return;
@@ -82,6 +93,7 @@ async function pollJob(
     if (isCancelled()) return;
     setFiles((prev) => applyJobUpdate(prev, fileState.file, nextJob));
     if (nextJob.status === "completed") invalidateBooks();
+    if (nextJob.status === "completed" || nextJob.status === "failed") invalidateQuota();
   } catch (e) {
     if (isCancelled()) return;
     const message = e instanceof Error ? e.message : "Не удалось получить статус";
@@ -116,11 +128,13 @@ function uploadSingleFile(
   cycleNumber: number | undefined,
   setFiles: React.Dispatch<React.SetStateAction<FileUploadState[]>>,
   upload: UploadMutate,
+  invalidateQuota: () => void,
 ): Promise<void> {
   setFiles((prev) => applyMarkUploading(prev, fileState.file));
   return new Promise<void>((resolve) => {
     const handleSuccess = (job: UploadJob) => {
       setFiles((prev) => applyMarkProcessing(prev, fileState.file, job));
+      invalidateQuota();
       resolve();
     };
     const handleError = (err: unknown) => {
@@ -136,6 +150,8 @@ function uploadSingleFile(
 }
 
 export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [files, setFiles] = useState<FileUploadState[]>([]);
@@ -150,7 +166,13 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
   const [autoNumber, setAutoNumber] = useState(true);
 
   const { data: cycles = [] } = useListCycles();
+  const { data: quota, isLoading: isQuotaLoading } = useGetStorageQuota({
+    query: { queryKey: getGetStorageQuotaQueryKey(), enabled: open },
+  });
   const { mutate: upload, invalidateBooks } = useUploadBook();
+  const invalidateQuota = () => {
+    void queryClient.invalidateQueries({ queryKey: getGetStorageQuotaQueryKey() });
+  };
 
   // Poll for job status updates
   useEffect(() => {
@@ -161,7 +183,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     const isCancelled = () => cancelled;
     const timer = globalThis.setInterval(() => {
       for (const fileState of filesToPoll) {
-        void pollJob(fileState, setFiles, invalidateBooks, isCancelled);
+        void pollJob(fileState, setFiles, invalidateBooks, invalidateQuota, isCancelled);
       }
     }, 1500);
 
@@ -169,18 +191,27 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
       cancelled = true;
       globalThis.clearInterval(timer);
     };
-  }, [files, invalidateBooks]);
+  }, [files, invalidateBooks, queryClient]);
 
   function handleFiles(fileList: FileList) {
     const newFiles: FileUploadState[] = [];
+    let availableBytes = quota?.availableBytes == null
+      ? null
+      : Math.max(
+          0,
+          quota.availableBytes - files
+            .filter((fileState) => fileState.status === "pending" || fileState.status === "uploading")
+            .reduce((total, fileState) => total + fileState.file.size, 0),
+        );
+
     for (const file of Array.from(fileList)) {
-      const error = validateFile(file);
+      const error = validateFile(file, { ...quota, availableBytes });
       if (error) {
         alert(`${file.name}: ${error}`);
         continue;
       }
       // Check duplicate
-      if (files.some((f) => f.file.name === file.name && f.file.size === file.size)) {
+      if ([...files, ...newFiles].some((f) => f.file.name === file.name && f.file.size === file.size)) {
         continue;
       }
       newFiles.push({
@@ -190,6 +221,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
         job: null,
         error: null,
       });
+      if (availableBytes !== null) availableBytes -= file.size;
     }
     setFiles((prev) => [...prev, ...newFiles]);
   }
@@ -237,7 +269,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
   ): Promise<void> {
     const format = fileState.file.name.toLowerCase().endsWith(".epub") ? "epub" : "fb2";
     trackBookUploadStarted(format, fileState.file.size);
-    return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload);
+    return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload, invalidateQuota);
   }
 
   async function handleUploadAll() {
@@ -282,11 +314,6 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     setStartNumber("1");
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`;
-    return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
-  };
-
   const getStatusText = (f: FileUploadState) => {
     if (f.status === "pending") return "Ожидает";
     if (f.status === "uploading") return "Загрузка...";
@@ -305,6 +332,13 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
   const allCompleted = files.length > 0 && files.every((f) => f.status === "completed");
   const hasPending = files.some((f) => f.status === "pending");
   const hasActive = files.some((f) => f.status === "uploading" || f.status === "processing");
+  const isStorageFull = quota?.isExempt !== true && quota?.canUpload === false;
+  const canSelectFiles = !isQuotaLoading && !isStorageFull;
+
+  function openShelf() {
+    onClose();
+    setLocation("/library?shelf=1");
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -312,11 +346,28 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
         <DialogHeader>
           <DialogTitle>Загрузить книги</DialogTitle>
           <DialogDescription>
-            Поддерживаются форматы FB2 и EPUB (до 50 МБ). Можно загрузить несколько файлов сразу.
+            Поддерживаются форматы FB2 и EPUB{quota?.maxFileSizeBytes ? ` (до ${formatSize(quota.maxFileSizeBytes)})` : ""}. Можно загрузить несколько файлов сразу.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {isQuotaLoading ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Проверяем доступное место…</div>
+          ) : quota?.isExempt ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Для администратора лимиты на размер книги и объём библиотеки не применяются.</div>
+          ) : quota ? (
+            <div className={`rounded-lg border p-3 text-sm ${isStorageFull ? "border-destructive/50 bg-destructive/5" : "bg-muted/30"}`}>
+              <p className="font-medium">Место в библиотеке: {formatSize(quota.usedBytes)} из {formatSize(quota.storageLimitBytes ?? 0)}</p>
+              {quota.reservedBytes > 0 && <p className="mt-1 text-xs text-muted-foreground">В обработке: {formatSize(quota.reservedBytes)}</p>}
+              <p className="mt-1 text-xs text-muted-foreground">Свободно: {formatSize(quota.availableBytes ?? 0)}</p>
+              {isStorageFull && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-destructive">Лимит библиотеки исчерпан. Загрузка новых книг недоступна.</span>
+                  {quota.shelfBooksCount > 0 && <Button type="button" size="sm" variant="outline" onClick={openShelf}>Открыть книжную полку</Button>}
+                </div>
+              )}
+            </div>
+          ) : null}
           {/* Drop zone */}
           <button
             type="button"
@@ -325,10 +376,11 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-primary/50 hover:bg-muted/30"
             }`}
-            onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onClick={() => canSelectFiles && inputRef.current?.click()}
+            onDragOver={(e) => { if (!canSelectFiles) return; e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
+            onDrop={(e) => { if (!canSelectFiles) return; handleDrop(e); }}
+            disabled={!canSelectFiles}
           >
             <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
             <p className="font-medium text-sm">Перетащите файлы или нажмите для выбора</p>
@@ -338,7 +390,8 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
             ref={inputRef}
             type="file"
             accept=".fb2,.epub"
-            multiple
+              multiple
+              disabled={!canSelectFiles}
             className="hidden"
             onChange={(e) => {
               if (e.target.files && e.target.files.length > 0) {
@@ -504,7 +557,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
             <Button
               className="flex-1"
               onClick={handleUploadAll}
-              disabled={!hasPending || isUploading}
+              disabled={!hasPending || isUploading || isStorageFull}
             >
               {isUploading ? (
                 <>

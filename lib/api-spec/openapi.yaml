@@ -497,18 +497,37 @@ paths:
             schema:
               $ref: "#/components/schemas/BookUploadInput"
       responses:
-        "201":
-          description: Uploaded and parsed
+        "202":
+          description: Accepted for background processing
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Book"
+                $ref: "#/components/schemas/BookUploadJob"
         "400":
           description: Invalid file
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: File size or library storage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /books/storage-quota:
+    get:
+      operationId: getStorageQuota
+      tags: [books]
+      summary: Get current user's book storage quota
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookStorageQuota"
 
   /books/{id}:
     get:
@@ -1717,6 +1736,53 @@ components:
           type: string
           format: binary
 
+    BookUploadJob:
+      type: object
+      required: [id, originalFilename, fileSize, format, status, stage, progress]
+      properties:
+        id:
+          type: integer
+        originalFilename:
+          type: string
+        fileSize:
+          type: integer
+        format:
+          type: string
+          enum: [fb2, epub]
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        stage:
+          type: string
+          enum: [queued, validating, parsing, saving, completed, failed]
+        progress:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        bookId:
+          type: ["integer", "null"]
+
+    BookStorageQuota:
+      type: object
+      required: [isExempt, usedBytes, reservedBytes, canUpload, shelfBooksCount]
+      properties:
+        isExempt:
+          type: boolean
+        maxFileSizeBytes:
+          type: ["integer", "null"]
+        storageLimitBytes:
+          type: ["integer", "null"]
+        usedBytes:
+          type: integer
+        reservedBytes:
+          type: integer
+        availableBytes:
+          type: ["integer", "null"]
+        canUpload:
+          type: boolean
+        shelfBooksCount:
+          type: integer
+
     LandingBookCoverUploadInput:
       type: object
       required: [cover]
@@ -2116,6 +2182,8 @@ components:
           type: boolean
         maxFileSizeMb:
           type: integer
+        libraryStorageLimitMb:
+          type: integer
         smtpHost:
           type: ["string", "null"]
         smtpPort:
@@ -2146,6 +2214,12 @@ components:
           type: boolean
         maxFileSizeMb:
           type: integer
+          minimum: 1
+          maximum: 500
+        libraryStorageLimitMb:
+          type: integer
+          minimum: 1
+          maximum: 102400
         smtpHost:
           type: ["string", "null"]
         smtpPort:

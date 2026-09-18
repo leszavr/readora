@@ -320,6 +320,21 @@ export const UploadBookBody = zod.object({
 
 
 /**
+ * @summary Get current user's book storage quota
+ */
+export const GetStorageQuotaResponse = zod.object({
+  "isExempt": zod.boolean(),
+  "maxFileSizeBytes": zod.number().nullish(),
+  "storageLimitBytes": zod.number().nullish(),
+  "usedBytes": zod.number(),
+  "reservedBytes": zod.number(),
+  "availableBytes": zod.number().nullish(),
+  "canUpload": zod.boolean(),
+  "shelfBooksCount": zod.number()
+})
+
+
+/**
  * @summary Get book details
  */
 export const GetBookParams = zod.object({
@@ -1027,6 +1042,7 @@ export const GetAppSettingsResponse = zod.object({
   "siteName": zod.string().optional(),
   "allowRegistration": zod.boolean().optional(),
   "maxFileSizeMb": zod.number().optional(),
+  "libraryStorageLimitMb": zod.number().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
   "smtpUser": zod.string().nullish(),
@@ -1043,10 +1059,17 @@ export const GetAppSettingsResponse = zod.object({
 /**
  * @summary Update app settings (admin)
  */
+export const updateAppSettingsBodyMaxFileSizeMbMax = 500;
+
+export const updateAppSettingsBodyLibraryStorageLimitMbMax = 102400;
+
+
+
 export const UpdateAppSettingsBody = zod.object({
   "siteName": zod.string().optional(),
   "allowRegistration": zod.boolean().optional(),
-  "maxFileSizeMb": zod.number().optional(),
+  "maxFileSizeMb": zod.number().min(1).max(updateAppSettingsBodyMaxFileSizeMbMax).optional(),
+  "libraryStorageLimitMb": zod.number().min(1).max(updateAppSettingsBodyLibraryStorageLimitMbMax).optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
   "smtpUser": zod.string().nullish(),
@@ -1064,6 +1087,7 @@ export const UpdateAppSettingsResponse = zod.object({
   "siteName": zod.string().optional(),
   "allowRegistration": zod.boolean().optional(),
   "maxFileSizeMb": zod.number().optional(),
+  "libraryStorageLimitMb": zod.number().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
   "smtpUser": zod.string().nullish(),

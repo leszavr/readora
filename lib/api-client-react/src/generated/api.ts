@@ -32,8 +32,10 @@ import type {
   AppSettingsUpdate,
   AuthResult,
   Book,
+  BookStorageQuota,
   BookUpdate,
   BookUploadInput,
+  BookUploadJob,
   BulkDeleteInput,
   BulkDeleteResult,
   Chapter,
@@ -1488,7 +1490,7 @@ export const getUploadBookUrl = () => {
 /**
  * @summary Upload a book file (FB2 or EPUB)
  */
-export const uploadBook = async (bookUploadInput: BookUploadInput, options?: RequestInit): Promise<Book> => {
+export const uploadBook = async (bookUploadInput: BookUploadInput, options?: RequestInit): Promise<BookUploadJob> => {
     const formData = new FormData();
 if(bookUploadInput.cycleId !== undefined) {
  formData.append(`cycleId`, bookUploadInput.cycleId.toString())
@@ -1503,7 +1505,7 @@ if(bookUploadInput.hideFromPopular !== undefined) {
  formData.append(`hideFromPopular`, bookUploadInput.hideFromPopular.toString())
  }
 
-  return customFetch<Book>(getUploadBookUrl(),
+  return customFetch<BookUploadJob>(getUploadBookUrl(),
   {
     ...options,
     method: 'POST'
@@ -1560,6 +1562,83 @@ export const useUploadBook = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getUploadBookMutationOptions(options));
     }
+
+export const getGetStorageQuotaUrl = () => {
+
+
+
+
+  return `/api/books/storage-quota`
+}
+
+/**
+ * @summary Get current user's book storage quota
+ */
+export const getStorageQuota = async ( options?: RequestInit): Promise<BookStorageQuota> => {
+
+  return customFetch<BookStorageQuota>(getGetStorageQuotaUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStorageQuotaQueryKey = () => {
+    return [
+    `/api/books/storage-quota`
+    ] as const;
+    }
+
+
+export const getGetStorageQuotaQueryOptions = <TData = Awaited<ReturnType<typeof getStorageQuota>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStorageQuota>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStorageQuotaQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStorageQuota>>> = ({ signal }) => getStorageQuota({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStorageQuota>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStorageQuotaQueryResult = NonNullable<Awaited<ReturnType<typeof getStorageQuota>>>
+export type GetStorageQuotaQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get current user's book storage quota
+ */
+
+export function useGetStorageQuota<TData = Awaited<ReturnType<typeof getStorageQuota>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStorageQuota>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStorageQuotaQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetBookUrl = (id: number,) => {
 

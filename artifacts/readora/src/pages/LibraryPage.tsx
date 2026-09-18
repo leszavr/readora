@@ -159,6 +159,10 @@ export default function LibraryPage() {
   }, [location]);
 
   useEffect(() => {
+    if (location.includes("shelf=1")) setLibrarySection("shelf");
+  }, [location, setLibrarySection]);
+
+  useEffect(() => {
     const filterCount = [search, statusFilter !== "all", genreFilter !== "all", sortBy !== "uploadedAt", groupBy !== "none"].filter(Boolean).length;
     trackLibraryViewed(librarySection === "shelf" ? "shelf" : viewMode, filterCount, search.trim().length > 0);
   }, [librarySection, viewMode, search, statusFilter, genreFilter, sortBy, groupBy]);
