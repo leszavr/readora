@@ -331,6 +331,64 @@ export interface LandingBookUploadInput {
   cover: Blob;
 }
 
+export type BookUploadJobFormat = typeof BookUploadJobFormat[keyof typeof BookUploadJobFormat];
+
+
+export const BookUploadJobFormat = {
+  fb2: 'fb2',
+  epub: 'epub',
+} as const;
+
+export type BookUploadJobStatus = typeof BookUploadJobStatus[keyof typeof BookUploadJobStatus];
+
+
+export const BookUploadJobStatus = {
+  queued: 'queued',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type BookUploadJobStage = typeof BookUploadJobStage[keyof typeof BookUploadJobStage];
+
+
+export const BookUploadJobStage = {
+  queued: 'queued',
+  validating: 'validating',
+  parsing: 'parsing',
+  saving: 'saving',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface BookUploadJob {
+  id: number;
+  originalFilename: string;
+  fileSize: number;
+  format: BookUploadJobFormat;
+  status: BookUploadJobStatus;
+  stage: BookUploadJobStage;
+  progress: number;
+  /** @nullable */
+  errorMessage?: string | null;
+  /** @nullable */
+  bookId?: number | null;
+}
+
+export interface BookStorageQuota {
+  isExempt: boolean;
+  /** @nullable */
+  maxFileSizeBytes?: number | null;
+  /** @nullable */
+  storageLimitBytes?: number | null;
+  usedBytes: number;
+  reservedBytes: number;
+  /** @nullable */
+  availableBytes?: number | null;
+  canUpload: boolean;
+  shelfBooksCount: number;
+}
+
 export interface LandingBookCoverUploadInput {
   cover: Blob;
 }
@@ -661,6 +719,7 @@ export interface AppSettings {
   siteName?: string;
   allowRegistration?: boolean;
   maxFileSizeMb?: number;
+  libraryStorageLimitMb?: number;
   /** @nullable */
   smtpHost?: string | null;
   /** @nullable */
@@ -684,7 +743,16 @@ export interface AppSettings {
 export interface AppSettingsUpdate {
   siteName?: string;
   allowRegistration?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 500
+     */
   maxFileSizeMb?: number;
+  /**
+     * @minimum 1
+     * @maximum 102400
+     */
+  libraryStorageLimitMb?: number;
   /** @nullable */
   smtpHost?: string | null;
   /** @nullable */

@@ -25,6 +25,12 @@ import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
 import { isRegistrationEnabled } from "../lib/registration-status";
+import {
+  DEFAULT_LIBRARY_STORAGE_MB,
+  DEFAULT_MAX_BOOK_FILE_SIZE_MB,
+  quotaSettingBounds,
+  validateQuotaSetting,
+} from "../lib/storage-quota";
 
 const router = Router();
 const PWA_INSTALL_ACCEPTED_KEY = "pwa_install_accepted_count";
@@ -739,7 +745,8 @@ router.get(
       // Алиасы для совместимости с AdminSettings.tsx (camelCase + типизация)
       siteName: map.siteName ?? "Readora",
       allowRegistration: map.allowRegistration !== "false",
-      maxFileSizeMb: Number.parseInt(map.maxFileSizeMb ?? "50", 10),
+      maxFileSizeMb: validateQuotaSetting(map.maxFileSizeMb ? Number(map.maxFileSizeMb) : undefined, quotaSettingBounds.maxBookFileSizeMb) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB,
+      libraryStorageLimitMb: validateQuotaSetting(map.libraryStorageLimitMb ? Number(map.libraryStorageLimitMb) : undefined, quotaSettingBounds.libraryStorageMb) ?? DEFAULT_LIBRARY_STORAGE_MB,
       smtpHost: map.smtpHost ?? null,
       smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
       smtpUser: map.smtpUser ?? null,
@@ -769,6 +776,37 @@ router.patch(
   requireAdmin,
   async (req, res): Promise<void> => {
     const updates = req.body ?? {};
+    const maxFileSizeMb = updates.maxFileSizeMb === undefined
+      ? undefined
+      : validateQuotaSetting(updates.maxFileSizeMb, quotaSettingBounds.maxBookFileSizeMb);
+    const libraryStorageLimitMb = updates.libraryStorageLimitMb === undefined
+      ? undefined
+      : validateQuotaSetting(updates.libraryStorageLimitMb, quotaSettingBounds.libraryStorageMb);
+    if (
+      (updates.maxFileSizeMb !== undefined && maxFileSizeMb === null) ||
+      (updates.libraryStorageLimitMb !== undefined && libraryStorageLimitMb === null)
+    ) {
+      res.status(400).json({ error: "Лимиты должны быть целыми положительными числами в допустимом диапазоне" });
+      return;
+    }
+
+    const currentQuotaRows = await db
+      .select({ key: appSettingsTable.key, value: appSettingsTable.value })
+      .from(appSettingsTable)
+      .where(inArray(appSettingsTable.key, ["maxFileSizeMb", "libraryStorageLimitMb"]));
+    const currentQuota = Object.fromEntries(currentQuotaRows.map((row) => [row.key, row.value]));
+    const effectiveMaxFileSizeMb = maxFileSizeMb ?? validateQuotaSetting(
+      currentQuota.maxFileSizeMb ? Number(currentQuota.maxFileSizeMb) : undefined,
+      quotaSettingBounds.maxBookFileSizeMb,
+    ) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB;
+    const effectiveLibraryStorageLimitMb = libraryStorageLimitMb ?? validateQuotaSetting(
+      currentQuota.libraryStorageLimitMb ? Number(currentQuota.libraryStorageLimitMb) : undefined,
+      quotaSettingBounds.libraryStorageMb,
+    ) ?? DEFAULT_LIBRARY_STORAGE_MB;
+    if (effectiveLibraryStorageLimitMb < effectiveMaxFileSizeMb) {
+      res.status(400).json({ error: "Лимит библиотеки не может быть меньше максимального размера одной книги" });
+      return;
+    }
     let smtpTouched = false;
 
     for (const [key, value] of Object.entries(updates)) {
@@ -813,7 +851,8 @@ router.patch(
       ...map,
       siteName: map.siteName ?? "Readora",
       allowRegistration: map.allowRegistration !== "false",
-      maxFileSizeMb: Number.parseInt(map.maxFileSizeMb ?? "50", 10),
+      maxFileSizeMb: validateQuotaSetting(map.maxFileSizeMb ? Number(map.maxFileSizeMb) : undefined, quotaSettingBounds.maxBookFileSizeMb) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB,
+      libraryStorageLimitMb: validateQuotaSetting(map.libraryStorageLimitMb ? Number(map.libraryStorageLimitMb) : undefined, quotaSettingBounds.libraryStorageMb) ?? DEFAULT_LIBRARY_STORAGE_MB,
       smtpHost: map.smtpHost ?? null,
       smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
       smtpUser: map.smtpUser ?? null,

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { eq, and, ilike, inArray, desc, asc, sql, notInArray } from "drizzle-orm";
 import multer from "multer";
 import path from "node:path";
@@ -12,6 +12,7 @@ import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/sto
 import { optimizeImage } from "../lib/image-optimizer";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
+import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
 import type { Request } from "express";
 
 const router = Router();
@@ -19,10 +20,7 @@ const router = Router();
 ensureStorageDirs();
 
 const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
+const bookUploadFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (file.fieldname === "file") {
       if (ext === ".fb2" || ext === ".epub") cb(null, true);
@@ -40,10 +38,49 @@ const upload = multer({
     }
 
     cb(new Error("Неподдерживаемый тип файла"));
-  },
-});
+  };
+const upload = multer({ storage, fileFilter: bookUploadFileFilter });
 
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
+
+async function uploadBookFile(req: Request, res: Response, next: (error?: unknown) => void): Promise<void> {
+  try {
+    const user = (req as AuthReq).user;
+    const quota = await getStorageQuota(user);
+    if (!quota.canUpload) {
+      res.status(413).json({
+        error: "Лимит библиотеки исчерпан. Удалите ненужные книги и повторите загрузку.",
+        code: "STORAGE_QUOTA_EXCEEDED",
+      });
+      return;
+    }
+
+    const fileSizeLimit = quota.isExempt
+      ? undefined
+      : Math.min(quota.maxFileSizeBytes ?? Number.MAX_SAFE_INTEGER, quota.availableBytes ?? 0);
+    multer({
+      storage,
+      limits: fileSizeLimit ? { fileSize: fileSizeLimit } : undefined,
+      fileFilter: bookUploadFileFilter,
+    }).single("file")(req, res, (error) => {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        const isFileSizeLimit = quota.maxFileSizeBytes !== null
+          && quota.availableBytes !== null
+          && quota.maxFileSizeBytes <= quota.availableBytes;
+        res.status(413).json({
+          error: isFileSizeLimit
+            ? `Размер книги превышает лимит ${Math.round((quota.maxFileSizeBytes ?? 0) / 1024 / 1024)} МБ`
+            : "Недостаточно свободного места в библиотеке. Удалите ненужные книги и повторите загрузку.",
+          code: isFileSizeLimit ? "FILE_SIZE_LIMIT" : "STORAGE_QUOTA_EXCEEDED",
+        });
+        return;
+      }
+      next(error);
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 
 function toUploadJobResponse(job: typeof bookUploadJobsTable.$inferSelect) {
   return {
@@ -525,7 +562,11 @@ router.get("/books", requireAuth, async (req, res): Promise<void> => {
 });
 
 // POST /books/upload
-router.post("/books/upload", requireAuth, upload.single("file"), async (req, res): Promise<void> => {
+router.get("/books/storage-quota", requireAuth, async (req, res): Promise<void> => {
+  res.json(await getStorageQuota((req as AuthReq).user));
+});
+
+router.post("/books/upload", requireAuth, uploadBookFile, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   if (!req.file) {
     res.status(400).json({ error: "Файл не загружен" });
@@ -537,20 +578,30 @@ router.post("/books/upload", requireAuth, upload.single("file"), async (req, res
   const tempPath = path.join(tempUploadsDir, tempStorageKey);
   fs.writeFileSync(tempPath, req.file.buffer);
 
-  const [job] = await db.insert(bookUploadJobsTable).values({
-    ownerUserId: user.id,
-    originalFilename: req.file.originalname,
-    fileSize: req.file.size,
-    format: ext,
-    tempStorageKey,
-    status: "queued",
-    stage: "queued",
-    progress: 5,
-    cycleId: req.body?.cycleId ? Number.parseInt(req.body.cycleId, 10) : null,
-    cycleName: req.body?.cycleName || null,
-    cycleNumber: req.body?.cycleNumber ? Number.parseFloat(req.body.cycleNumber) : null,
-    hideFromPopular: parseBoolean(req.body?.hideFromPopular) ?? false,
-  }).returning();
+  let job: typeof bookUploadJobsTable.$inferSelect;
+  try {
+    job = await createUploadJobWithinQuota(user, {
+      ownerUserId: user.id,
+      originalFilename: req.file.originalname,
+      fileSize: req.file.size,
+      format: ext,
+      tempStorageKey,
+      status: "queued",
+      stage: "queued",
+      progress: 5,
+      cycleId: req.body?.cycleId ? Number.parseInt(req.body.cycleId, 10) : null,
+      cycleName: req.body?.cycleName || null,
+      cycleNumber: req.body?.cycleNumber ? Number.parseFloat(req.body.cycleNumber) : null,
+      hideFromPopular: parseBoolean(req.body?.hideFromPopular) ?? false,
+    });
+  } catch (error) {
+    fs.rmSync(tempPath, { force: true });
+    if (error instanceof UploadLimitError) {
+      res.status(413).json({ error: error.message, code: error.code });
+      return;
+    }
+    throw error;
+  }
 
   setImmediate(() => {
     processBookUploadJob(job.id).catch((error) => {
