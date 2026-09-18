@@ -21,6 +21,7 @@ import seoRouter from "./routes/seo";
 declare module "express-session" {
   interface SessionData {
     userId?: number;
+    yandexOAuthState?: string;
   }
 }
 

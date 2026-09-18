@@ -207,6 +207,18 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            <div className="flex items-center gap-3 my-4">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground whitespace-nowrap">или</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            <a href="/api/auth/yandex" className="block w-full">
+              <Button variant="outline" className="w-full">
+                Войти через Яндекс
+              </Button>
+            </a>
+
             {registrationStatus?.enabled === true && (
               <p className="text-center text-sm text-muted-foreground mt-4">
                 Нет аккаунта?{" "}
