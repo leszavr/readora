@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
+import { AnalyticsLifecycle } from "@/components/AnalyticsLifecycle";
+import { ReferralSourceCapture } from "@/components/ReferralSourceCapture";
 
 function createQueryClient() {
   return new QueryClient({
@@ -21,7 +23,11 @@ export function AppProviders({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ReferralSourceCapture />
+          <AnalyticsLifecycle />
+          {children}
+        </AuthProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

@@ -4,15 +4,15 @@ import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable } from "@workspace/db";
+import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { parseBook } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
+import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import type { Request } from "express";
-import type { usersTable } from "@workspace/db";
 
 const router = Router();
 
@@ -250,6 +250,9 @@ async function processBookUploadJob(jobId: number): Promise<void> {
   const [job] = await db.select().from(bookUploadJobsTable).where(eq(bookUploadJobsTable.id, jobId));
   if (!job?.status || job.status !== "queued") return;
 
+  const [owner] = await db.select({ id: usersTable.id, analyticsOptIn: usersTable.analyticsOptIn }).from(usersTable).where(eq(usersTable.id, job.ownerUserId));
+  if (!owner) return;
+
   const tempPath = path.join(tempUploadsDir, job.tempStorageKey);
 
   try {
@@ -328,6 +331,19 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     }
 
     await updateUploadJob(jobId, { status: "completed", stage: "completed", progress: 100, bookId: book.id, completedAt: new Date() });
+    const durationMs = Math.max(0, Date.now() - job.createdAt.getTime());
+    await Promise.all([
+      recordServerAnalyticsEvent(owner, {
+        bookId: book.id,
+        eventName: "book_upload_finished",
+        properties: { format: ext, durationMs, outcome: "success" },
+      }),
+      recordServerAnalyticsEvent(owner, {
+        bookId: book.id,
+        eventName: "book_added",
+        properties: { format: ext, source: "manual_upload" },
+      }),
+    ]);
     fs.rmSync(tempPath, { force: true });
   } catch (e) {
     await updateUploadJob(jobId, {
@@ -336,6 +352,14 @@ async function processBookUploadJob(jobId: number): Promise<void> {
       progress: 100,
       errorMessage: e instanceof Error ? e.message : "Не удалось распарсить файл",
       completedAt: new Date(),
+    });
+    await recordServerAnalyticsEvent(owner, {
+      eventName: "book_upload_finished",
+      properties: {
+        format: job.format,
+        durationMs: Math.max(0, Date.now() - job.createdAt.getTime()),
+        outcome: "error",
+      },
     });
     fs.rmSync(tempPath, { force: true });
   }

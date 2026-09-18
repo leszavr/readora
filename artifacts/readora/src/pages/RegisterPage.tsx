@@ -12,6 +12,7 @@ import { LegalOverlay } from "@/components/LegalOverlay";
 import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
+import { captureReferralSource } from "@/lib/referral-source";
 
 export default function RegisterPage() {
   const [, navigate] = useLocation();
@@ -53,7 +54,7 @@ export default function RegisterPage() {
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!consent) return;
-    doRegister({ data: { email, username, password } });
+    doRegister({ data: { email, username, password, referralSource: captureReferralSource() } });
   }
 
   const errorMsg = error

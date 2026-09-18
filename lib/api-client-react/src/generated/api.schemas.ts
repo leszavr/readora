@@ -13,12 +13,28 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type RegisterInputReferralSource = typeof RegisterInputReferralSource[keyof typeof RegisterInputReferralSource];
+
+
+export const RegisterInputReferralSource = {
+  direct: 'direct',
+  telegram: 'telegram',
+  habr: 'habr',
+  productradar: 'productradar',
+  show_hn: 'show_hn',
+  reddit: 'reddit',
+  vk: 'vk',
+  seo: 'seo',
+  other: 'other',
+} as const;
+
 export interface RegisterInput {
   email: string;
   /** @minLength 6 */
   password: string;
   /** @minLength 2 */
   username: string;
+  referralSource?: RegisterInputReferralSource;
 }
 
 export interface LoginInput {
@@ -52,6 +68,7 @@ export interface User {
   status: UserStatus;
   /** @nullable */
   avatar?: string | null;
+  analyticsOptIn: boolean;
   createdAt: string;
   /** @nullable */
   lastLoginAt?: string | null;
@@ -66,6 +83,67 @@ export interface ProfileUpdate {
   username?: string;
   /** @nullable */
   avatar?: string | null;
+  analyticsOptIn?: boolean;
+}
+
+export type AnalyticsClientEventEventName = typeof AnalyticsClientEventEventName[keyof typeof AnalyticsClientEventEventName];
+
+
+export const AnalyticsClientEventEventName = {
+  app_opened: 'app_opened',
+  library_viewed: 'library_viewed',
+  book_upload_started: 'book_upload_started',
+  reader_session_started: 'reader_session_started',
+  reader_session_ended: 'reader_session_ended',
+  reading_progressed: 'reading_progressed',
+  chapter_opened: 'chapter_opened',
+  progress_sync_finished: 'progress_sync_finished',
+} as const;
+
+export type AnalyticsClientEventPlatform = typeof AnalyticsClientEventPlatform[keyof typeof AnalyticsClientEventPlatform];
+
+
+export const AnalyticsClientEventPlatform = {
+  web: 'web',
+} as const;
+
+export type AnalyticsClientEventDeviceMode = typeof AnalyticsClientEventDeviceMode[keyof typeof AnalyticsClientEventDeviceMode];
+
+
+export const AnalyticsClientEventDeviceMode = {
+  desktop: 'desktop',
+  mobile: 'mobile',
+  unknown: 'unknown',
+} as const;
+
+export type AnalyticsClientEventProperties = { [key: string]: unknown };
+
+export interface AnalyticsClientEvent {
+  eventId: string;
+  eventName: AnalyticsClientEventEventName;
+  occurredAt: string;
+  localDate: string;
+  sessionId?: string;
+  clientId: string;
+  platform: AnalyticsClientEventPlatform;
+  deviceMode: AnalyticsClientEventDeviceMode;
+  /** @maxLength 64 */
+  appVersion?: string;
+  bookId?: number;
+  properties: AnalyticsClientEventProperties;
+}
+
+export interface AnalyticsEventsBatchInput {
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  events: AnalyticsClientEvent[];
+}
+
+export interface AnalyticsEventsBatchResult {
+  acceptedEventIds: string[];
+  rejectedEventIds: string[];
 }
 
 export interface TrustedDevice {
@@ -437,6 +515,108 @@ export interface AdminStats {
   recentUsers: AdminUser[];
 }
 
+export type AdminAnalyticsDays = typeof AdminAnalyticsDays[keyof typeof AdminAnalyticsDays];
+
+
+export const AdminAnalyticsDays = {
+  NUMBER_7: 7,
+  NUMBER_30: 30,
+  NUMBER_90: 90,
+} as const;
+
+export interface AdminAnalyticsSystemSummary {
+  totalUsers: number;
+  totalBooks: number;
+  activeReaders: number;
+  bookOpens: number;
+  pwaInstallAccepted: number;
+  booksPerUser: number;
+  readEventsPerActiveReader: number;
+  completedBooks: number;
+  completedBooksRate: number;
+}
+
+export interface AdminAnalyticsSummary {
+  activeUsers: number;
+  appOpens: number;
+  readerSessions: number;
+  activeReadingMs: number;
+  booksStarted: number;
+  booksCompleted: number;
+  syncAttempts: number;
+  syncSuccesses: number;
+  syncSuccessRate: number;
+  trackedBooks: number;
+  averageSessionReadingMs: number;
+}
+
+export interface AdminAnalyticsRetention {
+  d7EligibleUsers: number;
+  d7RetainedUsers: number;
+  d7Rate: number;
+  d30EligibleUsers: number;
+  d30RetainedUsers: number;
+  d30Rate: number;
+}
+
+export interface AdminAnalyticsRegistrationWeek {
+  weekStart: string;
+  registrations: number;
+}
+
+export type AdminAnalyticsReferralSourceSource = typeof AdminAnalyticsReferralSourceSource[keyof typeof AdminAnalyticsReferralSourceSource];
+
+
+export const AdminAnalyticsReferralSourceSource = {
+  direct: 'direct',
+  telegram: 'telegram',
+  habr: 'habr',
+  productradar: 'productradar',
+  show_hn: 'show_hn',
+  reddit: 'reddit',
+  vk: 'vk',
+  seo: 'seo',
+  other: 'other',
+  unknown: 'unknown',
+} as const;
+
+export interface AdminAnalyticsReferralSource {
+  source: AdminAnalyticsReferralSourceSource;
+  registrations: number;
+}
+
+export interface AdminAnalyticsMarketing {
+  registrations: number;
+  verifiedUsers: number;
+  emailVerificationRate: number;
+  usersWithBooks: number;
+  firstBookUploadRate: number;
+  retention: AdminAnalyticsRetention;
+  registrationTrend: AdminAnalyticsRegistrationWeek[];
+  referralSources: AdminAnalyticsReferralSource[];
+}
+
+export interface AdminAnalyticsDailyTrend {
+  activityDate: string;
+  activeUsers: number;
+  appOpens: number;
+  readerSessions: number;
+  activeReadingMs: number;
+  booksCompleted: number;
+  syncAttempts: number;
+  syncSuccesses: number;
+}
+
+export interface AdminAnalytics {
+  days: AdminAnalyticsDays;
+  rangeStart: string;
+  rangeEnd: string;
+  systemSummary: AdminAnalyticsSystemSummary;
+  summary: AdminAnalyticsSummary;
+  marketing: AdminAnalyticsMarketing;
+  trend: AdminAnalyticsDailyTrend[];
+}
+
 export type AdminUserCreateRole = typeof AdminUserCreateRole[keyof typeof AdminUserCreateRole];
 
 
@@ -630,6 +810,19 @@ export const ListBooksGroupBy = {
 export type GetPopularBooksParams = {
 limit?: number;
 };
+
+export type GetAdminAnalyticsParams = {
+days?: GetAdminAnalyticsDays;
+};
+
+export type GetAdminAnalyticsDays = typeof GetAdminAnalyticsDays[keyof typeof GetAdminAnalyticsDays];
+
+
+export const GetAdminAnalyticsDays = {
+  NUMBER_7: 7,
+  NUMBER_30: 30,
+  NUMBER_90: 90,
+} as const;
 
 export type ListAdminUsersParams = {
 search?: string;

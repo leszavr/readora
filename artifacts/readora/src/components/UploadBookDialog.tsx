@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2, Layers, Plus, List } from "lucide-react";
+import { trackBookUploadStarted } from "@/lib/analytics";
 
 interface Props {
   open: boolean;
@@ -234,6 +235,8 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     cycleIdToUse: number | undefined,
     cycleNumber: number | undefined,
   ): Promise<void> {
+    const format = fileState.file.name.toLowerCase().endsWith(".epub") ? "epub" : "fb2";
+    trackBookUploadStarted(format, fileState.file.size);
     return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload);
   }
 

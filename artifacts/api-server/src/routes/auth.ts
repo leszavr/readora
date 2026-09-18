@@ -2,7 +2,7 @@ import { Router } from "express";
 import { eq, and, gt, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { rateLimit } from "express-rate-limit";
-import { z } from "zod";
+import { z } from "zod/v4";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -37,6 +37,7 @@ const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
   username: z.string().trim().min(2).max(80),
+  referralSource: z.enum(["direct", "telegram", "habr", "productradar", "show_hn", "reddit", "vk", "seo", "other"]).optional().default("direct"),
 });
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -79,7 +80,7 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     });
     return;
   }
-  const { email, password, username } = parsed.data;
+  const { email, password, username, referralSource } = parsed.data;
 
   const [existing] = await db
     .select()
@@ -98,6 +99,9 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
       username,
       passwordHash,
       emailVerified: !emailService.isEnabled(), // Auto-verify if email disabled
+      emailVerifiedAt: emailService.isEnabled() ? null : new Date(),
+      analyticsOptIn: true,
+      referralSource,
     })
     .returning();
 
@@ -234,11 +238,22 @@ router.patch(
   async (req, res): Promise<void> => {
     const user = (req as Request & { user: typeof usersTable.$inferSelect })
       .user;
-    const { username, avatar } = req.body ?? {};
+    const updateSchema = z.object({
+      username: z.string().trim().min(2).max(80).optional(),
+      avatar: z.string().max(2048).nullable().optional(),
+      analyticsOptIn: z.boolean().optional(),
+    }).strict();
+    const parsed = updateSchema.safeParse(req.body ?? {});
+    if (!parsed.success || Object.keys(parsed.data).length === 0) {
+      res.status(400).json({ error: "Некорректные настройки профиля" });
+      return;
+    }
+    const { username, avatar, analyticsOptIn } = parsed.data;
 
     const updates: Partial<typeof usersTable.$inferSelect> = {};
     if (username != null) updates.username = username;
     if (avatar !== undefined) updates.avatar = avatar;
+    if (analyticsOptIn !== undefined) updates.analyticsOptIn = analyticsOptIn;
 
     const [updated] = await db
       .update(usersTable)
@@ -675,6 +690,7 @@ function formatUser(u: typeof usersTable.$inferSelect) {
     status: u.status,
     avatar: u.avatar ?? null,
     emailVerified: u.emailVerified,
+    analyticsOptIn: u.analyticsOptIn,
     createdAt: u.createdAt,
     lastLoginAt: u.lastLoginAt ?? null,
   };

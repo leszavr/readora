@@ -74,10 +74,18 @@ import {
   mergeSettings,
   type ReaderLocalSettings,
 } from "@/lib/reader-local-settings";
+import {
+  trackChapterOpened,
+  trackProgressSyncFinished,
+  trackReaderSessionEnded,
+  trackReaderSessionStarted,
+  trackReadingProgressed,
+} from "@/lib/analytics";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
 
 type DeviceMode = "desktop" | "mobile";
+type ChapterNavigationSource = "toc" | "next_chapter" | "prev_chapter" | "restore";
 
 function getDeviceMode(): DeviceMode {
   if (typeof window === "undefined") return "desktop";
@@ -311,6 +319,7 @@ export default function ReaderPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [readerSessionEpoch, setReaderSessionEpoch] = useState(0);
   const [pendingScrollRestore, setPendingScrollRestore] =
     useState<PendingScrollRestore | null>(null);
   
@@ -346,6 +355,9 @@ export default function ReaderPage() {
   const tocActiveChapterRef = useRef<HTMLButtonElement | null>(null);
   const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
   const programmaticScrollUntilRef = useRef(0);
+  const readerSessionRef = useRef<{ startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; interacted: boolean; ended: boolean } | null>(null);
+  const progressAnalyticsRef = useRef({ progressPct: -1, sentAt: 0, activeAt: 0 });
+  const chapterNavigationSourceRef = useRef<ChapterNavigationSource>("restore");
   // Note: removed hasInitializedChapterRef - using currentChapterIdx !== null as initialization check (voxlibris pattern)
 
   const scrollElementRef = scrollContainerRef as RefObject<HTMLElement | null>;
@@ -360,6 +372,65 @@ export default function ReaderPage() {
     bookId,
     currentChapter?.id ?? 0
   );
+
+  useEffect(() => {
+    if (chapterLoading || !chapterContent || readerSessionRef.current) return;
+    const startProgressPct = remoteProgress?.progressPercent ?? 0;
+    const session = { startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: Date.now(), interacted: false, ended: false };
+    readerSessionRef.current = session;
+    trackReaderSessionStarted(bookId, startProgressPct);
+
+    const markActive = () => {
+      if (session.ended) {
+        readerSessionRef.current = null;
+        setReaderSessionEpoch((epoch) => epoch + 1);
+        return;
+      }
+      session.interacted = true;
+      session.lastActiveAt = Date.now();
+    };
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      if (document.visibilityState === "visible" && session.interacted && now - session.lastActiveAt <= 60_000) {
+        session.activeReadingMs += 1_000;
+      }
+    }, 1_000);
+    const end = (endReason: "hidden" | "unmount" | "inactive") => {
+      if (session.ended) return;
+      session.ended = true;
+      const endProgressPct = Math.max(0, Math.min(100, progressAnalyticsRef.current.progressPct >= 0 ? progressAnalyticsRef.current.progressPct : startProgressPct));
+      trackReaderSessionEnded(bookId, startProgressPct, endProgressPct, Math.max(session.maxProgressPct, endProgressPct), session.activeReadingMs, endReason);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        end("hidden");
+      } else if (session.ended) {
+        readerSessionRef.current = null;
+        setReaderSessionEpoch((epoch) => epoch + 1);
+      }
+    };
+    const inactivityTimer = window.setInterval(() => {
+      if (session.interacted && Date.now() - session.lastActiveAt > 60_000) end("inactive");
+    }, 5_000);
+    window.addEventListener("pointerdown", markActive, { passive: true });
+    window.addEventListener("keydown", markActive);
+    window.addEventListener("touchstart", markActive, { passive: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      end("unmount");
+      window.clearInterval(timer);
+      window.clearInterval(inactivityTimer);
+      window.removeEventListener("pointerdown", markActive);
+      window.removeEventListener("keydown", markActive);
+      window.removeEventListener("touchstart", markActive);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [bookId, chapterContent, chapterLoading, readerSessionEpoch, remoteProgress?.progressPercent]);
+
+  useEffect(() => {
+    if (currentChapterIdx === null || chapterLoading || !chapterContent) return;
+    trackChapterOpened(bookId, currentChapterIdx, chapterNavigationSourceRef.current);
+  }, [bookId, chapterContent, chapterLoading, currentChapterIdx]);
 
   // ---------------------------------------------------------------------------
   // Use server-side progress as single source of truth (no localStorage)
@@ -408,6 +479,7 @@ export default function ReaderPage() {
       );
       
       const readingStatus = payload.progressPercent >= 99 ? "finished" : "reading";
+      const syncStartedAt = Date.now();
       saveProgressMutate(
         {
           id: bookId,
@@ -426,11 +498,23 @@ export default function ReaderPage() {
             });
             if (saved) {
               qc.setQueryData(getGetProgressQueryKey(bookId), saved);
+              const now = Date.now();
+              const syncDurationMs = Math.max(0, now - syncStartedAt);
+              const progressPct = saved.progressPercent ?? payload.progressPercent;
+              const analytics = progressAnalyticsRef.current;
+              const session = readerSessionRef.current;
+              if (session) session.maxProgressPct = Math.max(session.maxProgressPct, progressPct);
+              if (analytics.progressPct < 0 || now - analytics.sentAt >= 30_000 || Math.abs(progressPct - analytics.progressPct) >= 5) {
+                trackReadingProgressed(bookId, Math.max(0, currentChapterIdx ?? 0), progressPct, Math.max(0, now - (analytics.activeAt || syncStartedAt)));
+                progressAnalyticsRef.current = { progressPct, sentAt: now, activeAt: now };
+              }
+              trackProgressSyncFinished("success", syncDurationMs);
             }
             callbacks?.onSuccess?.();
           },
           onError: (err) => {
             console.error('[ReaderPage] Progress save error:', err);
+            trackProgressSyncFinished("error", Math.max(0, Date.now() - syncStartedAt));
             callbacks?.onError?.(err);
           },
         }
@@ -485,7 +569,7 @@ export default function ReaderPage() {
   // Chapter navigation
   // ---------------------------------------------------------------------------
   const navigateToChapterIndex = useCallback(
-    (nextIdx: number, options?: { positionRaw?: string }) => {
+    (nextIdx: number, options?: { positionRaw?: string; navigationSource?: ChapterNavigationSource }) => {
       if (!chapters.length) return;
 
       const bounded = Math.max(0, Math.min(chapters.length - 1, nextIdx));
@@ -500,6 +584,7 @@ export default function ReaderPage() {
       }
 
       setPendingScrollRestore(null);
+      chapterNavigationSourceRef.current = options?.navigationSource ?? "toc";
       setCurrentChapterIdx(bounded);
       setProgrammaticScroll(220);
 
@@ -639,7 +724,7 @@ export default function ReaderPage() {
       if (event.key === "ArrowLeft" && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
         if (currentChapterIdx !== null && currentChapterIdx > 0 && isAtChapterStart) {
-          navigateToChapterIndex(currentChapterIdx - 1);
+          navigateToChapterIndex(currentChapterIdx - 1, { navigationSource: "prev_chapter" });
         }
         return;
       }
@@ -647,7 +732,7 @@ export default function ReaderPage() {
       if (event.key === "ArrowRight" && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
         if (currentChapterIdx !== null && currentChapterIdx < chapters.length - 1 && isAtChapterEnd) {
-          navigateToChapterIndex(currentChapterIdx + 1);
+          navigateToChapterIndex(currentChapterIdx + 1, { navigationSource: "next_chapter" });
         }
       }
     };
@@ -694,6 +779,7 @@ export default function ReaderPage() {
       }
     }
 
+    chapterNavigationSourceRef.current = "restore";
     setCurrentChapterIdx(targetIdx);
   }, [chapters, effectiveProgress, progressQuery.isLoading, currentChapterIdx]);
 
@@ -708,6 +794,7 @@ export default function ReaderPage() {
     }
 
     if (prevBookIdRef.current !== bookId) {
+      chapterNavigationSourceRef.current = "restore";
       setCurrentChapterIdx(null);
       setPendingScrollRestore(null);
       prevBookIdRef.current = bookId;
@@ -967,7 +1054,7 @@ export default function ReaderPage() {
                       key={ch.id}
                       ref={isActive ? tocActiveChapterRef : undefined}
                       onClick={() => {
-                        navigateToChapterIndex(idx);
+                        navigateToChapterIndex(idx, { navigationSource: "toc" });
                         setTocOpen(false);
                       }}
                       className={cn(
@@ -1185,7 +1272,7 @@ export default function ReaderPage() {
             variant="ghost"
             size="sm"
             className="gap-2"
-            onClick={() => navigateToChapterIndex(currentChapterIdx - 1)}
+            onClick={() => navigateToChapterIndex(currentChapterIdx - 1, { navigationSource: "prev_chapter" })}
             disabled={currentChapterIdx <= 0 || !isAtChapterStart}
           >
             <ChevronLeft className="w-4 h-4" />
@@ -1200,7 +1287,7 @@ export default function ReaderPage() {
             variant="ghost"
             size="sm"
             className="gap-2"
-            onClick={() => navigateToChapterIndex(currentChapterIdx + 1)}
+            onClick={() => navigateToChapterIndex(currentChapterIdx + 1, { navigationSource: "next_chapter" })}
             disabled={currentChapterIdx >= chapters.length - 1 || !isAtChapterEnd}
           >
             <span className="hidden sm:inline">Следующая</span>

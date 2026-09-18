@@ -1,8 +1,9 @@
 import { lazy, Suspense, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -12,9 +13,11 @@ const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
 const AdminSmtp = lazy(() => import("@/pages/admin/AdminSmtp").then(({ AdminSmtp }) => ({ default: AdminSmtp })));
 const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
 const AdminLandingBooks = lazy(() => import("@/pages/admin/AdminLandingBooks"));
+const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
+  { id: "analytics", label: "Аналитика", icon: LineChart },
   { id: "users", label: "Пользователи", icon: Users },
   { id: "books", label: "Книги", icon: BookCopy },
   { id: "landing-books", label: "Лендинг", icon: PanelsTopLeft },
@@ -27,7 +30,9 @@ const TABS = [
 type TabId = typeof TABS[number]["id"];
 
 export default function AdminPage() {
+  const { isAdmin } = useAuth();
   const [tab, setTab] = useState<TabId>("stats");
+  const visibleTabs = isAdmin ? TABS : TABS.filter(({ id }) => id !== "analytics");
 
   return (
     <ProtectedRoute adminOnly>
@@ -44,8 +49,8 @@ export default function AdminPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-muted rounded-xl p-1 mb-6 w-fit">
-            {TABS.map(({ id, label, icon: Icon }) => (
+          <div className="flex max-w-full flex-wrap gap-1 rounded-xl bg-muted p-1 mb-6 w-fit">
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setTab(id)}
@@ -64,6 +69,7 @@ export default function AdminPage() {
 
           <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
             {tab === "stats" && <AdminStats />}
+            {tab === "analytics" && isAdmin && <AdminAnalytics />}
             {tab === "users" && <AdminUsers />}
             {tab === "books" && <AdminBooks />}
             {tab === "landing-books" && <AdminLandingBooks />}
