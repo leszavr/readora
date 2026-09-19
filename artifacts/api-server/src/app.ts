@@ -22,6 +22,8 @@ declare module "express-session" {
   interface SessionData {
     userId?: number;
     yandexOAuthState?: string;
+    vkOAuthState?: string;
+    vkOAuthCodeVerifier?: string;
   }
 }
 
@@ -49,6 +51,11 @@ type HomeRenderer = {
   renderAboutDocument(input: {
     template: string;
     publicBaseUrl: string;
+  }): string;
+  renderLegalDocument(input: {
+    template: string;
+    publicBaseUrl: string;
+    kind: "terms" | "privacy";
   }): string;
   renderPrivateSpaDocument(input: {
     template: string;
@@ -179,6 +186,28 @@ if (hasClientDist && homeRenderer) {
       res.type("html").send(homeRenderer.renderAboutDocument({
         template: indexHtml,
         publicBaseUrl: getPublicBaseUrl(),
+      }));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/terms", (_req, res, next) => {
+    try {
+      res.type("html").send(homeRenderer.renderLegalDocument({
+        template: indexHtml,
+        publicBaseUrl: getPublicBaseUrl(),
+        kind: "terms",
+      }));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/privacy", (_req, res, next) => {
+    try {
+      res.type("html").send(homeRenderer.renderLegalDocument({
+        template: indexHtml,
+        publicBaseUrl: getPublicBaseUrl(),
+        kind: "privacy",
       }));
     } catch (error) {
       next(error);

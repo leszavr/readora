@@ -13,6 +13,7 @@ import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { captureReferralSource } from "@/lib/referral-source";
+import { VkIdOAuthList } from "@/components/VkIdOAuthList";
 
 export default function RegisterPage() {
   const [, navigate] = useLocation();
@@ -188,13 +189,21 @@ export default function RegisterPage() {
             </div>
 
             {consent ? (
-              <Button variant="outline" className="w-full" asChild>
-                <a href="/api/auth/yandex">Войти через Яндекс</a>
-              </Button>
+              <div className="space-y-2">
+                <Button variant="outline" className="w-full" asChild>
+                  <a href="/api/auth/yandex">Войти через Яндекс</a>
+                </Button>
+                <VkIdOAuthList />
+              </div>
             ) : (
-              <Button variant="outline" className="w-full" disabled title="Сначала дайте согласие на обработку персональных данных">
-                Войти через Яндекс
-              </Button>
+              <div className="space-y-2">
+                <Button variant="outline" className="w-full" disabled title="Сначала дайте согласие на обработку персональных данных">
+                  Войти через Яндекс
+                </Button>
+                <Button variant="outline" className="w-full" disabled title="Сначала дайте согласие на обработку персональных данных">
+                  Войти через VK ID, Одноклассники или Mail
+                </Button>
+              </div>
             )}
 
             <p className="text-center text-sm text-muted-foreground mt-4">

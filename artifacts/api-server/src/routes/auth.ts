@@ -24,6 +24,11 @@ import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import { logger } from "../lib/logger";
+import {
+  consumeVkOAuthState,
+  createVkPkceChallenge,
+  readVkCallbackParams,
+} from "../lib/vk-oauth";
 import type { Request } from "express";
 
 const router = Router();
@@ -907,6 +912,249 @@ router.get("/auth/yandex/callback", async (req, res): Promise<void> => {
     .set({ lastLoginAt: new Date() })
     .where(eq(usersTable.id, user.id));
 
+  await regenerateSession(req);
+  req.session.userId = user.id;
+
+  const appOrigin = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  res.redirect(appOrigin.replace(/\/$/, "") + "/library");
+});
+
+// --- VK ID OAuth ---
+
+const VK_AUTH_URL = "https://id.vk.ru/authorize";
+const VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth";
+const VK_USER_INFO_URL = "https://id.vk.ru/oauth2/user_info";
+const VK_REDIRECT_PATH = "/api/auth/vk/callback";
+
+interface VkTokenResponse {
+  access_token?: string;
+  user_id?: string | number;
+  state?: string;
+  error?: string;
+  error_description?: string;
+}
+
+interface VkUserInfoResponse {
+  user?: {
+    user_id?: string | number;
+    first_name?: string;
+    last_name?: string;
+    avatar?: string;
+    email?: string;
+  };
+  user_id?: string | number;
+  first_name?: string;
+  last_name?: string;
+  avatar?: string;
+  email?: string;
+}
+
+function getVkEnv(): { clientId: string; serviceToken: string } | null {
+  const clientId = process.env.VK_CLIENT_ID;
+  const serviceToken = process.env.VK_SERVICE_TOKEN;
+  if (!clientId || !serviceToken) return null;
+  return { clientId, serviceToken };
+}
+
+function getVkRedirectUri(): string {
+  const appOrigin = process.env.APP_ORIGIN ?? "http://localhost:3000";
+  return `${appOrigin.replace(/\/$/, "")}${VK_REDIRECT_PATH}`;
+}
+
+function createPkceVerifier(): string {
+  return crypto.randomBytes(48).toString("base64url");
+}
+
+router.get("/auth/vk/config", (req, res): void => {
+  const env = getVkEnv();
+  if (!env) {
+    res.status(503).json({ error: "Вход через VK ID не настроен" });
+    return;
+  }
+
+  const state = crypto.randomBytes(32).toString("base64url");
+  const codeVerifier = createPkceVerifier();
+  req.session.vkOAuthState = state;
+  req.session.vkOAuthCodeVerifier = codeVerifier;
+
+  res.json({
+    clientId: env.clientId,
+    redirectUri: getVkRedirectUri(),
+    state,
+    codeChallenge: createVkPkceChallenge(codeVerifier),
+  });
+});
+
+router.get("/auth/vk", (req, res): void => {
+  const env = getVkEnv();
+  if (!env) {
+    res.status(503).json({ error: "Вход через VK ID не настроен" });
+    return;
+  }
+
+  const state = crypto.randomBytes(32).toString("base64url");
+  const codeVerifier = createPkceVerifier();
+  req.session.vkOAuthState = state;
+  req.session.vkOAuthCodeVerifier = codeVerifier;
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: env.clientId,
+    redirect_uri: getVkRedirectUri(),
+    state,
+    code_challenge: createVkPkceChallenge(codeVerifier),
+    code_challenge_method: "S256",
+    scope: "email vkid.personal_info",
+  });
+  res.redirect(`${VK_AUTH_URL}?${params.toString()}`);
+});
+
+router.get("/auth/vk/callback", async (req, res): Promise<void> => {
+  const env = getVkEnv();
+  if (!env) {
+    res.status(503).json({ error: "Вход через VK ID не настроен" });
+    return;
+  }
+
+  const { code, state, deviceId } = readVkCallbackParams(req);
+  const codeVerifier = consumeVkOAuthState(req.session, state);
+
+  if (!code || !deviceId || !codeVerifier) {
+    res.status(400).json({ error: "Недействительный запрос авторизации VK ID" });
+    return;
+  }
+
+  let tokenData: VkTokenResponse;
+  try {
+    const tokenRes = await fetch(VK_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: env.clientId,
+        service_token: env.serviceToken,
+        code,
+        code_verifier: codeVerifier,
+        device_id: deviceId,
+        redirect_uri: getVkRedirectUri(),
+        state,
+      }).toString(),
+    });
+    const tokenResponse = (await tokenRes.json()) as VkTokenResponse;
+    if (!tokenRes.ok || !tokenResponse.access_token) {
+      logger.warn(
+        { statusCode: tokenRes.status, providerError: tokenResponse.error ?? "missing_access_token" },
+        "VK ID OAuth token exchange failed",
+      );
+      res.status(502).json({ error: "Не удалось получить токен VK ID. Повторите вход." });
+      return;
+    }
+    tokenData = tokenResponse;
+  } catch (error) {
+    logger.warn({ err: error }, "VK ID OAuth token request failed");
+    res.status(502).json({ error: "Не удалось получить токен VK ID" });
+    return;
+  }
+
+  let vkUserInfo: VkUserInfoResponse;
+  try {
+    const accessToken = tokenData.access_token;
+    if (!accessToken) {
+      res.status(502).json({ error: "VK ID не вернул токен доступа" });
+      return;
+    }
+    const infoRes = await fetch(VK_USER_INFO_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        access_token: accessToken,
+        client_id: env.clientId,
+      }).toString(),
+    });
+    if (!infoRes.ok) {
+      logger.warn({ statusCode: infoRes.status }, "VK ID user-info request failed");
+      res.status(502).json({ error: "Не удалось получить данные пользователя VK ID" });
+      return;
+    }
+    vkUserInfo = (await infoRes.json()) as VkUserInfoResponse;
+  } catch (error) {
+    logger.warn({ err: error }, "VK ID user-info request failed");
+    res.status(502).json({ error: "Не удалось получить данные пользователя VK ID" });
+    return;
+  }
+
+  const vkUser = vkUserInfo.user ?? vkUserInfo;
+  const externalId = String(vkUser.user_id ?? tokenData.user_id ?? "");
+  const email = (vkUser.email ?? "").toLowerCase().trim();
+  if (!externalId || !email) {
+    res.status(400).json({ error: "VK ID не вернул email. Разрешите доступ к почте в настройках приложения." });
+    return;
+  }
+
+  const [existingByVkId] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.externalProvider, "vk"), eq(usersTable.externalId, externalId)));
+  const [existingByEmail] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email));
+  const existing = existingByVkId ?? existingByEmail;
+
+  if (!existing && !(await isRegistrationEnabled())) {
+    res.status(403).json({ error: "Регистрация временно закрыта" });
+    return;
+  }
+
+  const maintenanceMode = (await getSettingValue(MAINTENANCE_MODE_KEY)) === "true";
+  if (maintenanceMode && (!existing || (existing.role !== "admin" && existing.role !== "moderator"))) {
+    res.status(403).json({
+      error: "Вход временно недоступен из-за технического обслуживания",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+
+  let user;
+  if (existing) {
+    if (existing.externalProvider === "vk" && existing.externalId === externalId) {
+      user = existing;
+    } else if (existing.externalProvider !== null || existing.externalId !== null) {
+      res.status(409).json({ error: "Email уже привязан к другой учётной записи" });
+      return;
+    } else {
+      await db
+        .update(usersTable)
+        .set({ externalProvider: "vk", externalId })
+        .where(eq(usersTable.id, existing.id));
+      const [updated] = await db.select().from(usersTable).where(eq(usersTable.id, existing.id));
+      user = updated;
+    }
+  } else {
+    const username = [vkUser.first_name, vkUser.last_name].filter(Boolean).join(" ").trim() || `VK ${externalId}`;
+    const [created] = await db
+      .insert(usersTable)
+      .values({
+        email,
+        username: username.slice(0, 80),
+        passwordHash: null,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+        externalProvider: "vk",
+        externalId,
+        avatar: vkUser.avatar ?? null,
+        referralSource: "vk",
+      })
+      .returning();
+    user = created;
+  }
+
+  if (user.status === "blocked") {
+    res.status(401).json({ error: "Аккаунт заблокирован" });
+    return;
+  }
+
+  await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
   await regenerateSession(req);
   req.session.userId = user.id;
 
