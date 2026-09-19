@@ -608,6 +608,21 @@ export interface AdminAnalyticsSummary {
   averageSessionReadingMs: number;
 }
 
+export type AdminAnalyticsFunnelStepStep = typeof AdminAnalyticsFunnelStepStep[keyof typeof AdminAnalyticsFunnelStepStep];
+
+
+export const AdminAnalyticsFunnelStepStep = {
+  registered: 'registered',
+  upload_completed: 'upload_completed',
+  first_read: 'first_read',
+} as const;
+
+export interface AdminAnalyticsFunnelStep {
+  step: AdminAnalyticsFunnelStepStep;
+  label: string;
+  count: number;
+}
+
 export interface AdminAnalyticsRetention {
   d7EligibleUsers: number;
   d7RetainedUsers: number;
@@ -649,6 +664,11 @@ export interface AdminAnalyticsMarketing {
   emailVerificationRate: number;
   usersWithBooks: number;
   firstBookUploadRate: number;
+  usersWithCompletedUploads: number;
+  completedUploadRate: number;
+  usersWithFirstRead: number;
+  firstReadRate: number;
+  funnel: AdminAnalyticsFunnelStep[];
   retention: AdminAnalyticsRetention;
   registrationTrend: AdminAnalyticsRegistrationWeek[];
   referralSources: AdminAnalyticsReferralSource[];

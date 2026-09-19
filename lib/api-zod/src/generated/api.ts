@@ -689,6 +689,15 @@ export const GetAdminAnalyticsResponse = zod.object({
   "emailVerificationRate": zod.number(),
   "usersWithBooks": zod.number(),
   "firstBookUploadRate": zod.number(),
+  "usersWithCompletedUploads": zod.number(),
+  "completedUploadRate": zod.number(),
+  "usersWithFirstRead": zod.number(),
+  "firstReadRate": zod.number(),
+  "funnel": zod.array(zod.object({
+  "step": zod.enum(['registered', 'upload_completed', 'first_read']),
+  "label": zod.string(),
+  "count": zod.number()
+})),
   "retention": zod.object({
   "d7EligibleUsers": zod.number(),
   "d7RetainedUsers": zod.number(),
