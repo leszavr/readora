@@ -2008,7 +2008,7 @@ components:
 
     AdminAnalyticsMarketing:
       type: object
-      required: [registrations, verifiedUsers, emailVerificationRate, usersWithBooks, firstBookUploadRate, retention, registrationTrend, referralSources]
+      required: [registrations, verifiedUsers, emailVerificationRate, usersWithBooks, firstBookUploadRate, usersWithCompletedUploads, completedUploadRate, usersWithFirstRead, firstReadRate, funnel, retention, registrationTrend, referralSources]
       properties:
         registrations:
           type: integer
@@ -2020,6 +2020,18 @@ components:
           type: integer
         firstBookUploadRate:
           type: number
+        usersWithCompletedUploads:
+          type: integer
+        completedUploadRate:
+          type: number
+        usersWithFirstRead:
+          type: integer
+        firstReadRate:
+          type: number
+        funnel:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsFunnelStep"
         retention:
           $ref: "#/components/schemas/AdminAnalyticsRetention"
         registrationTrend:
@@ -2030,6 +2042,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminAnalyticsReferralSource"
+
+    AdminAnalyticsFunnelStep:
+      type: object
+      required: [step, label, count]
+      properties:
+        step:
+          type: string
+          enum: [registered, upload_completed, first_read]
+        label:
+          type: string
+        count:
+          type: integer
 
     AdminAnalyticsRetention:
       type: object

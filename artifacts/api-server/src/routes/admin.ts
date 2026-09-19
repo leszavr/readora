@@ -9,6 +9,7 @@ import {
   booksTable,
   genresTable,
   readEventsTable,
+  bookUploadJobsTable,
   appSettingsTable,
   MAINTENANCE_MODE_KEY,
   MAINTENANCE_REASON_KEY,
@@ -222,6 +223,12 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
         usersWithBooks: sql<number>`count(*) filter (where exists (
           select 1 from ${booksTable} as uploaded_book where uploaded_book.owner_user_id = ${usersTable.id}
         ))::int`,
+        usersWithCompletedUploads: sql<number>`count(*) filter (where exists (
+          select 1 from ${bookUploadJobsTable} as upload_job where upload_job.owner_user_id = ${usersTable.id} and upload_job.status = 'completed'
+        ))::int`,
+        usersWithFirstRead: sql<number>`count(*) filter (where exists (
+          select 1 from ${readEventsTable} as read_event where read_event.user_id = ${usersTable.id}
+        ))::int`,
       })
       .from(usersTable)
       .where(sql`${usersTable.createdAt} >= ${rangeStart}::date and ${usersTable.createdAt} < (${rangeEnd}::date + interval '1 day')`),
@@ -349,6 +356,15 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       emailVerificationRate: toRate(marketing.verifiedUsers, marketing.registrations),
       usersWithBooks: marketing.usersWithBooks,
       firstBookUploadRate: toRate(marketing.usersWithBooks, marketing.registrations),
+      usersWithCompletedUploads: marketing.usersWithCompletedUploads,
+      completedUploadRate: toRate(marketing.usersWithCompletedUploads, marketing.registrations),
+      usersWithFirstRead: marketing.usersWithFirstRead,
+      firstReadRate: toRate(marketing.usersWithFirstRead, marketing.registrations),
+      funnel: [
+        { step: "registered", label: "Регистрация", count: marketing.registrations },
+        { step: "upload_completed", label: "Первая успешная загрузка", count: marketing.usersWithCompletedUploads },
+        { step: "first_read", label: "Первое чтение", count: marketing.usersWithFirstRead },
+      ],
       retention: {
         d7EligibleUsers: retention.d7EligibleUsers,
         d7RetainedUsers: retention.d7RetainedUsers,

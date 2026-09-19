@@ -162,15 +162,60 @@ export default function AdminAnalytics() {
         </div>
       </section>
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle>Воронка активации</CardTitle>
+          <CardDescription>Новые пользователи за период: от регистрации до первого чтения. Доля — относительно всех регистраций.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {marketing.funnel.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Данных пока нет.</p>
+          ) : (
+            <div className="space-y-3">
+              {marketing.funnel.map((step, index) => {
+                const previous = index > 0 ? marketing.funnel[index - 1] : null;
+                const shareOfFirst = marketing.funnel[0].count === 0 ? 0 : Math.round((step.count / marketing.funnel[0].count) * 100);
+                const dropOff = previous && previous.count > 0 ? Math.round(((previous.count - step.count) / previous.count) * 100) : null;
+                return (
+                  <div key={step.step} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{step.label}</span>
+                      <span className="text-muted-foreground">
+                        {formatNumber(step.count)}
+                        {previous && dropOff !== null && (
+                          <span className="ml-2 text-xs">−{dropOff}% с прошлого шага</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${shareOfFirst}%` }}
+                        role="progressbar"
+                        aria-valuenow={shareOfFirst}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${step.label}: ${step.count}`}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{shareOfFirst}% от регистраций</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle>Возвращаемость читателей</CardTitle>
-            <CardDescription>Пользователь читал в день регистрации и вернулся в указанный срок.</CardDescription>
+            <CardDescription>Пользователь читал в день регистрации и вернулся к чтению в указанный срок.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
-            <div><p className="text-2xl font-bold">{formatPercent(marketing.retention.d7Rate)}</p><p className="text-sm text-muted-foreground">D7: {formatNumber(marketing.retention.d7RetainedUsers)} из {formatNumber(marketing.retention.d7EligibleUsers)}</p></div>
-            <div><p className="text-2xl font-bold">{formatPercent(marketing.retention.d30Rate)}</p><p className="text-sm text-muted-foreground">D30: {formatNumber(marketing.retention.d30RetainedUsers)} из {formatNumber(marketing.retention.d30EligibleUsers)}</p></div>
+            <div><p className="text-2xl font-bold">{formatPercent(marketing.retention.d7Rate)}</p><p className="text-sm text-muted-foreground">Вернулись через 7 дней: {formatNumber(marketing.retention.d7RetainedUsers)} из {formatNumber(marketing.retention.d7EligibleUsers)}</p></div>
+            <div><p className="text-2xl font-bold">{formatPercent(marketing.retention.d30Rate)}</p><p className="text-sm text-muted-foreground">Вернулись через 30 дней: {formatNumber(marketing.retention.d30RetainedUsers)} из {formatNumber(marketing.retention.d30EligibleUsers)}</p></div>
           </CardContent>
         </Card>
         <Card>
