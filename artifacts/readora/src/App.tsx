@@ -19,6 +19,8 @@ const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const ConfirmPasswordChangePage = lazy(() => import("@/pages/ConfirmPasswordChangePage"));
+const TermsPage = lazy(() => import("@/pages/TermsPage"));
+const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
 
 function Router() {
   return (
@@ -26,6 +28,8 @@ function Router() {
       <Switch>
         <Route path="/" component={HomePage} />
         <Route path="/about" component={AboutPage} />
+        <Route path="/terms" component={TermsPage} />
+        <Route path="/privacy" component={PrivacyPage} />
         <Route path="/login" component={LoginPage} />
         <Route path="/register" component={RegisterPage} />
         <Route path="/verify/:token" component={VerifyEmailPage} />

@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
 import { EmailVerificationModal } from "@/components/EmailVerificationModal";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
+import { VkIdOAuthList } from "@/components/VkIdOAuthList";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -218,6 +219,7 @@ export default function LoginPage() {
                 Войти через Яндекс
               </Button>
             </a>
+            <VkIdOAuthList />
 
             {registrationStatus?.enabled === true && (
               <p className="text-center text-sm text-muted-foreground mt-4">

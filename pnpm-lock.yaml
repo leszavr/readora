@@ -195,6 +195,10 @@ importers:
         version: 3.1.0
 
   artifacts/readora:
+    dependencies:
+      '@vkid/sdk':
+        specifier: 2.6.8
+        version: 2.6.8
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -2490,6 +2494,9 @@ packages:
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
 
+  '@vkid/sdk@2.6.8':
+    resolution: {integrity: sha512-8XGUcpWWqNGICY0c3zWlhHwiURf87cyo4nJmn80CHDLcM6OedSpyD2DGIN2AAvMVxngj4drxiNc16ikzYy57Rw==}
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -2676,6 +2683,10 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
+
+  crypto-js@4.2.0:
+    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
@@ -6072,6 +6083,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@vkid/sdk@2.6.8':
+    dependencies:
+      crypto-js: 4.2.0
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -6263,6 +6278,8 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
+
+  crypto-js@4.2.0: {}
 
   css-select@5.2.2:
     dependencies:

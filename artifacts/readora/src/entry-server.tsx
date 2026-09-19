@@ -2,6 +2,7 @@ import { renderToString } from "react-dom/server";
 import { AboutPage, aboutFaqItems } from "@/components/AboutPage";
 import { AppProviders } from "@/components/AppProviders";
 import { LandingPage } from "@/components/LandingPage";
+import { LegalDocumentPage, type LegalDocumentKind } from "@/components/LegalDocumentPage";
 import type { LandingData } from "@/landing-data";
 
 const homePageMetadata = {
@@ -16,6 +17,19 @@ const aboutPageMetadata = {
   path: "/about",
 };
 
+const legalPageMetadata = {
+  terms: {
+    title: "Правила пользования Readora",
+    description: "Правила пользования личной веб-библиотекой Readora.",
+    path: "/terms",
+  },
+  privacy: {
+    title: "Политика конфиденциальности Readora",
+    description: "Политика обработки персональных данных пользователей Readora.",
+    path: "/privacy",
+  },
+} as const;
+
 type HomeDocumentInput = {
   template: string;
   publicBaseUrl: string;
@@ -24,7 +38,7 @@ type HomeDocumentInput = {
   registrationStatus: LandingData["registrationStatus"];
 };
 
-type PageMetadata = typeof homePageMetadata | typeof aboutPageMetadata;
+type PageMetadata = typeof homePageMetadata | typeof aboutPageMetadata | (typeof legalPageMetadata)[LegalDocumentKind];
 
 function serializeJson(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
@@ -69,6 +83,10 @@ export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocume
     })),
   };
   return renderDocument(template, publicBaseUrl, aboutPageMetadata, <AboutPage />, "", renderJsonLd(faqSchema));
+}
+
+export function renderLegalDocument({ template, publicBaseUrl, kind }: Omit<HomeDocumentInput, "popularBooks"> & { kind: LegalDocumentKind }): string {
+  return renderDocument(template, publicBaseUrl, legalPageMetadata[kind], <LegalDocumentPage kind={kind} />);
 }
 
 export function renderPrivateSpaDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "popularBooks">): string {
