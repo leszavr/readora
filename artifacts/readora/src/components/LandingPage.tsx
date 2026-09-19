@@ -77,15 +77,24 @@ export function LandingPage({
       </header>
 
       <main className="flex-1">
-        <section className="relative bg-gradient-to-b from-primary/5 via-background to-background border-b border-border">
-          <div className="max-w-5xl mx-auto px-4 py-20 md:py-28 text-center">
-            <div className="inline-flex items-center justify-center rounded-3xl bg-primary/15 px-6 py-4 mb-6 shadow-lg">
-              <img src="/readora-wordmark.webp" alt="Readora" className="h-10 w-auto" loading="eager" decoding="async" />
-            </div>
-            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+        <section className="relative isolate overflow-hidden border-b border-border">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 -z-20"
+            style={{
+              backgroundImage: "linear-gradient(rgba(6, 12, 18, 0.34), rgba(6, 12, 18, 0.76)), url('/hero-bg.webp')",
+              backgroundPosition: "center center",
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "cover",
+              backgroundAttachment: "scroll",
+            }}
+          />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/25 via-background/75 to-background" />
+          <div className="max-w-5xl mx-auto px-4 py-20 md:py-28 text-center relative">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight text-white md:text-foreground bg-gradient-to-r from-white via-white to-white/80 md:from-foreground md:via-foreground md:to-foreground/70 md:bg-clip-text bg-clip-text text-transparent md:text-transparent drop-shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
               Ваша личная библиотека
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-lg md:text-xl text-white/90 md:text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
               Readora — удобное приложение для чтения книг в форматах FB2 и EPUB. Загружайте, читайте и отслеживайте прогресс без ограничений.
             </p>
             <div className="flex flex-wrap gap-3 justify-center mb-8">
@@ -107,7 +116,7 @@ export function LandingPage({
                 </>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">Бесплатно • Без рекламы • Личные данные остаются вашими</p>
+            <p className="text-sm text-white/80 md:text-muted-foreground">Бесплатно • Без рекламы • Личные данные остаются вашими</p>
           </div>
         </section>
 
@@ -190,9 +199,30 @@ export function LandingPage({
             <div>
               <h4 className="font-semibold mb-3 text-sm">Навигация</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="/" className="hover:text-foreground transition-colors">Главная</a></li>
-                <li><a href="/library" className="hover:text-foreground transition-colors">Библиотека</a></li>
-                <li><a href="/profile" className="hover:text-foreground transition-colors">Профиль</a></li>
+                <li>
+                  <a href="/" className="hover:text-foreground transition-colors flex items-center gap-2">
+                    <BookOpen className="w-3 h-3" />
+                    Главная
+                  </a>
+                </li>
+                <li>
+                  <a href="/library" className="hover:text-foreground transition-colors flex items-center gap-2">
+                    <Library className="w-3 h-3" />
+                    Библиотека
+                  </a>
+                </li>
+                <li>
+                  <a href="/profile" className="hover:text-foreground transition-colors flex items-center gap-2">
+                    <Settings className="w-3 h-3" />
+                    Профиль
+                  </a>
+                </li>
+                <li>
+                  <button onClick={() => setIsFeedbackOpen(true)} className="hover:text-foreground transition-colors flex items-center gap-2 text-left">
+                    <MessageSquare className="w-3 h-3" />
+                    Обратная связь
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -202,13 +232,7 @@ export function LandingPage({
                 <li><a href="/about" className="hover:text-foreground transition-colors">О сервисе</a></li>
                 <li><button onClick={() => setActiveLegalPage("terms")} className="hover:text-foreground transition-colors text-left">Правила пользования</button></li>
                 <li><button onClick={() => setActiveLegalPage("copyright")} className="hover:text-foreground transition-colors text-left">Правообладателям</button></li>
-                <li><button onClick={() => setActiveLegalPage("privacy")} className="hover:text-foreground transition-colors text-left">Политика обработки персональных данных</button></li>
-                <li>
-                  <button onClick={() => setIsFeedbackOpen(true)} className="hover:text-foreground transition-colors flex items-center gap-2 text-left">
-                    <MessageSquare className="w-3 h-3" />
-                    Обратная связь
-                  </button>
-                </li>
+                <li><button onClick={() => setActiveLegalPage("privacy")} className="hover:text-foreground transition-colors text-left break-words">Политика обработки персональных данных</button></li>
               </ul>
             </div>
           </div>
