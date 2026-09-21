@@ -76,6 +76,13 @@ export interface LegacyReadingPosition {
 
 export type ReadingPosition = SemanticReadingPosition | LegacyReadingPosition;
 
+export interface TextSelectionAnchor {
+  version: 1;
+  startOffset: number;
+  endOffset: number;
+  selectedText: string;
+}
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -245,6 +252,138 @@ function findTextNodeInElement(
   
   // Если offset больше длины текста — возвращаем конец последнего узла
   return null;
+}
+
+function getTextOffset(root: HTMLElement, node: Node, offset: number): number {
+  const range = document.createRange();
+  range.setStart(root, 0);
+  range.setEnd(node, offset);
+  return range.toString().length;
+}
+
+function findTextPosition(root: HTMLElement, textOffset: number): { node: Text; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let remaining = Math.max(0, textOffset);
+  let node: Node | null;
+
+  while ((node = walker.nextNode())) {
+    const textNode = node as Text;
+    if (remaining <= textNode.data.length) {
+      return { node: textNode, offset: remaining };
+    }
+    remaining -= textNode.data.length;
+  }
+
+  return null;
+}
+
+export function findTextRangeByText(root: HTMLElement, text: string): Range | null {
+  const target = text.trim();
+  if (!target) return null;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let fullText = "";
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    fullText += node.textContent ?? "";
+  }
+
+  const startOffset = fullText.indexOf(target);
+  if (startOffset < 0) return null;
+  return restoreTextSelectionAnchor(
+    { version: 1, startOffset, endOffset: startOffset + target.length, selectedText: target },
+    root,
+  );
+}
+
+export function captureTextSelectionAnchor(
+  selection: Selection | null,
+  contentArea: HTMLElement,
+): TextSelectionAnchor | null {
+  if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
+
+  const range = selection.getRangeAt(0);
+  if (!contentArea.contains(range.startContainer) || !contentArea.contains(range.endContainer)) return null;
+
+  const startOffset = getTextOffset(contentArea, range.startContainer, range.startOffset);
+  const endOffset = getTextOffset(contentArea, range.endContainer, range.endOffset);
+  const selectedText = range.toString().trim().slice(0, 100);
+
+  if (!selectedText || endOffset <= startOffset) return null;
+
+  return { version: 1, startOffset, endOffset, selectedText };
+}
+
+export function restoreTextSelectionAnchor(
+  anchor: TextSelectionAnchor,
+  contentArea: HTMLElement,
+): Range | null {
+  if (anchor.version !== 1 || anchor.endOffset <= anchor.startOffset) return null;
+
+  const start = findTextPosition(contentArea, anchor.startOffset);
+  const end = findTextPosition(contentArea, anchor.endOffset);
+  if (!start || !end) return null;
+
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  return range;
+}
+
+export function showTextSelectionHighlight(
+  range: Range,
+  scrollContainer?: HTMLElement | null,
+): () => void {
+  let layers: HTMLElement[] = [];
+
+  const createLayers = (count: number) => Array.from({ length: count }, () => {
+    const layer = document.createElement("div");
+    layer.className = "readora-note-highlight-overlay";
+    document.body.appendChild(layer);
+    return layer;
+  });
+
+  const updatePositions = () => {
+    const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+    if (rects.length !== layers.length) {
+      layers.forEach((layer) => layer.remove());
+      layers = createLayers(rects.length);
+    }
+    rects.forEach((rect, index) => {
+      const layer = layers[index];
+      layer.style.left = `${rect.left}px`;
+      layer.style.top = `${rect.top}px`;
+      layer.style.width = `${rect.width}px`;
+      layer.style.height = `${rect.height}px`;
+    });
+  };
+
+  updatePositions();
+  if (layers.length === 0) return () => undefined;
+
+  let animationFrame = 0;
+  const schedulePositionUpdate = () => {
+    window.cancelAnimationFrame(animationFrame);
+    animationFrame = window.requestAnimationFrame(updatePositions);
+  };
+  scrollContainer?.addEventListener("scroll", schedulePositionUpdate, { passive: true });
+  window.addEventListener("resize", schedulePositionUpdate, { passive: true });
+
+  const showTimer = window.setTimeout(() => layers.forEach((layer) => layer.classList.add("is-visible")), 0);
+  const timers = [
+    window.setTimeout(() => layers.forEach((layer) => layer.classList.remove("is-visible")), 2_000),
+  ];
+
+  function cleanup() {
+    window.clearTimeout(showTimer);
+    timers.forEach((timer) => window.clearTimeout(timer));
+    window.cancelAnimationFrame(animationFrame);
+    scrollContainer?.removeEventListener("scroll", schedulePositionUpdate);
+    window.removeEventListener("resize", schedulePositionUpdate);
+    layers.forEach((layer) => layer.remove());
+  }
+
+  return cleanup;
 }
 
 // =============================================================================

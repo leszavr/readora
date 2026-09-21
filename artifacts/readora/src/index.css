@@ -224,3 +224,18 @@
     pointer-events: none;
   }
 }
+
+.readora-note-highlight-overlay {
+  position: fixed;
+  z-index: 55;
+  pointer-events: none;
+  border-radius: 0.15rem;
+  background: rgba(250, 204, 21, 0.9);
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.35);
+  opacity: 0;
+  transition: opacity 1s linear;
+}
+
+.readora-note-highlight-overlay.is-visible {
+  opacity: 1;
+}

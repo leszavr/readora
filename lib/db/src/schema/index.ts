@@ -6,6 +6,8 @@ export * from "./book_upload_jobs";
 export * from "./book_genres";
 export * from "./chapters";
 export * from "./reading_progress";
+export * from "./bookmarks";
+export * from "./notes";
 export * from "./reader_settings";
 export * from "./read_events";
 export * from "./app_settings";

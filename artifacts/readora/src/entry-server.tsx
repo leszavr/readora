@@ -1,4 +1,5 @@
 import { renderToString } from "react-dom/server";
+import { Router as WouterRouter } from "wouter";
 import { AboutPage, aboutFaqItems } from "@/components/AboutPage";
 import { AppProviders } from "@/components/AppProviders";
 import { LandingPage } from "@/components/LandingPage";
@@ -60,7 +61,11 @@ function renderTemplate(template: string, publicBaseUrl: string, metadata: PageM
 
 function renderDocument(template: string, publicBaseUrl: string, metadata: PageMetadata, page: React.ReactNode, data = "", structuredData = ""): string {
   return renderTemplate(template, publicBaseUrl, metadata, structuredData)
-    .replace("<!--app-html-->", renderToString(<AppProviders>{page}</AppProviders>))
+    .replace("<!--app-html-->", renderToString(
+      <AppProviders>
+        <WouterRouter ssrPath={metadata.path}>{page}</WouterRouter>
+      </AppProviders>,
+    ))
     .replace("<!--landing-data-->", data);
 }
 

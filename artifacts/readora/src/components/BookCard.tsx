@@ -1,14 +1,6 @@
-import { Link } from "wouter";
-import {
-  getGetBookQueryKey,
-  getGetProgressQueryKey,
-  getListBooksQueryKey,
-  useSaveProgress,
-} from "@workspace/api-client-react";
+import { Link, useLocation } from "wouter";
 import type { Book } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, Check, Circle } from "lucide-react";
@@ -16,7 +8,8 @@ import { BookOpen, Check, Circle } from "lucide-react";
 interface Props {
   book: Book;
   className?: string;
-  compactActions?: boolean;
+  /** Кнопка "Читать снова" вместо "Читать" (для книжной полки) */
+  shelf?: boolean;
 }
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -26,19 +19,18 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
   abandoned: { label: "Заброшено", variant: "destructive" },
 };
 
-export function BookCard({ book, className, compactActions = false }: Readonly<Props>) {
-  const qc = useQueryClient();
-  const { mutate: saveProgress, isPending: isUpdatingStatus } = useSaveProgress({
-    mutation: {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListBooksQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetBookQueryKey(book.id) });
-        qc.invalidateQueries({ queryKey: getGetProgressQueryKey(book.id) });
-      },
-    },
-  });
+const STATUS_ICON: Record<string, typeof Check> = {
+  reading: BookOpen,
+  finished: Check,
+  not_started: Circle,
+  abandoned: Circle,
+};
+
+export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
+  const [, navigate] = useLocation();
 
   const status = book.readingStatus ? STATUS_LABELS[book.readingStatus] : STATUS_LABELS.not_started;
+  const StatusIcon = STATUS_ICON[book.readingStatus ?? "not_started"] ?? Circle;
   const hasCycleNumber = typeof book.cycleNumber === "number";
   const cycleBadgeTitle = book.cycleName
     ? hasCycleNumber
@@ -46,19 +38,10 @@ export function BookCard({ book, className, compactActions = false }: Readonly<P
       : book.cycleName
     : undefined;
 
-  const setQuickStatus = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    readingStatus: "finished" | "not_started",
-  ) => {
+  const handleRead = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    saveProgress({
-      id: book.id,
-      data: {
-        readingStatus,
-        progressPercent: readingStatus === "finished" ? 100 : 0,
-      },
-    });
+    navigate(`/reader/${book.id}`);
   };
 
   return (
@@ -94,7 +77,15 @@ export function BookCard({ book, className, compactActions = false }: Readonly<P
           )}
 
           {/* Format badge */}
-          <div className="absolute top-2 right-2">
+          <div className="absolute top-2 right-2 flex items-center gap-1.5">
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white shadow-sm backdrop-blur-sm"
+              title={status.label}
+              aria-label={status.label}
+            >
+              <StatusIcon className="size-3" aria-hidden="true" />
+              <span className="hidden sm:inline">{status.label}</span>
+            </span>
             <span className="bg-black/60 text-white text-xs font-mono px-1.5 py-0.5 rounded uppercase">
               {book.format}
             </span>
@@ -109,11 +100,10 @@ export function BookCard({ book, className, compactActions = false }: Readonly<P
           )}
 
           <div className="mt-auto pt-2 flex items-center justify-between gap-2">
-            <Badge variant={status.variant} className="text-xs">
-              {status.label}
-            </Badge>
-            {book.progressPercent != null && book.progressPercent > 0 && (
-              <span className="text-xs text-muted-foreground">{Math.round(book.progressPercent)}%</span>
+            {book.progressPercent != null && book.progressPercent > 0 ? (
+              <span className="text-xs text-muted-foreground ml-auto">{Math.round(book.progressPercent)}%</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">{status.label}</span>
             )}
           </div>
 
@@ -121,34 +111,16 @@ export function BookCard({ book, className, compactActions = false }: Readonly<P
             <Progress value={book.progressPercent} className="h-1" />
           )}
 
-          <div className="grid grid-cols-2 gap-2 pt-1 min-w-0">
-            <Button
-              type="button"
-              size="sm"
-              variant={book.readingStatus === "finished" ? "secondary" : "outline"}
-              className="h-7 min-w-0 px-2 text-[11px] sm:px-3"
-              disabled={isUpdatingStatus}
-              onClick={(event) => setQuickStatus(event, "finished")}
-              aria-label="Отметить как прочитанную"
-              title="Прочитано"
-            >
-              <Check className={cn("size-3.5", !compactActions && "sm:hidden")} aria-hidden="true" />
-              <span className={cn(compactActions ? "hidden" : "hidden sm:inline")}>Прочитано</span>
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={book.readingStatus === "not_started" || !book.readingStatus ? "secondary" : "outline"}
-              className="h-7 min-w-0 px-2 text-[11px] sm:px-3"
-              disabled={isUpdatingStatus}
-              onClick={(event) => setQuickStatus(event, "not_started")}
-              aria-label="Отметить как нечитанную"
-              title="Не читал"
-            >
-              <Circle className={cn("size-3.5", !compactActions && "sm:hidden")} aria-hidden="true" />
-              <span className={cn(compactActions ? "hidden" : "hidden sm:inline")}>Не читал</span>
-            </Button>
-          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="mt-1 w-full h-8 text-xs font-medium"
+            onClick={handleRead}
+            aria-label={`${shelf ? "Читать снова" : "Читать"}: ${book.title}`}
+          >
+            <BookOpen className="size-3.5" aria-hidden="true" />
+            {shelf ? "Читать снова" : "Читать"}
+          </Button>
         </div>
       </div>
     </Link>

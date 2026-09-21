@@ -84,7 +84,7 @@ export function CycleStack({ cycleName, books, className }: Props) {
           <div className={cn("mt-4", DIALOG_CARD_GRID_CLASS)}>
             {books.map((b) => (
               <div key={b.id} className={cn("min-w-0", CARD_ITEM_HEIGHT_CLASS)}>
-                <BookCard book={b} className="h-full" compactActions />
+                <BookCard book={b} className="h-full" shelf />
               </div>
             ))}
           </div>
