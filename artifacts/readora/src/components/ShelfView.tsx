@@ -94,7 +94,7 @@ export function ShelfView({
                 className="border-2 bg-background"
               />
             </div>
-            <BookCard book={book} className="h-full" />
+            <BookCard book={book} className="h-full" shelf />
           </div>
         ))}
       </div>
@@ -139,13 +139,13 @@ export function ShelfView({
     return (
       <div className={CARD_GRID_CLASS}>
         {items.map((item, idx) => (
-          <div key={idx} className={`relative self-start ${CARD_ITEM_HEIGHT_CLASS}`}>
-            {item.type === "cycle" ? (
-              <CycleStack cycleName={item.cycleName} books={item.books} className="h-full" />
-            ) : (
-              <BookCard book={item.book} className="h-full" />
-            )}
-          </div>
+              <div key={idx} className={`relative self-start ${CARD_ITEM_HEIGHT_CLASS}`}>
+                {item.type === "cycle" ? (
+                  <CycleStack cycleName={item.cycleName} books={item.books} className="h-full" />
+                ) : (
+                  <BookCard book={item.book} className="h-full" shelf />
+                )}
+              </div>
         ))}
       </div>
     );
@@ -163,7 +163,7 @@ export function ShelfView({
           <div className={CARD_GRID_CLASS}>
             {singleBooks.map((book) => (
               <div key={book.id} className={`self-start ${CARD_ITEM_HEIGHT_CLASS}`}>
-                <BookCard book={book} className="h-full" />
+                <BookCard book={book} className="h-full" shelf />
               </div>
             ))}
           </div>

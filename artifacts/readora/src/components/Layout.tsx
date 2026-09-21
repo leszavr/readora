@@ -1,5 +1,4 @@
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,14 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BookOpen, Library, LogOut, User as UserIcon, ShieldCheck, MessageSquare } from "lucide-react";
+import { Library, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
-import { LegalOverlay } from "@/components/LegalOverlay";
-import { FeedbackModal } from "@/components/FeedbackModal";
-import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
-import { CopyrightHoldersContent } from "@/components/legal/CopyrightHoldersContent";
-import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
+import { SiteFooter } from "@/components/SiteFooter";
 import { clearAnalyticsQueue } from "@/lib/analytics";
 
 function BrandWordmark({ className }: Readonly<{ className?: string }>) {
@@ -40,15 +35,10 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const qc = useQueryClient();
   const { data: maintenanceStatus } = useMaintenanceStatus();
   const { data: registrationStatus } = useRegistrationStatus();
-  
-  // State для управления оверлеями и модалами
-  const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "copyright" | "privacy" | null>(null);
-  const [legalStack, setLegalStack] = useState<Array<"terms" | "copyright" | "privacy">>([]);
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  
+
   // Показываем баннер админу при активном режиме обслуживания
   const showAdminMaintenanceBanner = isAdmin && maintenanceStatus?.enabled;
-  
+
   async function handleLogout() {
     if (user) await clearAnalyticsQueue(user.id);
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -161,160 +151,7 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="border-t border-border bg-muted/30">
-        <div className="max-w-5xl mx-auto px-4 py-10">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            {/* Brand */}
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-2 text-primary mb-3">
-                <img
-                  src="/readora-mark.webp"
-                  alt="Readora"
-                  className="h-8 w-auto"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <BrandWordmark className="h-6 w-auto" />
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Личная библиотека для чтения книг в форматах FB2 и EPUB.
-                <br />
-                Удобно, безопасно, бесплатно.
-              </p>
-            </div>
-
-            {/* Navigation */}
-            <div>
-              <h4 className="font-semibold mb-3 text-sm">Навигация</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>
-                  <Link href="/" className="hover:text-foreground transition-colors">
-                    Главная
-                  </Link>
-                </li>
-                {isAuthenticated ? (
-                  <>
-                    <li>
-                      <Link href="/library" className="hover:text-foreground transition-colors">
-                        Библиотека
-                      </Link>
-                    </li>
-                    <li>
-                      <Link href="/profile" className="hover:text-foreground transition-colors">
-                        Профиль
-                      </Link>
-                    </li>
-                  </>
-                ) : (
-                  <>
-                    <li>
-                      <Link href="/login" className="hover:text-foreground transition-colors">
-                        Войти
-                      </Link>
-                    </li>
-                    {registrationStatus?.enabled === true && (
-                      <li>
-                        <Link href="/register" className="hover:text-foreground transition-colors">
-                          Регистрация
-                        </Link>
-                      </li>
-                    )}
-                  </>
-                )}
-              </ul>
-            </div>
-
-            {/* Info */}
-            <div>
-              <h4 className="font-semibold mb-3 text-sm">Информация</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>
-                  <Link href="/about" className="hover:text-foreground transition-colors">
-                    О сервисе
-                  </Link>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setActiveLegalPage("terms")}
-                    className="hover:text-foreground transition-colors text-left"
-                  >
-                    Правила пользования
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setActiveLegalPage("copyright")}
-                    className="hover:text-foreground transition-colors text-left"
-                  >
-                    Правообладателям
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setActiveLegalPage("privacy")}
-                    className="hover:text-foreground transition-colors text-left"
-                  >
-                    Политика обработки персональных данных
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setIsFeedbackOpen(true)}
-                    className="hover:text-foreground transition-colors flex items-center gap-2 text-left"
-                  >
-                    <MessageSquare className="w-3 h-3" />
-                    Обратная связь
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-border text-center text-xs text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Readora. Личная библиотека книг.</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Legal Overlays */}
-      <LegalOverlay
-        isOpen={activeLegalPage === "terms"}
-        onClose={() => {
-          const prev = legalStack[legalStack.length - 1];
-          setLegalStack((s) => s.slice(0, -1));
-          setActiveLegalPage(prev ?? null);
-        }}
-        title="Правила пользования"
-      >
-        <TermsOfServiceContent />
-      </LegalOverlay>
-
-      <LegalOverlay
-        isOpen={activeLegalPage === "copyright"}
-        onClose={() => {
-          const prev = legalStack[legalStack.length - 1];
-          setLegalStack((s) => s.slice(0, -1));
-          setActiveLegalPage(prev ?? null);
-        }}
-        title="Информация для правообладателей"
-      >
-        <CopyrightHoldersContent onOpenPrivacy={() => { setLegalStack((s) => [...s, "copyright"]); setActiveLegalPage("privacy"); }} />
-      </LegalOverlay>
-
-      <LegalOverlay
-        isOpen={activeLegalPage === "privacy"}
-        onClose={() => {
-          const prev = legalStack[legalStack.length - 1];
-          setLegalStack((s) => s.slice(0, -1));
-          setActiveLegalPage(prev ?? null);
-        }}
-        title="Политика обработки персональных данных"
-      >
-        <PrivacyPolicyContent />
-      </LegalOverlay>
-
-      {/* Feedback Modal */}
-      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <SiteFooter />
     </div>
   );
 }

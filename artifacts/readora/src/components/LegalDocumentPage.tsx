@@ -1,4 +1,5 @@
 import { PublicHeaderNavigation } from "@/components/PublicHeaderNavigation";
+import { SiteFooter } from "@/components/SiteFooter";
 import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
 import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 
@@ -23,7 +24,7 @@ export function LegalDocumentPage({ kind }: Readonly<{ kind: LegalDocumentKind }
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2" aria-label="Readora">
             <img src="/readora-mark.webp" alt="" className="h-8 w-auto" loading="eager" decoding="async" />
             <img src="/readora-wordmark.webp" alt="Readora" className="h-5 w-auto" loading="eager" decoding="async" />
@@ -46,11 +47,7 @@ export function LegalDocumentPage({ kind }: Readonly<{ kind: LegalDocumentKind }
         </article>
       </main>
 
-      <footer className="border-t border-border bg-muted/30">
-        <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-muted-foreground">
-          <a href="/" className="text-primary hover:underline">← На главную</a>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -39,6 +39,9 @@ import {
   Maximize2,
   Minimize2,
   X,
+  Bookmark,
+  Trash2,
+  StickyNote,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -56,6 +59,11 @@ import {
 } from "@/components/reader/core/use-reader-progress-sync";
 import {
   captureSemanticPosition,
+  captureTextSelectionAnchor,
+  findTextRangeByText,
+  restoreTextSelectionAnchor,
+  showTextSelectionHighlight,
+  type TextSelectionAnchor,
   restoreSemanticPosition,
 } from "@/components/reader/core/reader-text-anchor";
 import { useReaderSyncState } from "@/components/reader/core/use-reader-sync-state";
@@ -81,6 +89,10 @@ import {
   trackReaderSessionStarted,
   trackReadingProgressed,
 } from "@/lib/analytics";
+import { useBookmarks, useCreateBookmark, useDeleteBookmark } from "@/hooks/use-bookmarks";
+import { useNotes, useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/use-notes";
+import { NotesPanel } from "@/components/reader/NotesPanel";
+import { TextSelectionToolbar } from "@/components/reader/TextSelectionToolbar";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
 
@@ -111,6 +123,19 @@ async function fetchReaderSettings(deviceMode: DeviceMode) {
 interface PendingScrollRestore {
   chapterId: number;
   positionRaw: string;
+}
+
+interface NotePositionData {
+  textSelection?: TextSelectionAnchor;
+}
+
+function parseNotePosition(raw: string): NotePositionData {
+  try {
+    const parsed = JSON.parse(raw) as NotePositionData;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,10 +343,18 @@ export default function ReaderPage() {
   const [currentChapterIdx, setCurrentChapterIdx] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [readerSessionEpoch, setReaderSessionEpoch] = useState(0);
   const [pendingScrollRestore, setPendingScrollRestore] =
     useState<PendingScrollRestore | null>(null);
+  const [pendingNoteHighlight, setPendingNoteHighlight] = useState<{
+    chapterId: number;
+    anchor: TextSelectionAnchor | null;
+    text: string | null;
+  } | null>(null);
+  const noteHighlightCleanupRef = useRef<(() => void) | null>(null);
   
   // Scroll position tracking for smart navigation
   const [isAtChapterStart, setIsAtChapterStart] = useState(true);
@@ -351,6 +384,8 @@ export default function ReaderPage() {
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const readerRootRef = useRef<HTMLDivElement>(null);
   const tocPanelRef = useRef<HTMLDivElement>(null);
+  const bookmarksPanelRef = useRef<HTMLDivElement>(null);
+  const notesPanelRef = useRef<HTMLDivElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const tocActiveChapterRef = useRef<HTMLButtonElement | null>(null);
   const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
@@ -566,6 +601,89 @@ export default function ReaderPage() {
   });
 
   // ---------------------------------------------------------------------------
+  // Bookmarks & Notes
+  // ---------------------------------------------------------------------------
+  const { data: bookmarks = [] } = useBookmarks(bookId);
+  const createBookmark = useCreateBookmark(bookId);
+  const deleteBookmark = useDeleteBookmark(bookId);
+
+  const { data: notes = [] } = useNotes(bookId);
+  const createNote = useCreateNote(bookId);
+  const updateNote = useUpdateNote(bookId);
+  const deleteNote = useDeleteNote(bookId);
+
+  const handleAddBookmark = useCallback(() => {
+    if (currentChapterId === null) return;
+    const container = scrollContainerRef.current;
+    const contentArea = contentAreaRef.current;
+    let positionRaw: string | null = null;
+    let selectedText: string | null = null;
+
+    // Захват выделенного текста
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && contentArea && contentArea.contains(selection.anchorNode)) {
+      selectedText = selection.toString().trim().slice(0, 100) || null;
+    }
+
+    if (container && contentArea) {
+      const pos = captureSemanticPosition({ chapterId: currentChapterId, scrollContainer: container, contentArea, viewportInset: 8 });
+      if (pos) positionRaw = JSON.stringify(pos);
+    }
+    if (!positionRaw) {
+      positionRaw = JSON.stringify({ chapterId: currentChapterId, version: 1, scrollTop: container?.scrollTop ?? 0 });
+    }
+    
+    createBookmark.mutate({ chapterId: currentChapterId, positionRaw, selectedText }, {
+      onSuccess: () => {
+        // Показываем уведомление или тост (опционально)
+      }
+    });
+  }, [currentChapterId, createBookmark]);
+
+  const handleAddNote = useCallback(() => {
+    if (currentChapterId === null) return;
+    const container = scrollContainerRef.current;
+    const contentArea = contentAreaRef.current;
+    let positionRaw: string | null = null;
+    let highlightedText: string | null = null;
+
+    // Захват выделенного текста
+    const selection = window.getSelection();
+    const selectionAnchor = contentArea ? captureTextSelectionAnchor(selection, contentArea) : null;
+    if (selection && !selection.isCollapsed && contentArea && contentArea.contains(selection.anchorNode)) {
+      highlightedText = selectionAnchor?.selectedText ?? (selection.toString().trim().slice(0, 100) || null);
+    }
+
+    if (container && contentArea) {
+      const pos = captureSemanticPosition({ chapterId: currentChapterId, scrollContainer: container, contentArea, viewportInset: 8 });
+      if (pos) positionRaw = JSON.stringify(pos);
+    }
+    if (!positionRaw) {
+      positionRaw = JSON.stringify({ chapterId: currentChapterId, version: 1, scrollTop: container?.scrollTop ?? 0 });
+    }
+
+    if (selectionAnchor) {
+      try {
+        const position = JSON.parse(positionRaw) as Record<string, unknown>;
+        position.textSelection = selectionAnchor;
+        positionRaw = JSON.stringify(position);
+      } catch {
+        // Оставляем базовую позицию, если старый формат нельзя расширить.
+      }
+    }
+
+    const noteText = prompt("Введите текст заметки:");
+    if (!noteText || !noteText.trim()) return;
+
+    createNote.mutate({ chapterId: currentChapterId, positionRaw, highlightedText, noteText: noteText.trim(), color: "yellow" }, {
+      onSuccess: () => {
+        // Открываем панель заметок после создания
+        setNotesOpen(true);
+      }
+    });
+  }, [currentChapterId, createNote]);
+
+  // ---------------------------------------------------------------------------
   // Chapter navigation
   // ---------------------------------------------------------------------------
   const navigateToChapterIndex = useCallback(
@@ -573,6 +691,19 @@ export default function ReaderPage() {
       if (!chapters.length) return;
 
       const bounded = Math.max(0, Math.min(chapters.length - 1, nextIdx));
+      
+      // Фикс: если переходим на ту же главу с positionRaw — обновляем только позицию
+      if (currentChapterIdx !== null && bounded === currentChapterIdx && options?.positionRaw) {
+        const boundedChapterId = chapters[bounded]?.id;
+        if (boundedChapterId) {
+          setPendingScrollRestore({
+            chapterId: boundedChapterId,
+            positionRaw: options.positionRaw,
+          });
+        }
+        return;
+      }
+      
       if (currentChapterIdx !== null && bounded === currentChapterIdx) return;
 
       // Save current chapter progress before navigating
@@ -619,13 +750,15 @@ export default function ReaderPage() {
   const closeAllPanels = useCallback(() => {
     setTocOpen(false);
     setSettingsOpen(false);
+    setBookmarksOpen(false);
+    setNotesOpen(false);
   }, []);
 
   useReaderPanelsAutoclose({
-    isOpen: tocOpen || settingsOpen,
+    isOpen: tocOpen || settingsOpen || bookmarksOpen || notesOpen,
     onClose: closeAllPanels,
     contentRef: scrollElementRef,
-    protectedRefs: [tocPanelRef, settingsPanelRef],
+    protectedRefs: [tocPanelRef, bookmarksPanelRef, notesPanelRef, settingsPanelRef],
   });
 
   // ---------------------------------------------------------------------------
@@ -661,6 +794,41 @@ export default function ReaderPage() {
     manualRestoreCleanupRef,
     setPendingScrollRestore,
   });
+
+  useEffect(() => {
+    if (!pendingNoteHighlight || chapterLoading || currentChapterId !== pendingNoteHighlight.chapterId) return;
+
+    noteHighlightCleanupRef.current?.();
+    noteHighlightCleanupRef.current = null;
+
+    const timer = window.setTimeout(() => {
+      const contentArea = contentAreaRef.current;
+      if (!contentArea) return;
+
+      const range = pendingNoteHighlight.anchor
+        ? restoreTextSelectionAnchor(pendingNoteHighlight.anchor, contentArea)
+        : pendingNoteHighlight.text
+          ? findTextRangeByText(contentArea, pendingNoteHighlight.text)
+          : null;
+
+      if (range) {
+        noteHighlightCleanupRef.current = showTextSelectionHighlight(range, scrollContainerRef.current);
+        const cleanup = noteHighlightCleanupRef.current;
+        window.setTimeout(() => {
+          if (noteHighlightCleanupRef.current === cleanup) {
+            cleanup();
+            noteHighlightCleanupRef.current = null;
+          }
+        }, 3_000);
+        range.getBoundingClientRect();
+      }
+      setPendingNoteHighlight(null);
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [chapterLoading, currentChapterId, pendingNoteHighlight]);
+
+  useEffect(() => () => noteHighlightCleanupRef.current?.(), []);
 
   // ---------------------------------------------------------------------------
   // Scroll position tracking for smart navigation
@@ -994,10 +1162,54 @@ export default function ReaderPage() {
               className="h-8 w-8"
               onClick={() => {
                 setSettingsOpen(false);
+                setBookmarksOpen(false);
+                setNotesOpen(false);
                 setTocOpen((v) => !v);
               }}
             >
               <List className="w-4 h-4" />
+            </Button>
+
+            <Button
+              variant={bookmarksOpen ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8 relative"
+              onClick={() => {
+                setTocOpen(false);
+                setSettingsOpen(false);
+                setNotesOpen(false);
+                setBookmarksOpen((v) => !v);
+              }}
+              title="Закладки"
+              aria-label="Закладки"
+            >
+              <Bookmark className="w-4 h-4" />
+              {bookmarks.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] leading-none rounded-full min-w-4 h-4 flex items-center justify-center px-0.5">
+                  {bookmarks.length}
+                </span>
+              )}
+            </Button>
+
+            <Button
+              variant={notesOpen ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8 relative"
+              onClick={() => {
+                setTocOpen(false);
+                setSettingsOpen(false);
+                setBookmarksOpen(false);
+                setNotesOpen((v) => !v);
+              }}
+              title="Заметки"
+              aria-label="Заметки"
+            >
+              <StickyNote className="w-4 h-4" />
+              {notes.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] leading-none rounded-full min-w-4 h-4 flex items-center justify-center px-0.5">
+                  {notes.length}
+                </span>
+              )}
             </Button>
 
             <Button
@@ -1006,6 +1218,8 @@ export default function ReaderPage() {
               className="h-8 w-8"
               onClick={() => {
                 setTocOpen(false);
+                setBookmarksOpen(false);
+                setNotesOpen(false);
                 setSettingsOpen((v) => !v);
               }}
             >
@@ -1072,6 +1286,75 @@ export default function ReaderPage() {
               </div>
             </ScrollArea>
           </div>
+        )}
+
+        {/* Bookmarks panel */}
+        {bookmarksOpen && (
+          <div
+            ref={bookmarksPanelRef}
+            className="fixed right-2 top-14 z-50 flex h-[calc(100vh-4rem)] w-[calc(100vw-1rem)] max-w-xs flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-xl sm:right-4 sm:max-w-sm"
+          >
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h2 className="font-semibold">Закладки</h2>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setBookmarksOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <ScrollArea className="min-h-0 flex-1 overscroll-contain p-2">
+              <div className="space-y-1 pr-2">
+                {bookmarks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Нет закладок. Выделите текст в книге — появится меню для создания закладки.</p>
+                ) : (
+                  bookmarks.map((bm) => {
+                    const chIdx = chapters.findIndex((c) => c.id === bm.chapterId);
+                    const chTitle = chIdx >= 0 ? chapters[chIdx].title : `Глава ${bm.chapterId}`;
+                    return (
+                      <div key={bm.id} className="flex items-center gap-1 rounded-lg hover:bg-muted px-2 py-2">
+                        <button
+                          className="flex-1 text-left"
+                          onClick={() => {
+                            if (chIdx >= 0) navigateToChapterIndex(chIdx, { positionRaw: bm.positionRaw });
+                            setBookmarksOpen(false);
+                          }}
+                        >
+                          <span className="text-xs opacity-60 block">{chIdx >= 0 ? `Глава ${chIdx + 1}` : ""} {chTitle}</span>
+                          {bm.selectedText && (
+                            <p className="text-sm italic text-muted-foreground line-clamp-2 mt-0.5">«{bm.selectedText}»</p>
+                          )}
+                          {bm.label && <span className="text-sm line-clamp-1">{bm.label}</span>}
+                          <span className="text-xs text-muted-foreground">{new Date(bm.createdAt).toLocaleDateString("ru-RU")}</span>
+                        </button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => deleteBookmark.mutate(bm.id)} aria-label="Удалить закладку">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Notes panel */}
+        {notesOpen && (
+          <NotesPanel
+            notes={notes}
+            chapters={chapters}
+            onClose={() => setNotesOpen(false)}
+            onNavigate={(chIdx, posRaw, highlightedText) => {
+              const position = parseNotePosition(posRaw);
+              setPendingNoteHighlight({
+                chapterId: chapters[chIdx]?.id ?? 0,
+                anchor: position.textSelection ?? null,
+                text: highlightedText,
+              });
+              navigateToChapterIndex(chIdx, { positionRaw: posRaw });
+              setNotesOpen(false);
+            }}
+            onDelete={(noteId) => deleteNote.mutate(noteId)}
+            onUpdate={(noteId, noteText, color) => updateNote.mutate({ noteId, noteText, color })}
+          />
         )}
 
         {/* Settings panel */}
@@ -1219,6 +1502,7 @@ export default function ReaderPage() {
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto"
           onScroll={scheduleProgressSave}
+          onContextMenu={(event) => event.preventDefault()}
         >
           <div
             ref={contentAreaRef}
@@ -1259,6 +1543,13 @@ export default function ReaderPage() {
             )}
           </div>
         </div>
+
+        {/* Text Selection Toolbar */}
+        <TextSelectionToolbar
+          containerRef={contentAreaRef}
+          onAddBookmark={handleAddBookmark}
+          onAddNote={handleAddNote}
+        />
 
         {/* Footer navigation */}
         <div
