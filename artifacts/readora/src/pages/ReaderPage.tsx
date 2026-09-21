@@ -1501,6 +1501,15 @@ export default function ReaderPage() {
         <div
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto"
+          style={{
+            colorScheme: theme === "dark" ? "dark" : "light",
+            scrollbarColor:
+              theme === "dark"
+                ? "#4b5563 #1f2937"
+                : theme === "sepia"
+                  ? "#d6b98c #fef3c7"
+                  : "#cbd5e1 #ffffff",
+          }}
           onScroll={scheduleProgressSave}
           onContextMenu={(event) => event.preventDefault()}
         >
