@@ -39,7 +39,7 @@ export default function AdminPage() {
   return (
     <ProtectedRoute adminOnly>
       <Layout>
-        <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5 text-primary" />
@@ -50,37 +50,46 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex max-w-full flex-wrap gap-1 rounded-xl bg-muted p-1 mb-6 w-fit">
-            {visibleTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  tab === id
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
-            ))}
-          </div>
+          <div className="flex flex-col gap-6 md:flex-row md:items-start">
+            {/* Навигация: горизонтальная прокрутка на мобильных, левый сайдбар на md+ */}
+            <nav aria-label="Разделы админки" className="-mx-4 overflow-x-auto px-4 md:sticky md:top-20 md:mx-0 md:w-56 md:shrink-0 md:overflow-visible md:px-0">
+              <ul className="flex w-max gap-1 rounded-xl bg-muted p-1 md:w-full md:flex-col">
+                {visibleTabs.map(({ id, label, icon: Icon }) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => setTab(id)}
+                      aria-current={tab === id ? "page" : undefined}
+                      className={cn(
+                        "flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                        tab === id
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
 
-          <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
-            {tab === "stats" && <AdminStats />}
-            {tab === "analytics" && isAdmin && <AdminAnalytics />}
-            {tab === "users" && <AdminUsers />}
-            {tab === "books" && <AdminBooks />}
-            {tab === "landing-books" && <AdminLandingBooks />}
-            {tab === "gift-editions" && <AdminGiftEditions />}
-            {tab === "genres" && <AdminGenres />}
-            {tab === "email" && <AdminSmtp />}
-            {tab === "saved-emails" && <AdminEmails />}
-            {tab === "settings" && <AdminSettings />}
-          </Suspense>
+            <section className="min-w-0 flex-1">
+              <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
+                {tab === "stats" && <AdminStats />}
+                {tab === "analytics" && isAdmin && <AdminAnalytics />}
+                {tab === "users" && <AdminUsers />}
+                {tab === "books" && <AdminBooks />}
+                {tab === "landing-books" && <AdminLandingBooks />}
+                {tab === "gift-editions" && <AdminGiftEditions />}
+                {tab === "genres" && <AdminGenres />}
+                {tab === "email" && <AdminSmtp />}
+                {tab === "saved-emails" && <AdminEmails />}
+                {tab === "settings" && <AdminSettings />}
+              </Suspense>
+            </section>
+          </div>
         </div>
       </Layout>
     </ProtectedRoute>
