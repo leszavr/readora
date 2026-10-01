@@ -848,10 +848,14 @@ export default function ReaderPage() {
       // User is at end only if scrolled to the very bottom
       const atEnd = scrollBottom <= SCROLL_THRESHOLD;
 
+      // Short chapter (title page, annotation, foreword…) fits on screen without scrolling:
+      // the whole chapter is visible, so both directions are available right away.
+      const fitsWithoutScroll = !chapterLoading && scrollHeight - clientHeight <= SCROLL_THRESHOLD;
+
       // Make states mutually exclusive: if not at start and not at end, both should be false
       // This prevents accidental navigation from the middle of the chapter
-      const isStart = atStart && !atEnd;
-      const isEnd = atEnd && !atStart;
+      const isStart = fitsWithoutScroll || (atStart && !atEnd);
+      const isEnd = fitsWithoutScroll || (atEnd && !atStart);
 
       console.log('[Reader] Scroll position:', {
         scrollTop,
@@ -873,8 +877,29 @@ export default function ReaderPage() {
     handleScroll();
 
     container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [currentChapterId]); // Re-check when chapter changes
+
+    // Content height changes after render (chapter text, fonts, images, font size, window resize):
+    // re-check so short chapters unlock navigation and long ones keep it locked.
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => handleScroll());
+    const observeChildren = () => {
+      if (!resizeObserver) return;
+      resizeObserver.disconnect();
+      resizeObserver.observe(container);
+      Array.from(container.children).forEach((child) => resizeObserver.observe(child));
+    };
+    observeChildren();
+    const mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => {
+      observeChildren();
+      handleScroll();
+    });
+    mutationObserver?.observe(container, { childList: true });
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+    };
+  }, [currentChapterId, chapterLoading]); // Re-check when chapter changes or finishes loading
 
   // ---------------------------------------------------------------------------
   // Keyboard navigation (← → chapter switch)
