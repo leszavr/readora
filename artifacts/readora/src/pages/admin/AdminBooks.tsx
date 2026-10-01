@@ -4,8 +4,12 @@ import {
   useDeleteAdminBook,
   useDeleteBulkAdminBooks,
   useToggleBlockBook,
+  useCreateGiftEdition,
+  useDeleteGiftEdition,
   getListAdminBooksQueryKey,
+  getListGiftEditionsQueryKey,
 } from "@workspace/api-client-react";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +46,29 @@ export default function AdminBooks() {
   const { mutate: deleteBook } = useDeleteAdminBook({ mutation: { onSuccess: invalidate } });
   const deleteBooksMutation = useDeleteBulkAdminBooks();
   const { mutate: toggleBlock } = useToggleBlockBook({ mutation: { onSuccess: invalidate } });
+  const createGiftMutation = useCreateGiftEdition();
+  const deleteGiftMutation = useDeleteGiftEdition();
+  const [pendingGiftBookId, setPendingGiftBookId] = useState<number | null>(null);
+
+  const toggleGiftEdition = async (book: { id: number; title: string; giftEditionId?: number | null }, enabled: boolean) => {
+    setPendingGiftBookId(book.id);
+    try {
+      if (enabled) {
+        await createGiftMutation.mutateAsync({ data: { bookId: book.id, isPublished: true } });
+        toast({ title: "Подарочное издание добавлено", description: `«${book.title}» будет выдаваться новым пользователям.` });
+      } else if (book.giftEditionId) {
+        await deleteGiftMutation.mutateAsync({ id: book.giftEditionId });
+        toast({ title: "Книга убрана из подарочных изданий", description: "Уже выданные копии остаются у пользователей." });
+      }
+      void invalidate();
+      void qc.invalidateQueries({ queryKey: getListGiftEditionsQueryKey() });
+    } catch (error) {
+      const message = error && typeof error === "object" && "message" in error && typeof error.message === "string" ? error.message : "Повторите попытку.";
+      toast({ title: "Не удалось изменить подарочное издание", description: message, variant: "destructive" });
+    } finally {
+      setPendingGiftBookId(null);
+    }
+  };
 
   useEffect(() => {
     setSelectedBookIds(new Set());
@@ -126,19 +153,20 @@ export default function AdminBooks() {
                 <TableHead>Статус</TableHead>
                 <TableHead>Размер</TableHead>
                 <TableHead>Загружена</TableHead>
+                <TableHead title="Подарочное издание («Мировое достояние»)">Подарочное</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {books.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Книги не найдены</TableCell>
+                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">Книги не найдены</TableCell>
                 </TableRow>
               ) : (
                 books.map((b: {
                   id: number; title: string; author?: string | null;
                   format: string; status: string; ownerUsername?: string | null;
-                  fileSize?: number | null; uploadedAt: string;
+                  fileSize?: number | null; uploadedAt: string; giftEditionId?: number | null;
                   }) => (
                     <TableRow key={b.id}>
                       <TableCell>
@@ -166,6 +194,14 @@ export default function AdminBooks() {
                     <TableCell className="text-xs text-muted-foreground">{formatSize(b.fileSize ?? null)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(b.uploadedAt).toLocaleDateString("ru-RU")}
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={Boolean(b.giftEditionId)}
+                        disabled={pendingGiftBookId === b.id || b.status !== "active"}
+                        onCheckedChange={(checked) => void toggleGiftEdition(b, checked)}
+                        aria-label={`Подарочное издание: ${b.title}`}
+                      />
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
