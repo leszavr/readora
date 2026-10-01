@@ -123,21 +123,6 @@ export function LandingPage({
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-4 py-16 md:py-20">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">Всё необходимое для комфортного чтения</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <Card key={feature.title} className="border-border hover:shadow-md transition-shadow">
-                <CardContent className="pt-6">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 text-primary">{feature.icon}</div>
-                  <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
         {popularBooks.length > 0 && (
           <section className="bg-muted/30 border-y border-border py-16 md:py-20">
             <div className="max-w-5xl mx-auto px-4">
@@ -164,6 +149,21 @@ export function LandingPage({
             </div>
           </section>
         )}
+
+        <section className="max-w-5xl mx-auto px-4 py-16 md:py-20">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">Всё необходимое для комфортного чтения</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            {features.map((feature) => (
+              <Card key={feature.title} className="border-border hover:shadow-md transition-shadow">
+                <CardContent className="pt-6">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 text-primary">{feature.icon}</div>
+                  <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
 
         <section className="max-w-5xl mx-auto px-4 py-16 md:py-20 text-center">
           <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 md:p-12">

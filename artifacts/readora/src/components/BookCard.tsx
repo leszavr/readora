@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import type { Book } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, Check, Circle } from "lucide-react";
 
@@ -124,5 +125,70 @@ export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
         </div>
       </div>
     </Link>
+  );
+}
+
+export function BookListItem({
+  book,
+  selected = false,
+  onSelect,
+  showCheckbox = false,
+  shelf = false,
+}: Readonly<{
+  book: Book;
+  selected?: boolean;
+  onSelect?: () => void;
+  showCheckbox?: boolean;
+  shelf?: boolean;
+}>) {
+  const [, navigate] = useLocation();
+
+  const handleRead = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    navigate(`/reader/${book.id}`);
+  };
+
+  return (
+    <div className={`flex items-center gap-4 p-4 rounded-lg border bg-card transition-colors ${selected ? "ring-2 ring-primary" : ""}`}>
+      {showCheckbox && onSelect && (
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          onClick={(event) => event.stopPropagation()}
+        />
+      )}
+      <Link href={`/book/${book.id}`} className="flex min-w-0 flex-1 items-center gap-4 rounded-md hover:bg-accent/50">
+        <div className="relative w-12 h-16 flex-shrink-0 rounded overflow-hidden bg-muted">
+          {book.coverUrl && (
+            <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+          )}
+          {typeof book.cycleNumber === "number" && (
+            <span
+              className="absolute left-1 top-1 inline-flex items-center rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm backdrop-blur-sm"
+              title={book.cycleName ? `${book.cycleName} • #${book.cycleNumber}` : `#${book.cycleNumber}`}
+            >
+              #{book.cycleNumber}
+            </span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium truncate">{book.title}</h3>
+          <p className="text-sm text-muted-foreground truncate">{book.author || "Неизвестный автор"}</p>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            {book.genres && book.genres.length > 0 && (
+              <span className="truncate">{book.genres[0].name}</span>
+            )}
+            {book.progressPercent != null && book.progressPercent > 0 && (
+              <span>{Math.round(book.progressPercent)}% прочитано</span>
+            )}
+          </div>
+        </div>
+      </Link>
+      <Button type="button" size="sm" className="shrink-0 gap-2" onClick={handleRead}>
+        <BookOpen className="size-3.5" aria-hidden="true" />
+        <span>{shelf ? "Читать снова" : "Читать"}</span>
+      </Button>
+    </div>
   );
 }
