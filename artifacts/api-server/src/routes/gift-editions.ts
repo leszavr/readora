@@ -1,8 +1,8 @@
 import { Router, type Request } from "express";
-import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db, booksTable, giftEditionsTable, type usersTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../middlewares/auth";
-import { countAvailableGiftEditions, grantGiftEditions } from "../lib/gift-editions-service";
+import { countAvailableGiftEditions, grantGiftEditions, resolveGiftSourceBook } from "../lib/gift-editions-service";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
@@ -61,23 +61,6 @@ router.get("/admin/gift-editions", requireAdmin, async (_req, res): Promise<void
   res.json(await listEditions());
 });
 
-// Кандидаты — только собственные книги администратора, чтобы не раздавать чужие приватные загрузки.
-router.get("/admin/gift-editions/candidates", requireAdmin, async (req, res): Promise<void> => {
-  const user = (req as AuthReq).user;
-  const editionBookIds = db.select({ id: giftEditionsTable.bookId }).from(giftEditionsTable);
-  const books = await db
-    .select({ id: booksTable.id, title: booksTable.title, author: booksTable.author, format: booksTable.format })
-    .from(booksTable)
-    .where(and(
-      eq(booksTable.ownerUserId, user.id),
-      eq(booksTable.status, "active"),
-      isNull(booksTable.contentBookId),
-      notInArray(booksTable.id, editionBookIds),
-    ))
-    .orderBy(asc(booksTable.title));
-  res.json(books.map((book) => ({ ...book, author: book.author ?? null })));
-});
-
 router.post("/admin/gift-editions", requireAdmin, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseId(req.body?.bookId);
@@ -85,17 +68,16 @@ router.post("/admin/gift-editions", requireAdmin, async (req, res): Promise<void
   if (!bookId) { res.status(400).json({ error: "Выберите книгу" }); return; }
   if (Number.isNaN(sortOrder)) { res.status(400).json({ error: "Порядок должен быть целым числом от 0 до 10000" }); return; }
 
-  const [book] = await db
-    .select()
-    .from(booksTable)
-    .where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
-  if (!book) { res.status(404).json({ error: "Книга не найдена в вашей библиотеке" }); return; }
+  const [book] = await db.select().from(booksTable).where(eq(booksTable.id, bookId));
+  if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   if (book.contentBookId !== null) { res.status(400).json({ error: "Подарочную копию нельзя сделать подарочным изданием" }); return; }
   if (book.status !== "active") { res.status(400).json({ error: "Заблокированную книгу нельзя сделать подарочным изданием" }); return; }
 
+  const source = await resolveGiftSourceBook(book, user.id);
+
   const [edition] = await db
     .insert(giftEditionsTable)
-    .values({ bookId, sortOrder: sortOrder ?? 0, isPublished: req.body?.isPublished !== false })
+    .values({ bookId: source.id, sortOrder: sortOrder ?? 0, isPublished: req.body?.isPublished !== false })
     .onConflictDoNothing()
     .returning();
   if (!edition) { res.status(409).json({ error: "Книга уже добавлена в подарочные издания" }); return; }

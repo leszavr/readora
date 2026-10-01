@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import os from "node:os";
 import { statfs } from "node:fs/promises";
@@ -18,6 +18,7 @@ import {
   analyticsDailyBookActivityTable,
   analyticsDailyUserActivityTable,
   readingProgressTable,
+  giftEditionsTable,
 } from "@workspace/db";
 import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
@@ -614,10 +615,17 @@ router.post(
 // GET /admin/books
 router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
   const { search } = req.query as Record<string, string>;
+  // Подарочные копии пользователей не показываем: это не загрузки, а ссылки на эталон.
+  const giftEditionId = sql<number | null>`(
+    select ge.id from ${giftEditionsTable} ge join ${booksTable} src on src.id = ge.book_id
+    where src.id = ${booksTable.id} or (src.file_hash is not null and src.file_hash = ${booksTable.fileHash})
+    order by (src.id = ${booksTable.id}) desc limit 1
+  )`;
   const books = await db
-    .select({ book: booksTable, username: usersTable.username })
+    .select({ book: booksTable, username: usersTable.username, giftEditionId })
     .from(booksTable)
     .leftJoin(usersTable, eq(booksTable.ownerUserId, usersTable.id))
+    .where(isNull(booksTable.contentBookId))
     .orderBy(desc(booksTable.uploadedAt));
 
   let result = books;
@@ -639,6 +647,7 @@ router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
       ownerId: r.book.ownerUserId,
       fileSize: r.book.fileSize,
       uploadedAt: r.book.uploadedAt,
+      giftEditionId: r.giftEditionId ?? null,
     })),
   );
 });

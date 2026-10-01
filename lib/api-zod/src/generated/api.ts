@@ -632,7 +632,8 @@ export const GetAdminStatsResponse = zod.object({
   "ownerUsername": zod.string().nullish(),
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
-  "uploadedAt": zod.coerce.date()
+  "uploadedAt": zod.coerce.date(),
+  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
 })),
   "recentUsers": zod.array(zod.object({
   "id": zod.number(),
@@ -883,7 +884,8 @@ export const ListAdminBooksResponseItem = zod.object({
   "ownerUsername": zod.string().nullish(),
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
-  "uploadedAt": zod.coerce.date()
+  "uploadedAt": zod.coerce.date(),
+  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
 })
 export const ListAdminBooksResponse = zod.array(ListAdminBooksResponseItem)
 
@@ -904,7 +906,8 @@ export const GetAdminBookResponse = zod.object({
   "ownerUsername": zod.string().nullish(),
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
-  "uploadedAt": zod.coerce.date()
+  "uploadedAt": zod.coerce.date(),
+  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
 })
 
 
@@ -944,7 +947,8 @@ export const ToggleBlockBookResponse = zod.object({
   "ownerUsername": zod.string().nullish(),
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
-  "uploadedAt": zod.coerce.date()
+  "uploadedAt": zod.coerce.date(),
+  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
 })
 
 
@@ -1083,7 +1087,7 @@ export const ListGiftEditionsResponse = zod.array(ListGiftEditionsResponseItem)
 
 
 /**
- * @summary Mark one of the admin's own books as a gift edition (admin)
+ * @summary Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
  */
 export const createGiftEditionBodySortOrderMin = 0;
 export const createGiftEditionBodySortOrderMax = 10000;
@@ -1095,18 +1099,6 @@ export const CreateGiftEditionBody = zod.object({
   "sortOrder": zod.number().min(createGiftEditionBodySortOrderMin).max(createGiftEditionBodySortOrderMax).optional(),
   "isPublished": zod.boolean().optional()
 })
-
-
-/**
- * @summary List the admin's own books that can become gift editions (admin)
- */
-export const ListGiftEditionCandidatesResponseItem = zod.object({
-  "id": zod.number(),
-  "title": zod.string(),
-  "author": zod.string().nullish(),
-  "format": zod.enum(['fb2', 'epub'])
-})
-export const ListGiftEditionCandidatesResponse = zod.array(ListGiftEditionCandidatesResponseItem)
 
 
 /**

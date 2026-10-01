@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  getListGiftEditionCandidatesQueryKey,
+  getListAdminBooksQueryKey,
   getListGiftEditionsQueryKey,
   useCreateGiftEdition,
   useDeleteGiftEdition,
-  useListGiftEditionCandidates,
   useListGiftEditions,
   useUpdateGiftEdition,
   type GiftEdition,
@@ -16,9 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { UploadBookDialog } from "@/components/UploadBookDialog";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
@@ -42,33 +41,30 @@ function GiftCover({ edition }: Readonly<{ edition: GiftEdition }>) {
 export default function AdminGiftEditions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [bookId, setBookId] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const handledBookIds = useRef(new Set<number>());
   const [deleteEdition, setDeleteEdition] = useState<GiftEdition | null>(null);
 
   const { data: editions = [], isLoading, isError } = useListGiftEditions();
-  const { data: candidates = [], isLoading: candidatesLoading } = useListGiftEditionCandidates({ query: { enabled: createOpen, queryKey: getListGiftEditionCandidatesQueryKey() } });
   const createMutation = useCreateGiftEdition();
   const updateMutation = useUpdateGiftEdition();
   const deleteMutation = useDeleteGiftEdition();
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: getListGiftEditionsQueryKey() });
-    void queryClient.invalidateQueries({ queryKey: getListGiftEditionCandidatesQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: getListAdminBooksQueryKey() });
   };
 
-  async function createEdition() {
-    const id = Number(bookId);
-    if (!Number.isInteger(id) || id <= 0) return;
+  async function markUploadedBook(bookId: number) {
+    if (handledBookIds.current.has(bookId)) return;
+    handledBookIds.current.add(bookId);
     try {
       const nextOrder = editions.reduce((max, edition) => Math.max(max, edition.sortOrder), -1) + 1;
-      await createMutation.mutateAsync({ data: { bookId: id, sortOrder: Math.min(nextOrder, 10000), isPublished: true } });
+      const edition = await createMutation.mutateAsync({ data: { bookId, sortOrder: Math.min(nextOrder, 10000), isPublished: true } });
       invalidate();
-      setCreateOpen(false);
-      setBookId("");
-      toast({ title: "Подарочное издание добавлено", description: "Книга будет выдаваться новым пользователям." });
+      toast({ title: "Подарочное издание добавлено", description: `«${edition.title}» будет выдаваться новым пользователям.` });
     } catch (error) {
-      toast({ title: "Не удалось добавить издание", description: getErrorMessage(error, "Повторите попытку."), variant: "destructive" });
+      toast({ title: "Книга загружена, но не отмечена как подарочная", description: getErrorMessage(error, "Отметьте её в разделе «Книги»."), variant: "destructive" });
     }
   }
 
@@ -110,10 +106,10 @@ export default function AdminGiftEditions() {
           <h2 className="text-lg font-semibold">Подарочные издания · Мировое достояние</h2>
           <p className="text-sm text-muted-foreground">
             Опубликованные книги автоматически добавляются новым пользователям. Остальные могут добавить их из библиотеки.
-            Название, описание и обложку эталона меняйте на странице книги в своей библиотеке — изменения увидят только те, кто получит книгу после этого.
+            Отметить уже загруженную книгу можно в разделе «Книги». Название, описание и обложку эталона меняйте на странице книги в своей библиотеке — изменения увидят только те, кто получит книгу после этого.
           </p>
         </div>
-        <Button className="shrink-0 gap-2" onClick={() => setCreateOpen(true)}>
+        <Button className="shrink-0 gap-2" onClick={() => setUploadOpen(true)}>
           <Plus className="h-4 w-4" /> Добавить книгу
         </Button>
       </div>
@@ -126,7 +122,7 @@ export default function AdminGiftEditions() {
         <div className="rounded-xl border border-dashed bg-card px-4 py-12 text-center">
           <Gift className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="font-medium">Подарочных изданий пока нет</p>
-          <p className="mt-1 text-sm text-muted-foreground">Загрузите книгу из public domain в свою библиотеку, затем добавьте её здесь.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Нажмите «Добавить книгу» и загрузите FB2 или EPUB из public domain — или отметьте уже загруженную книгу в разделе «Книги».</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -173,40 +169,12 @@ export default function AdminGiftEditions() {
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) setBookId(""); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Добавить подарочное издание</DialogTitle>
-            <DialogDescription>Выберите книгу из своей библиотеки. Файл и главы не копируются — пользователи читают эталонный экземпляр.</DialogDescription>
-          </DialogHeader>
-          {candidatesLoading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-          ) : candidates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">В вашей библиотеке нет подходящих книг. Сначала загрузите книгу через «Загрузить книгу».</p>
-          ) : (
-            <div className="space-y-2">
-              <Label>Книга</Label>
-              <Select value={bookId} onValueChange={setBookId}>
-                <SelectTrigger><SelectValue placeholder="Выберите книгу" /></SelectTrigger>
-                <SelectContent>
-                  {candidates.map((book) => (
-                    <SelectItem key={book.id} value={String(book.id)}>
-                      {book.title}{book.author ? ` — ${book.author}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Отмена</Button>
-            <Button onClick={createEdition} disabled={!bookId || createMutation.isPending}>
-              {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Добавить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UploadBookDialog
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        title="Загрузить подарочное издание"
+        onBookUploaded={(bookId) => void markUploadedBook(bookId)}
+      />
 
       <Dialog open={Boolean(deleteEdition)} onOpenChange={(open) => !open && setDeleteEdition(null)}>
         <DialogContent>

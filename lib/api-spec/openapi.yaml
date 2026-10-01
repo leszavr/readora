@@ -1277,7 +1277,7 @@ paths:
     post:
       operationId: createGiftEdition
       tags: [admin]
-      summary: Mark one of the admin's own books as a gift edition (admin)
+      summary: Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
       requestBody:
         required: true
         content:
@@ -1292,7 +1292,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GiftEdition"
         "404":
-          description: Book not found in the admin's library
+          description: Book not found
           content:
             application/json:
               schema:
@@ -1303,21 +1303,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /admin/gift-editions/candidates:
-    get:
-      operationId: listGiftEditionCandidates
-      tags: [admin]
-      summary: List the admin's own books that can become gift editions (admin)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GiftEditionCandidate"
 
   /admin/gift-editions/{id}:
     patch:
@@ -2334,6 +2319,9 @@ components:
         uploadedAt:
           type: string
           format: date-time
+        giftEditionId:
+          type: ["integer", "null"]
+          description: Gift edition created from this book (or from the same file)
 
     GiftEditionsAvailability:
       type: object
@@ -2377,20 +2365,6 @@ components:
         createdAt:
           type: string
           format: date-time
-
-    GiftEditionCandidate:
-      type: object
-      required: [id, title, format]
-      properties:
-        id:
-          type: integer
-        title:
-          type: string
-        author:
-          type: ["string", "null"]
-        format:
-          type: string
-          enum: [fb2, epub]
 
     GiftEditionCreate:
       type: object

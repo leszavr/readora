@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
-import { db, bookGenresTable, booksTable, giftEditionsTable } from "@workspace/db";
+import { db, bookGenresTable, booksTable, chaptersTable, giftEditionsTable } from "@workspace/db";
 import { logger } from "./logger";
 
 type StoredBook = typeof booksTable.$inferSelect;
@@ -110,4 +110,57 @@ export async function userOwnsGiftSourcesInUse(userId: number): Promise<boolean>
     .where(and(inArray(booksTable.contentBookId, owned), sql`${booksTable.ownerUserId} <> ${userId}`))
     .limit(1);
   return Boolean(row);
+}
+
+/**
+ * Эталон подарочного издания всегда принадлежит администратору: книгу другого пользователя
+ * клонируем в библиотеку администратора (файл и обложка общие, главы копируются один раз),
+ * чтобы владелец мог свободно удалить свою книгу.
+ */
+export async function resolveGiftSourceBook(book: StoredBook, adminUserId: number): Promise<StoredBook> {
+  if (book.ownerUserId === adminUserId) return book;
+
+  if (book.fileHash) {
+    const [existing] = await db
+      .select()
+      .from(booksTable)
+      .where(and(
+        eq(booksTable.ownerUserId, adminUserId),
+        eq(booksTable.fileHash, book.fileHash),
+        isNull(booksTable.contentBookId),
+      ))
+      .limit(1);
+    if (existing) return existing;
+  }
+
+  return db.transaction(async (tx) => {
+    const [clone] = await tx
+      .insert(booksTable)
+      .values({
+        ownerUserId: adminUserId,
+        title: book.title,
+        author: book.author,
+        description: book.description,
+        coverPath: book.coverPath,
+        format: book.format,
+        language: book.language,
+        publicationYear: book.publicationYear,
+        storageKey: book.storageKey,
+        fileHash: book.fileHash,
+        fileSize: book.fileSize,
+        hideFromPopular: true,
+      })
+      .returning();
+
+    await tx.execute(sql`
+      insert into ${chaptersTable} (book_id, "index", title, html_content, word_count)
+      select ${clone.id}, "index", title, html_content, word_count from ${chaptersTable} where book_id = ${book.id}
+    `);
+    await tx.execute(sql`
+      insert into ${bookGenresTable} (book_id, genre_id)
+      select ${clone.id}, genre_id from ${bookGenresTable} where book_id = ${book.id}
+      on conflict do nothing
+    `);
+    return clone;
+  });
 }

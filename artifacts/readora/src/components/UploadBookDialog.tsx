@@ -17,6 +17,10 @@ import { trackBookUploadStarted } from "@/lib/analytics";
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Заголовок диалога вместо стандартного «Загрузить книги». */
+  title?: string;
+  /** Вызывается для каждой успешно обработанной книги. */
+  onBookUploaded?: (bookId: number) => void;
 }
 
 interface FileUploadState {
@@ -86,13 +90,17 @@ async function pollJob(
   invalidateBooks: () => void,
   invalidateQuota: () => void,
   isCancelled: () => boolean,
+  onBookUploaded?: (bookId: number) => void,
 ): Promise<void> {
   if (!fileState.job) return;
   try {
     const nextJob = await fetchUploadJob(fileState.job.id);
     if (isCancelled()) return;
     setFiles((prev) => applyJobUpdate(prev, fileState.file, nextJob));
-    if (nextJob.status === "completed") invalidateBooks();
+    if (nextJob.status === "completed") {
+      invalidateBooks();
+      if (nextJob.bookId) onBookUploaded?.(nextJob.bookId);
+    }
     if (nextJob.status === "completed" || nextJob.status === "failed") invalidateQuota();
   } catch (e) {
     if (isCancelled()) return;
@@ -149,7 +157,7 @@ function uploadSingleFile(
   });
 }
 
-export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
+export function UploadBookDialog({ open, onClose, title = "Загрузить книги", onBookUploaded }: Readonly<Props>) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -183,7 +191,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     const isCancelled = () => cancelled;
     const timer = globalThis.setInterval(() => {
       for (const fileState of filesToPoll) {
-        void pollJob(fileState, setFiles, invalidateBooks, invalidateQuota, isCancelled);
+        void pollJob(fileState, setFiles, invalidateBooks, invalidateQuota, isCancelled, onBookUploaded);
       }
     }, 1500);
 
@@ -344,7 +352,7 @@ export function UploadBookDialog({ open, onClose }: Readonly<Props>) {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl min-w-0">
         <DialogHeader>
-          <DialogTitle>Загрузить книги</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             Поддерживаются форматы FB2 и EPUB{quota?.maxFileSizeBytes ? ` (до ${formatSize(quota.maxFileSizeBytes)})` : ""}. Можно загрузить несколько файлов сразу.
           </DialogDescription>

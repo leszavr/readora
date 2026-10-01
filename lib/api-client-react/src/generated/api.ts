@@ -51,7 +51,6 @@ import type {
   GetAdminAnalyticsParams,
   GetPopularBooksParams,
   GiftEdition,
-  GiftEditionCandidate,
   GiftEditionCreate,
   GiftEditionUpdate,
   GiftEditionsAvailability,
@@ -4501,7 +4500,7 @@ export const getCreateGiftEditionUrl = () => {
 }
 
 /**
- * @summary Mark one of the admin's own books as a gift edition (admin)
+ * @summary Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
  */
 export const createGiftEdition = async (giftEditionCreate: GiftEditionCreate, options?: RequestInit): Promise<GiftEdition> => {
 
@@ -4550,7 +4549,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateGiftEditionMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Mark one of the admin's own books as a gift edition (admin)
+ * @summary Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
  */
 export const useCreateGiftEdition = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGiftEdition>>, TError,{data: BodyType<GiftEditionCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -4562,83 +4561,6 @@ export const useCreateGiftEdition = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getCreateGiftEditionMutationOptions(options));
     }
-
-export const getListGiftEditionCandidatesUrl = () => {
-
-
-
-
-  return `/api/admin/gift-editions/candidates`
-}
-
-/**
- * @summary List the admin's own books that can become gift editions (admin)
- */
-export const listGiftEditionCandidates = async ( options?: RequestInit): Promise<GiftEditionCandidate[]> => {
-
-  return customFetch<GiftEditionCandidate[]>(getListGiftEditionCandidatesUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListGiftEditionCandidatesQueryKey = () => {
-    return [
-    `/api/admin/gift-editions/candidates`
-    ] as const;
-    }
-
-
-export const getListGiftEditionCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListGiftEditionCandidatesQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGiftEditionCandidates>>> = ({ signal }) => listGiftEditionCandidates({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListGiftEditionCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof listGiftEditionCandidates>>>
-export type ListGiftEditionCandidatesQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List the admin's own books that can become gift editions (admin)
- */
-
-export function useListGiftEditionCandidates<TData = Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListGiftEditionCandidatesQueryOptions(options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-
-
-
-
-
 
 export const getUpdateGiftEditionUrl = (id: number,) => {
 

@@ -532,6 +532,11 @@ export interface AdminBook {
   ownerId?: number;
   fileSize?: number;
   uploadedAt: string;
+  /**
+     * Gift edition created from this book (or from the same file)
+     * @nullable
+     */
+  giftEditionId?: number | null;
 }
 
 export type AdminUserRole = typeof AdminUserRole[keyof typeof AdminUserRole];
@@ -767,22 +772,6 @@ export interface GiftEdition {
   isPublished: boolean;
   copiesCount: number;
   createdAt: string;
-}
-
-export type GiftEditionCandidateFormat = typeof GiftEditionCandidateFormat[keyof typeof GiftEditionCandidateFormat];
-
-
-export const GiftEditionCandidateFormat = {
-  fb2: 'fb2',
-  epub: 'epub',
-} as const;
-
-export interface GiftEditionCandidate {
-  id: number;
-  title: string;
-  /** @nullable */
-  author?: string | null;
-  format: GiftEditionCandidateFormat;
 }
 
 export interface GiftEditionCreate {
