@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import {
+  getGetBookQueryKey,
   getListAdminBooksQueryKey,
   getListGiftEditionsQueryKey,
   useCreateGiftEdition,
@@ -9,7 +10,7 @@ import {
   type GiftEdition,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Gift, Loader2, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Gift, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { UploadBookDialog } from "@/components/UploadBookDialog";
+import { useAuth } from "@/hooks/use-auth";
+import { EditGiftEditionDialog } from "./EditGiftEditionDialog";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
@@ -44,6 +47,8 @@ export default function AdminGiftEditions() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const handledBookIds = useRef(new Set<number>());
   const [deleteEdition, setDeleteEdition] = useState<GiftEdition | null>(null);
+  const [editEdition, setEditEdition] = useState<GiftEdition | null>(null);
+  const { user } = useAuth();
 
   const { data: editions = [], isLoading, isError } = useListGiftEditions();
   const createMutation = useCreateGiftEdition();
@@ -106,7 +111,7 @@ export default function AdminGiftEditions() {
           <h2 className="text-lg font-semibold">Подарочные издания · Мировое достояние</h2>
           <p className="text-sm text-muted-foreground">
             Опубликованные книги автоматически добавляются новым пользователям. Остальные могут добавить их из библиотеки.
-            Отметить уже загруженную книгу можно в разделе «Книги». Название, описание и обложку эталона меняйте на странице книги в своей библиотеке — изменения увидят только те, кто получит книгу после этого.
+            Отметить уже загруженную книгу можно в разделе «Книги». Правки названия, описания и обложки увидят только те, кто получит книгу после этого.
           </p>
         </div>
         <Button className="shrink-0 gap-2" onClick={() => setUploadOpen(true)}>
@@ -125,7 +130,7 @@ export default function AdminGiftEditions() {
           <p className="mt-1 text-sm text-muted-foreground">Нажмите «Добавить книгу» и загрузите FB2 или EPUB из public domain — или отметьте уже загруженную книгу в разделе «Книги».</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
           {editions.map((edition) => (
             <article key={edition.id} className="flex gap-3 rounded-xl border bg-card p-3 shadow-sm">
               <GiftCover edition={edition} />
@@ -138,9 +143,9 @@ export default function AdminGiftEditions() {
                   <Badge variant={edition.isPublished ? "default" : "secondary"}>{edition.isPublished ? "Выдаётся" : "Снята"}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">{edition.format.toUpperCase()} · в библиотеках: {edition.copiesCount}</p>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Label htmlFor={`gift-order-${edition.id}`} className="text-xs text-muted-foreground">Порядок</Label>
-                  <div className="w-20">
+                  <div className="w-16 shrink-0">
                     <Input
                       id={`gift-order-${edition.id}`}
                       key={`${edition.id}-${edition.sortOrder}`}
@@ -159,6 +164,17 @@ export default function AdminGiftEditions() {
                       aria-label="Выдавать пользователям"
                     />
                   </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    disabled={edition.ownerUserId !== user?.id}
+                    title={edition.ownerUserId === user?.id ? "Редактировать" : "Редактировать может только владелец эталона"}
+                    onClick={() => setEditEdition(edition)}
+                    aria-label={`Редактировать «${edition.title}»`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" onClick={() => setDeleteEdition(edition)} aria-label={`Убрать «${edition.title}»`}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -174,6 +190,18 @@ export default function AdminGiftEditions() {
         onClose={() => setUploadOpen(false)}
         title="Загрузить подарочное издание"
         onBookUploaded={(bookId) => void markUploadedBook(bookId)}
+      />
+
+      <EditGiftEditionDialog
+        edition={editEdition}
+        onClose={() => setEditEdition(null)}
+        onSaved={() => {
+          invalidate();
+          if (editEdition) void queryClient.invalidateQueries({ queryKey: getGetBookQueryKey(editEdition.bookId) });
+          setEditEdition(null);
+          toast({ title: "Подарочное издание обновлено" });
+        }}
+        onError={(message) => toast({ title: "Не удалось сохранить изменения", description: message, variant: "destructive" })}
       />
 
       <Dialog open={Boolean(deleteEdition)} onOpenChange={(open) => !open && setDeleteEdition(null)}>
