@@ -10,6 +10,7 @@ import pwaRouter from "./pwa";
 import feedbackRouter from "./feedback";
 import landingBooksRouter from "./landing-books";
 import analyticsRouter from "./analytics";
+import giftEditionsRouter from "./gift-editions";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(pwaRouter);
 router.use(feedbackRouter);
 router.use(landingBooksRouter);
 router.use(analyticsRouter);
+router.use(giftEditionsRouter);
 
 export default router;

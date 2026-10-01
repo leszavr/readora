@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart, Gift } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -13,6 +13,7 @@ const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
 const AdminSmtp = lazy(() => import("@/pages/admin/AdminSmtp").then(({ AdminSmtp }) => ({ default: AdminSmtp })));
 const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
 const AdminLandingBooks = lazy(() => import("@/pages/admin/AdminLandingBooks"));
+const AdminGiftEditions = lazy(() => import("@/pages/admin/AdminGiftEditions"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
 
 const TABS = [
@@ -21,6 +22,7 @@ const TABS = [
   { id: "users", label: "Пользователи", icon: Users },
   { id: "books", label: "Книги", icon: BookCopy },
   { id: "landing-books", label: "Лендинг", icon: PanelsTopLeft },
+  { id: "gift-editions", label: "Подарочные издания", icon: Gift },
   { id: "genres", label: "Жанры", icon: Tags },
   { id: "email", label: "Email", icon: Mail },
   { id: "saved-emails", label: "Письма", icon: Inbox },
@@ -73,6 +75,7 @@ export default function AdminPage() {
             {tab === "users" && <AdminUsers />}
             {tab === "books" && <AdminBooks />}
             {tab === "landing-books" && <AdminLandingBooks />}
+            {tab === "gift-editions" && <AdminGiftEditions />}
             {tab === "genres" && <AdminGenres />}
             {tab === "email" && <AdminSmtp />}
             {tab === "saved-emails" && <AdminEmails />}

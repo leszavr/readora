@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   appSettingsTable,
   bookUploadJobsTable,
@@ -79,7 +79,7 @@ async function getUsage(userId: number) {
     db
       .select({ usedBytes: sql<number>`coalesce(sum(${booksTable.fileSize}), 0)::double precision` })
       .from(booksTable)
-      .where(eq(booksTable.ownerUserId, userId)),
+      .where(and(eq(booksTable.ownerUserId, userId), isNull(booksTable.contentBookId))),
     db
       .select({ reservedBytes: sql<number>`coalesce(sum(${bookUploadJobsTable.fileSize}), 0)::double precision` })
       .from(bookUploadJobsTable)
@@ -145,7 +145,7 @@ export async function createUploadJobWithinQuota(
         tx
           .select({ usedBytes: sql<number>`coalesce(sum(${booksTable.fileSize}), 0)::double precision` })
           .from(booksTable)
-          .where(eq(booksTable.ownerUserId, user.id)),
+          .where(and(eq(booksTable.ownerUserId, user.id), isNull(booksTable.contentBookId))),
         tx
           .select({ reservedBytes: sql<number>`coalesce(sum(${bookUploadJobsTable.fileSize}), 0)::double precision` })
           .from(bookUploadJobsTable)

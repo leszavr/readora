@@ -255,6 +255,8 @@ export interface Book {
   /** @nullable */
   lastReadAt?: string | null;
   hideFromPopular?: boolean;
+  /** Book is a personal copy of a gift edition («Мировое достояние») */
+  isGiftEdition?: boolean;
   uploadedAt: string;
 }
 
@@ -733,6 +735,73 @@ export interface AdminUserUpdate {
   email?: string;
   role?: AdminUserUpdateRole;
   status?: AdminUserUpdateStatus;
+}
+
+export interface GiftEditionsAvailability {
+  availableCount: number;
+}
+
+export interface GiftEditionsClaimResult {
+  added: number;
+}
+
+export type GiftEditionFormat = typeof GiftEditionFormat[keyof typeof GiftEditionFormat];
+
+
+export const GiftEditionFormat = {
+  fb2: 'fb2',
+  epub: 'epub',
+} as const;
+
+export interface GiftEdition {
+  id: number;
+  bookId: number;
+  title: string;
+  /** @nullable */
+  author?: string | null;
+  format: GiftEditionFormat;
+  /** @nullable */
+  coverUrl?: string | null;
+  ownerUserId: number;
+  sortOrder: number;
+  isPublished: boolean;
+  copiesCount: number;
+  createdAt: string;
+}
+
+export type GiftEditionCandidateFormat = typeof GiftEditionCandidateFormat[keyof typeof GiftEditionCandidateFormat];
+
+
+export const GiftEditionCandidateFormat = {
+  fb2: 'fb2',
+  epub: 'epub',
+} as const;
+
+export interface GiftEditionCandidate {
+  id: number;
+  title: string;
+  /** @nullable */
+  author?: string | null;
+  format: GiftEditionCandidateFormat;
+}
+
+export interface GiftEditionCreate {
+  bookId: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  sortOrder?: number;
+  isPublished?: boolean;
+}
+
+export interface GiftEditionUpdate {
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  sortOrder?: number;
+  isPublished?: boolean;
 }
 
 export interface AppSettings {

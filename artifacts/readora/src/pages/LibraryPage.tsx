@@ -5,6 +5,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { BookCard, BookListItem } from "@/components/BookCard";
 import { UploadBookDialog } from "@/components/UploadBookDialog";
+import { GiftEditionsBanner } from "@/components/GiftEditionsBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -257,6 +258,7 @@ export default function LibraryPage() {
       showDeleteDialog={showDeleteDialog}
       handleBulkDelete={handleBulkDelete}
       toggleBookSelection={toggleBookSelection}
+      hasGiftBooks={bookItems.some((book: any) => book?.isGiftEdition)}
     />
   );
 }
@@ -295,6 +297,7 @@ function LibraryPageLayout({
   showDeleteDialog,
   handleBulkDelete,
   toggleBookSelection,
+  hasGiftBooks,
 }: any) {
   return (
     <ProtectedRoute>
@@ -311,6 +314,8 @@ function LibraryPageLayout({
             clearSelection={clearSelection}
             setUploadOpen={setUploadOpen}
           />
+
+          {librarySection === "library" && <GiftEditionsBanner hasGiftBooks={hasGiftBooks} />}
 
           <LibrarySectionSwitch
             librarySection={librarySection}

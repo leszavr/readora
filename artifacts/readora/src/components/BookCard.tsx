@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Check, Circle } from "lucide-react";
+import { BookOpen, Check, Circle, Landmark } from "lucide-react";
 
 interface Props {
   book: Book;
@@ -73,6 +73,18 @@ export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
                 title={cycleBadgeTitle}
               >
                 #{book.cycleNumber}
+              </span>
+            </div>
+          )}
+
+          {book.isGiftEdition && (
+            <div className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)]">
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white shadow-sm backdrop-blur-sm"
+                title="Подарочное издание из категории «Мировое достояние». Не учитывается в квоте хранилища."
+              >
+                <Landmark className="size-3" aria-hidden="true" />
+                <span className="truncate">Мировое достояние</span>
               </span>
             </div>
           )}
@@ -176,6 +188,12 @@ export function BookListItem({
           <h3 className="font-medium truncate">{book.title}</h3>
           <p className="text-sm text-muted-foreground truncate">{book.author || "Неизвестный автор"}</p>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            {book.isGiftEdition && (
+              <span className="inline-flex shrink-0 items-center gap-1" title="Подарочное издание. Не учитывается в квоте хранилища.">
+                <Landmark className="size-3" aria-hidden="true" />
+                Мировое достояние
+              </span>
+            )}
             {book.genres && book.genres.length > 0 && (
               <span className="truncate">{book.genres[0].name}</span>
             )}
