@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/auth";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
+import { getContentBookId } from "../lib/gift-editions-service";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
@@ -56,15 +57,15 @@ router.get("/books/:id/chapters", requireAuth, async (req, res): Promise<void> =
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
 
   const chapters = await db
-    .select({ id: chaptersTable.id, bookId: chaptersTable.bookId, index: chaptersTable.index, title: chaptersTable.title, wordCount: chaptersTable.wordCount })
+    .select({ id: chaptersTable.id, index: chaptersTable.index, title: chaptersTable.title, wordCount: chaptersTable.wordCount })
     .from(chaptersTable)
-    .where(eq(chaptersTable.bookId, bookId))
+    .where(eq(chaptersTable.bookId, getContentBookId(book)))
     .orderBy(chaptersTable.index);
 
   // Log open event
   await db.insert(readEventsTable).values({ bookId, userId: user.id, eventType: "open" }).catch(() => {});
 
-  res.json(chapters);
+  res.json(chapters.map((chapter) => ({ ...chapter, bookId })));
 });
 
 // GET /books/:id/chapters/:chapterId — chapter content
@@ -76,12 +77,12 @@ router.get("/books/:id/chapters/:chapterId", requireAuth, async (req, res): Prom
   const [book] = await db.select().from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(403).json({ error: "Доступ запрещён" }); return; }
 
-  const [chapter] = await db.select().from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, bookId)));
+  const [chapter] = await db.select().from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, getContentBookId(book))));
   if (!chapter) { res.status(404).json({ error: "Глава не найдена" }); return; }
 
   res.json({
     id: chapter.id,
-    bookId: chapter.bookId,
+    bookId,
     index: chapter.index,
     title: chapter.title,
     htmlContent: chapter.htmlContent,
@@ -126,7 +127,7 @@ router.get("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
 router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const { currentChapterId, currentPosition, progressPercent, readingStatus } = req.body ?? {};
   const normalizedCurrentChapterId = typeof currentChapterId === "number" && Number.isInteger(currentChapterId)
@@ -296,7 +297,7 @@ router.delete("/reader/settings", requireAuth, async (req, res): Promise<void> =
 router.get("/books/:id/bookmarks", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const rows = await db.select().from(bookmarksTable).where(and(eq(bookmarksTable.userId, user.id), eq(bookmarksTable.bookId, bookId))).orderBy(bookmarksTable.createdAt);
   res.json(rows);
@@ -306,7 +307,7 @@ router.get("/books/:id/bookmarks", requireAuth, async (req, res): Promise<void> 
 router.post("/books/:id/bookmarks", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const { chapterId, positionRaw, label, selectedText } = req.body ?? {};
   if (typeof chapterId !== "number" || !Number.isInteger(chapterId)) { res.status(400).json({ error: "chapterId обязателен" }); return; }
@@ -314,7 +315,7 @@ router.post("/books/:id/bookmarks", requireAuth, async (req, res): Promise<void>
   if (positionRaw.length > 8000) { res.status(400).json({ error: "positionRaw слишком длинный" }); return; }
   const normalizedLabel = typeof label === "string" ? label.trim().slice(0, 200) || null : null;
   const normalizedSelectedText = typeof selectedText === "string" ? selectedText.trim().slice(0, 100) || null : null;
-  const [chapter] = await db.select({ id: chaptersTable.id }).from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, bookId)));
+  const [chapter] = await db.select({ id: chaptersTable.id }).from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, getContentBookId(book))));
   if (!chapter) { res.status(400).json({ error: "Глава не найдена" }); return; }
   const [row] = await db.insert(bookmarksTable).values({ userId: user.id, bookId, chapterId, positionRaw: positionRaw.trim(), label: normalizedLabel, selectedText: normalizedSelectedText }).returning();
   res.status(201).json(row);
@@ -325,7 +326,7 @@ router.delete("/books/:id/bookmarks/:bookmarkId", requireAuth, async (req, res):
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
   const bookmarkId = String(req.params.bookmarkId);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const [deleted] = await db.delete(bookmarksTable).where(and(eq(bookmarksTable.id, bookmarkId), eq(bookmarksTable.userId, user.id), eq(bookmarksTable.bookId, bookId))).returning({ id: bookmarksTable.id });
   if (!deleted) { res.status(404).json({ error: "Закладка не найдена" }); return; }
@@ -336,7 +337,7 @@ router.delete("/books/:id/bookmarks/:bookmarkId", requireAuth, async (req, res):
 router.get("/books/:id/notes", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const rows = await db.select().from(notesTable).where(and(eq(notesTable.userId, user.id), eq(notesTable.bookId, bookId))).orderBy(notesTable.updatedAt);
   res.json(rows);
@@ -346,7 +347,7 @@ router.get("/books/:id/notes", requireAuth, async (req, res): Promise<void> => {
 router.post("/books/:id/notes", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const { chapterId, positionRaw, highlightedText, noteText, color } = req.body ?? {};
   if (typeof chapterId !== "number" || !Number.isInteger(chapterId)) { res.status(400).json({ error: "chapterId обязателен" }); return; }
@@ -356,7 +357,7 @@ router.post("/books/:id/notes", requireAuth, async (req, res): Promise<void> => 
   if (noteText.length > 2000) { res.status(400).json({ error: "noteText слишком длинный" }); return; }
   const normalizedHighlightedText = typeof highlightedText === "string" ? highlightedText.trim().slice(0, 100) || null : null;
   const normalizedColor = ["yellow", "green", "blue", "pink", "purple"].includes(color) ? color : "yellow";
-  const [chapter] = await db.select({ id: chaptersTable.id }).from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, bookId)));
+  const [chapter] = await db.select({ id: chaptersTable.id }).from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, getContentBookId(book))));
   if (!chapter) { res.status(400).json({ error: "Глава не найдена" }); return; }
   const [row] = await db.insert(notesTable).values({ userId: user.id, bookId, chapterId, positionRaw: positionRaw.trim(), highlightedText: normalizedHighlightedText, noteText: noteText.trim().slice(0, 2000), color: normalizedColor }).returning();
   res.status(201).json(row);
@@ -367,7 +368,7 @@ router.put("/books/:id/notes/:noteId", requireAuth, async (req, res): Promise<vo
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
   const noteId = String(req.params.noteId);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const { noteText, color } = req.body ?? {};
   if (noteText && (typeof noteText !== "string" || noteText.length > 2000)) { res.status(400).json({ error: "noteText некорректен" }); return; }
@@ -385,7 +386,7 @@ router.delete("/books/:id/notes/:noteId", requireAuth, async (req, res): Promise
   const user = (req as AuthReq).user;
   const bookId = parseInt(String(req.params.id), 10);
   const noteId = String(req.params.noteId);
-  const [book] = await db.select({ id: booksTable.id }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  const [book] = await db.select({ id: booksTable.id, contentBookId: booksTable.contentBookId }).from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   const [deleted] = await db.delete(notesTable).where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id), eq(notesTable.bookId, bookId))).returning({ id: notesTable.id });
   if (!deleted) { res.status(404).json({ error: "Заметка не найдена" }); return; }

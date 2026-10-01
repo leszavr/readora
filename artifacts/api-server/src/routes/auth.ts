@@ -24,6 +24,7 @@ import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import { logger } from "../lib/logger";
+import { grantGiftEditionsOnSignup, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import {
   consumeVkOAuthState,
   createVkPkceChallenge,
@@ -110,6 +111,7 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
       referralSource,
     })
     .returning();
+  await grantGiftEditionsOnSignup(user.id);
 
   // Create verification token if email enabled
   if (emailService.isEnabled()) {
@@ -392,6 +394,11 @@ router.post(
     );
     if (!valid) {
       res.status(400).json({ error: "Текущий пароль неверный" });
+      return;
+    }
+
+    if (await userOwnsGiftSourcesInUse(user.id)) {
+      res.status(409).json({ error: "Ваши книги выданы пользователям как подарочные издания. Обратитесь к администратору." });
       return;
     }
 
@@ -899,6 +906,7 @@ router.get("/auth/yandex/callback", async (req, res): Promise<void> => {
         referralSource: "direct",
       })
       .returning();
+    await grantGiftEditionsOnSignup(created.id);
     user = created;
   }
 
@@ -1146,6 +1154,7 @@ router.get("/auth/vk/callback", async (req, res): Promise<void> => {
         referralSource: "vk",
       })
       .returning();
+    await grantGiftEditionsOnSignup(created.id);
     user = created;
   }
 

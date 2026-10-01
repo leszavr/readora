@@ -303,6 +303,7 @@ export const ListBooksResponseItem = zod.object({
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
   "hideFromPopular": zod.boolean().optional(),
+  "isGiftEdition": zod.boolean().optional().describe('Book is a personal copy of a gift edition («Мировое достояние»)'),
   "uploadedAt": zod.coerce.date()
 })
 export const ListBooksResponse = zod.array(ListBooksResponseItem)
@@ -368,6 +369,7 @@ export const GetBookResponse = zod.object({
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
   "hideFromPopular": zod.boolean().optional(),
+  "isGiftEdition": zod.boolean().optional().describe('Book is a personal copy of a gift edition («Мировое достояние»)'),
   "uploadedAt": zod.coerce.date()
 })
 
@@ -418,6 +420,7 @@ export const UpdateBookResponse = zod.object({
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
   "hideFromPopular": zod.boolean().optional(),
+  "isGiftEdition": zod.boolean().optional().describe('Book is a personal copy of a gift edition («Мировое достояние»)'),
   "uploadedAt": zod.coerce.date()
 })
 
@@ -1041,6 +1044,108 @@ export const UpdateLandingBookCoverResponse = zod.object({
   "isPublished": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Count published gift editions missing from the current user's library
+ */
+export const GetAvailableGiftEditionsResponse = zod.object({
+  "availableCount": zod.number()
+})
+
+
+/**
+ * @summary Add missing published gift editions to the current user's library
+ */
+export const ClaimGiftEditionsResponse = zod.object({
+  "added": zod.number()
+})
+
+
+/**
+ * @summary List gift editions (admin)
+ */
+export const ListGiftEditionsResponseItem = zod.object({
+  "id": zod.number(),
+  "bookId": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "coverUrl": zod.string().nullish(),
+  "ownerUserId": zod.number(),
+  "sortOrder": zod.number(),
+  "isPublished": zod.boolean(),
+  "copiesCount": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListGiftEditionsResponse = zod.array(ListGiftEditionsResponseItem)
+
+
+/**
+ * @summary Mark one of the admin's own books as a gift edition (admin)
+ */
+export const createGiftEditionBodySortOrderMin = 0;
+export const createGiftEditionBodySortOrderMax = 10000;
+
+
+
+export const CreateGiftEditionBody = zod.object({
+  "bookId": zod.number(),
+  "sortOrder": zod.number().min(createGiftEditionBodySortOrderMin).max(createGiftEditionBodySortOrderMax).optional(),
+  "isPublished": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List the admin's own books that can become gift editions (admin)
+ */
+export const ListGiftEditionCandidatesResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub'])
+})
+export const ListGiftEditionCandidatesResponse = zod.array(ListGiftEditionCandidatesResponseItem)
+
+
+/**
+ * @summary Update gift edition order and publication state (admin)
+ */
+export const UpdateGiftEditionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateGiftEditionBodySortOrderMin = 0;
+export const updateGiftEditionBodySortOrderMax = 10000;
+
+
+
+export const UpdateGiftEditionBody = zod.object({
+  "sortOrder": zod.number().min(updateGiftEditionBodySortOrderMin).max(updateGiftEditionBodySortOrderMax).optional(),
+  "isPublished": zod.boolean().optional()
+})
+
+export const UpdateGiftEditionResponse = zod.object({
+  "id": zod.number(),
+  "bookId": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "coverUrl": zod.string().nullish(),
+  "ownerUserId": zod.number(),
+  "sortOrder": zod.number(),
+  "isPublished": zod.boolean(),
+  "copiesCount": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a book from gift editions; issued copies stay (admin)
+ */
+export const DeleteGiftEditionParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

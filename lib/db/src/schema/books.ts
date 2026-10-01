@@ -1,4 +1,4 @@
-import { index, pgTable, text, serial, integer, timestamp, pgEnum, real, boolean } from "drizzle-orm/pg-core";
+import { index, pgTable, text, serial, integer, timestamp, pgEnum, real, boolean, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -29,11 +29,15 @@ export const booksTable = pgTable(
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
     hideFromPopular: boolean("hide_from_popular").notNull().default(false),
+    // Подарочная копия: главы и файл берутся из канонической книги, метаданные — свои.
+    contentBookId: integer("content_book_id").references((): AnyPgColumn => booksTable.id, { onDelete: "restrict" }),
   },
   (t) => [
     index("books_owner_user_id_idx").on(t.ownerUserId),
     index("books_file_hash_idx").on(t.fileHash),
     index("books_owner_uploaded_at_idx").on(t.ownerUserId, t.uploadedAt),
+    uniqueIndex("books_owner_content_book_uidx").on(t.ownerUserId, t.contentBookId),
+    index("books_content_book_id_idx").on(t.contentBookId),
   ],
 );
 

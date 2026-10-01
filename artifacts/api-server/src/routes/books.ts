@@ -13,6 +13,7 @@ import { optimizeImage } from "../lib/image-optimizer";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
+import { getContentBookId, GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside } from "../lib/gift-editions-service";
 import type { Request } from "express";
 
 const router = Router();
@@ -255,7 +256,7 @@ async function getBookWithDetails(bookId: number, userId: number) {
   const chapterCountResult = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(chaptersTable)
-    .where(eq(chaptersTable.bookId, bookId));
+    .where(eq(chaptersTable.bookId, getContentBookId(book)));
   const chapterCount = chapterCountResult[0]?.count ?? 0;
 
   return {
@@ -280,6 +281,7 @@ async function getBookWithDetails(bookId: number, userId: number) {
     lastReadAt: progress?.lastReadAt ?? null,
     uploadedAt: book.uploadedAt,
     hideFromPopular: book.hideFromPopular,
+    isGiftEdition: book.contentBookId !== null,
   };
 }
 
@@ -679,6 +681,7 @@ router.delete("/books/:id", requireAuth, async (req, res): Promise<void> => {
   const id = Number.parseInt(String(req.params.id), 10);
   const [book] = await db.select().from(booksTable).where(and(eq(booksTable.id, id), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
+  if (await hasGiftCopiesOutside([book.id])) { res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE }); return; }
   await deleteStoredFilesIfUnreferenced(book);
   await db.delete(booksTable).where(eq(booksTable.id, id));
   res.sendStatus(204);
@@ -696,6 +699,10 @@ router.post("/books/delete-bulk", requireAuth, async (req, res): Promise<void> =
   const deletingIds = booksToDelete.map((book) => book.id);
   if (deletingIds.length === 0) {
     res.json({ deleted: 0 });
+    return;
+  }
+  if (await hasGiftCopiesOutside(deletingIds)) {
+    res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE });
     return;
   }
   for (const book of booksToDelete) {

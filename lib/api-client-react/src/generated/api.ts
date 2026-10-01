@@ -50,6 +50,12 @@ import type {
   GenreUpdate,
   GetAdminAnalyticsParams,
   GetPopularBooksParams,
+  GiftEdition,
+  GiftEditionCandidate,
+  GiftEditionCreate,
+  GiftEditionUpdate,
+  GiftEditionsAvailability,
+  GiftEditionsClaimResult,
   HealthStatus,
   LandingBook,
   LandingBookCoverUploadInput,
@@ -4260,6 +4266,520 @@ export const useUpdateLandingBookCover = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getUpdateLandingBookCoverMutationOptions(options));
+    }
+
+export const getGetAvailableGiftEditionsUrl = () => {
+
+
+
+
+  return `/api/gift-editions/available`
+}
+
+/**
+ * @summary Count published gift editions missing from the current user's library
+ */
+export const getAvailableGiftEditions = async ( options?: RequestInit): Promise<GiftEditionsAvailability> => {
+
+  return customFetch<GiftEditionsAvailability>(getGetAvailableGiftEditionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAvailableGiftEditionsQueryKey = () => {
+    return [
+    `/api/gift-editions/available`
+    ] as const;
+    }
+
+
+export const getGetAvailableGiftEditionsQueryOptions = <TData = Awaited<ReturnType<typeof getAvailableGiftEditions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAvailableGiftEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAvailableGiftEditionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAvailableGiftEditions>>> = ({ signal }) => getAvailableGiftEditions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAvailableGiftEditions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAvailableGiftEditionsQueryResult = NonNullable<Awaited<ReturnType<typeof getAvailableGiftEditions>>>
+export type GetAvailableGiftEditionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Count published gift editions missing from the current user's library
+ */
+
+export function useGetAvailableGiftEditions<TData = Awaited<ReturnType<typeof getAvailableGiftEditions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAvailableGiftEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAvailableGiftEditionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getClaimGiftEditionsUrl = () => {
+
+
+
+
+  return `/api/gift-editions/claim`
+}
+
+/**
+ * @summary Add missing published gift editions to the current user's library
+ */
+export const claimGiftEditions = async ( options?: RequestInit): Promise<GiftEditionsClaimResult> => {
+
+  return customFetch<GiftEditionsClaimResult>(getClaimGiftEditionsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getClaimGiftEditionsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimGiftEditions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof claimGiftEditions>>, TError,void, TContext> => {
+
+const mutationKey = ['claimGiftEditions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof claimGiftEditions>>, void> = () => {
+
+
+          return  claimGiftEditions(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClaimGiftEditionsMutationResult = NonNullable<Awaited<ReturnType<typeof claimGiftEditions>>>
+
+    export type ClaimGiftEditionsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add missing published gift editions to the current user's library
+ */
+export const useClaimGiftEditions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimGiftEditions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof claimGiftEditions>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClaimGiftEditionsMutationOptions(options));
+    }
+
+export const getListGiftEditionsUrl = () => {
+
+
+
+
+  return `/api/admin/gift-editions`
+}
+
+/**
+ * @summary List gift editions (admin)
+ */
+export const listGiftEditions = async ( options?: RequestInit): Promise<GiftEdition[]> => {
+
+  return customFetch<GiftEdition[]>(getListGiftEditionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGiftEditionsQueryKey = () => {
+    return [
+    `/api/admin/gift-editions`
+    ] as const;
+    }
+
+
+export const getListGiftEditionsQueryOptions = <TData = Awaited<ReturnType<typeof listGiftEditions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGiftEditionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGiftEditions>>> = ({ signal }) => listGiftEditions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGiftEditions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGiftEditionsQueryResult = NonNullable<Awaited<ReturnType<typeof listGiftEditions>>>
+export type ListGiftEditionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List gift editions (admin)
+ */
+
+export function useListGiftEditions<TData = Awaited<ReturnType<typeof listGiftEditions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGiftEditionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateGiftEditionUrl = () => {
+
+
+
+
+  return `/api/admin/gift-editions`
+}
+
+/**
+ * @summary Mark one of the admin's own books as a gift edition (admin)
+ */
+export const createGiftEdition = async (giftEditionCreate: GiftEditionCreate, options?: RequestInit): Promise<GiftEdition> => {
+
+  return customFetch<GiftEdition>(getCreateGiftEditionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      giftEditionCreate,)
+  }
+);}
+
+
+
+
+export const getCreateGiftEditionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGiftEdition>>, TError,{data: BodyType<GiftEditionCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGiftEdition>>, TError,{data: BodyType<GiftEditionCreate>}, TContext> => {
+
+const mutationKey = ['createGiftEdition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGiftEdition>>, {data: BodyType<GiftEditionCreate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGiftEdition(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGiftEditionMutationResult = NonNullable<Awaited<ReturnType<typeof createGiftEdition>>>
+    export type CreateGiftEditionMutationBody = BodyType<GiftEditionCreate>
+    export type CreateGiftEditionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Mark one of the admin's own books as a gift edition (admin)
+ */
+export const useCreateGiftEdition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGiftEdition>>, TError,{data: BodyType<GiftEditionCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGiftEdition>>,
+        TError,
+        {data: BodyType<GiftEditionCreate>},
+        TContext
+      > => {
+      return useMutation(getCreateGiftEditionMutationOptions(options));
+    }
+
+export const getListGiftEditionCandidatesUrl = () => {
+
+
+
+
+  return `/api/admin/gift-editions/candidates`
+}
+
+/**
+ * @summary List the admin's own books that can become gift editions (admin)
+ */
+export const listGiftEditionCandidates = async ( options?: RequestInit): Promise<GiftEditionCandidate[]> => {
+
+  return customFetch<GiftEditionCandidate[]>(getListGiftEditionCandidatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGiftEditionCandidatesQueryKey = () => {
+    return [
+    `/api/admin/gift-editions/candidates`
+    ] as const;
+    }
+
+
+export const getListGiftEditionCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGiftEditionCandidatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGiftEditionCandidates>>> = ({ signal }) => listGiftEditionCandidates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGiftEditionCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof listGiftEditionCandidates>>>
+export type ListGiftEditionCandidatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the admin's own books that can become gift editions (admin)
+ */
+
+export function useListGiftEditionCandidates<TData = Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGiftEditionCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGiftEditionCandidatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateGiftEditionUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/gift-editions/${id}`
+}
+
+/**
+ * @summary Update gift edition order and publication state (admin)
+ */
+export const updateGiftEdition = async (id: number,
+    giftEditionUpdate: GiftEditionUpdate, options?: RequestInit): Promise<GiftEdition> => {
+
+  return customFetch<GiftEdition>(getUpdateGiftEditionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      giftEditionUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateGiftEditionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGiftEdition>>, TError,{id: number;data: BodyType<GiftEditionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGiftEdition>>, TError,{id: number;data: BodyType<GiftEditionUpdate>}, TContext> => {
+
+const mutationKey = ['updateGiftEdition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGiftEdition>>, {id: number;data: BodyType<GiftEditionUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateGiftEdition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGiftEditionMutationResult = NonNullable<Awaited<ReturnType<typeof updateGiftEdition>>>
+    export type UpdateGiftEditionMutationBody = BodyType<GiftEditionUpdate>
+    export type UpdateGiftEditionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update gift edition order and publication state (admin)
+ */
+export const useUpdateGiftEdition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGiftEdition>>, TError,{id: number;data: BodyType<GiftEditionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGiftEdition>>,
+        TError,
+        {id: number;data: BodyType<GiftEditionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateGiftEditionMutationOptions(options));
+    }
+
+export const getDeleteGiftEditionUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/gift-editions/${id}`
+}
+
+/**
+ * @summary Remove a book from gift editions; issued copies stay (admin)
+ */
+export const deleteGiftEdition = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteGiftEditionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteGiftEditionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGiftEdition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGiftEdition>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteGiftEdition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGiftEdition>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteGiftEdition(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGiftEditionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGiftEdition>>>
+
+    export type DeleteGiftEditionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Remove a book from gift editions; issued copies stay (admin)
+ */
+export const useDeleteGiftEdition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGiftEdition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGiftEdition>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGiftEditionMutationOptions(options));
     }
 
 export const getGetAppSettingsUrl = () => {
