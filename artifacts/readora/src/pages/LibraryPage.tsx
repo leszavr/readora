@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { ListBooksStatus, useListBooks, useListGenres, useDeleteBulkBooks } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { BookCard } from "@/components/BookCard";
+import { BookCard, BookListItem } from "@/components/BookCard";
 import { UploadBookDialog } from "@/components/UploadBookDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -855,73 +855,5 @@ function BooksGridView({
         </div>
       ))}
     </div>
-  );
-}
-
-// List view component for books
-function BookListItem({ 
-  book, 
-  selected, 
-  onSelect, 
-  showCheckbox 
-}: Readonly<{ 
-  book: any; 
-  selected?: boolean; 
-  onSelect?: () => void; 
-  showCheckbox?: boolean;
-}>) {
-  const [, navigate] = useLocation();
-  
-  const handleClick = () => {
-    navigate(`/books/${book.id}`);
-  };
-  
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      navigate(`/books/${book.id}`);
-    }
-  };
-  
-  return (
-    <button
-      type="button"
-      className={`flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer text-left w-full ${selected ? 'ring-2 ring-primary' : ''}`}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-    >
-      {showCheckbox && onSelect && (
-        <Checkbox
-          checked={selected}
-          onCheckedChange={onSelect}
-          onClick={(e) => e.stopPropagation()}
-        />
-      )}
-      <div className="relative w-12 h-16 flex-shrink-0 rounded overflow-hidden bg-muted">
-        {book.coverUrl && (
-          <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-        )}
-        {typeof book.cycleNumber === "number" && (
-          <span
-            className="absolute left-1 top-1 inline-flex items-center rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm backdrop-blur-sm"
-            title={book.cycleName ? `${book.cycleName} • #${book.cycleNumber}` : `#${book.cycleNumber}`}
-          >
-            #{book.cycleNumber}
-          </span>
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium truncate">{book.title}</h3>
-        <p className="text-sm text-muted-foreground truncate">{book.author || "Неизвестный автор"}</p>
-        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-          {book.genres && book.genres.length > 0 && (
-            <span className="truncate">{book.genres[0].name}</span>
-          )}
-          {book.progressPercent != null && book.progressPercent > 0 && (
-            <span>{Math.round(book.progressPercent)}% прочитано</span>
-          )}
-        </div>
-      </div>
-    </button>
   );
 }

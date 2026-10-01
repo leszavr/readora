@@ -1,5 +1,5 @@
 import type { Book } from "@workspace/api-client-react";
-import { BookCard } from "@/components/BookCard";
+import { BookCard, BookListItem } from "@/components/BookCard";
 import { CycleStack } from "@/components/CycleStack";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -70,13 +70,14 @@ export function ShelfView({
       return (
         <div className="space-y-2">
           {books.map((book) => (
-            <label key={book.id} className="flex cursor-pointer items-center gap-4 rounded-lg border bg-card p-4">
-              <Checkbox checked={selectedBooks.has(book.id)} onCheckedChange={() => onToggleSelection?.(book.id)} />
-              <div>
-                <p className="font-medium">{book.title}</p>
-                {book.author && <p className="text-sm text-muted-foreground">{book.author}</p>}
-              </div>
-            </label>
+            <BookListItem
+              key={book.id}
+              book={book}
+              shelf
+              selected={selectedBooks.has(book.id)}
+              onSelect={() => onToggleSelection?.(book.id)}
+              showCheckbox
+            />
           ))}
         </div>
       );
@@ -105,10 +106,7 @@ export function ShelfView({
     return (
       <div className="space-y-2">
         {books.map((book) => (
-          <div key={book.id} className="rounded-lg border bg-card p-4">
-            <p className="font-medium">{book.title}</p>
-            {book.author && <p className="text-sm text-muted-foreground">{book.author}</p>}
-          </div>
+          <BookListItem key={book.id} book={book} shelf />
         ))}
       </div>
     );
