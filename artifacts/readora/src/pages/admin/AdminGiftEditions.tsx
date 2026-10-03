@@ -143,41 +143,49 @@ export default function AdminGiftEditions() {
                   <Badge variant={edition.isPublished ? "default" : "secondary"}>{edition.isPublished ? "Выдаётся" : "Снята"}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">{edition.format.toUpperCase()} · в библиотеках: {edition.copiesCount}</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Label htmlFor={`gift-order-${edition.id}`} className="text-xs text-muted-foreground">Порядок</Label>
-                  <div className="w-16 shrink-0">
-                    <Input
-                      id={`gift-order-${edition.id}`}
-                      key={`${edition.id}-${edition.sortOrder}`}
-                      type="number"
-                      min={0}
-                      max={10000}
-                      defaultValue={edition.sortOrder}
-                      onBlur={(event) => saveSortOrder(edition, event.target.value)}
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`gift-order-${edition.id}`} className="text-xs text-muted-foreground">Порядок</Label>
+                    <div className="w-16 shrink-0">
+                      <Input
+                        id={`gift-order-${edition.id}`}
+                        key={`${edition.id}-${edition.sortOrder}`}
+                        type="number"
+                        min={0}
+                        max={10000}
+                        defaultValue={edition.sortOrder}
+                        onBlur={(event) => saveSortOrder(edition, event.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="ml-auto flex items-center">
-                    <Switch
-                      checked={edition.isPublished}
-                      disabled={updateMutation.isPending}
-                      onCheckedChange={(isPublished) => void updateEdition(edition, { isPublished })}
-                      aria-label="Выдавать пользователям"
-                    />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Switch
+                        id={`gift-published-${edition.id}`}
+                        checked={edition.isPublished}
+                        disabled={updateMutation.isPending}
+                        onCheckedChange={(isPublished) => void updateEdition(edition, { isPublished })}
+                        aria-label="Выдавать пользователям"
+                      />
+                      <Label htmlFor={`gift-published-${edition.id}`} className="truncate text-xs font-normal text-muted-foreground">Выдавать</Label>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9"
+                        disabled={edition.ownerUserId !== user?.id}
+                        title={edition.ownerUserId === user?.id ? "Редактировать" : "Редактировать может только владелец эталона"}
+                        onClick={() => setEditEdition(edition)}
+                        aria-label={`Редактировать «${edition.title}»`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" onClick={() => setDeleteEdition(edition)} aria-label={`Убрать «${edition.title}»`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    disabled={edition.ownerUserId !== user?.id}
-                    title={edition.ownerUserId === user?.id ? "Редактировать" : "Редактировать может только владелец эталона"}
-                    onClick={() => setEditEdition(edition)}
-                    aria-label={`Редактировать «${edition.title}»`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" onClick={() => setDeleteEdition(edition)} aria-label={`Убрать «${edition.title}»`}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             </article>

@@ -1743,7 +1743,7 @@ components:
           type: boolean
         isGiftEdition:
           type: boolean
-          description: Book is a personal copy of a gift edition («Мировое достояние»)
+          description: Book belongs to a gift edition («Мировое достояние»), including its source book
         uploadedAt:
           type: string
           format: date-time

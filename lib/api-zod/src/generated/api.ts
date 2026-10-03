@@ -303,7 +303,7 @@ export const ListBooksResponseItem = zod.object({
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
   "hideFromPopular": zod.boolean().optional(),
-  "isGiftEdition": zod.boolean().optional().describe('Book is a personal copy of a gift edition («Мировое достояние»)'),
+  "isGiftEdition": zod.boolean().optional().describe('Book belongs to a gift edition («Мировое достояние»), including its source book'),
   "uploadedAt": zod.coerce.date()
 })
 export const ListBooksResponse = zod.array(ListBooksResponseItem)
@@ -369,7 +369,7 @@ export const GetBookResponse = zod.object({
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
   "hideFromPopular": zod.boolean().optional(),
-  "isGiftEdition": zod.boolean().optional().describe('Book is a personal copy of a gift edition («Мировое достояние»)'),
+  "isGiftEdition": zod.boolean().optional().describe('Book belongs to a gift edition («Мировое достояние»), including its source book'),
   "uploadedAt": zod.coerce.date()
 })
 
@@ -420,7 +420,7 @@ export const UpdateBookResponse = zod.object({
   "progressPercent": zod.number().nullish(),
   "lastReadAt": zod.coerce.date().nullish(),
   "hideFromPopular": zod.boolean().optional(),
-  "isGiftEdition": zod.boolean().optional().describe('Book is a personal copy of a gift edition («Мировое достояние»)'),
+  "isGiftEdition": zod.boolean().optional().describe('Book belongs to a gift edition («Мировое достояние»), including its source book'),
   "uploadedAt": zod.coerce.date()
 })
 

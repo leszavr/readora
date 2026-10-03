@@ -255,7 +255,7 @@ export interface Book {
   /** @nullable */
   lastReadAt?: string | null;
   hideFromPopular?: boolean;
-  /** Book is a personal copy of a gift edition («Мировое достояние») */
+  /** Book belongs to a gift edition («Мировое достояние»), including its source book */
   isGiftEdition?: boolean;
   uploadedAt: string;
 }
