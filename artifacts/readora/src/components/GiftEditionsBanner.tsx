@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAvailableGiftEditionsQueryKey,
@@ -13,15 +14,23 @@ import { useToast } from "@/hooks/use-toast";
 
 const ONBOARDING_KEY = "readora.giftEditions.onboardingSeen";
 const DISMISSED_COUNT_KEY = "readora.giftEditions.dismissedCount";
+const ONBOARDING_AUTO_DISMISS_DELAY_MS = 8_000;
 
 export function GiftEditionsBanner({ hasGiftBooks }: Readonly<{ hasGiftBooks: boolean }>) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [onboardingSeen, setOnboardingSeen] = useLocalStorageState(ONBOARDING_KEY, false);
   const [dismissedCount, setDismissedCount] = useLocalStorageState<number | null>(DISMISSED_COUNT_KEY, null);
-  const { data } = useGetAvailableGiftEditions();
+  const { data, isLoading } = useGetAvailableGiftEditions();
   const claimMutation = useClaimGiftEditions();
   const availableCount = data?.availableCount ?? 0;
+
+  useEffect(() => {
+    if (isLoading || !hasGiftBooks || onboardingSeen || availableCount > 0) return;
+
+    const timeoutId = window.setTimeout(() => setOnboardingSeen(true), ONBOARDING_AUTO_DISMISS_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [availableCount, hasGiftBooks, isLoading, onboardingSeen, setOnboardingSeen]);
 
   async function claim() {
     try {
@@ -67,8 +76,14 @@ export function GiftEditionsBanner({ hasGiftBooks }: Readonly<{ hasGiftBooks: bo
             Начните читать прямо сейчас. Описание и обложку можно изменить, а книгу — удалить, как любую свою. Место в квоте они не занимают.
           </p>
         </div>
-        <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOnboardingSeen(true)}>
-          Понятно
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 shrink-0"
+          onClick={() => setOnboardingSeen(true)}
+          aria-label="Скрыть уведомление"
+        >
+          <X className="h-4 w-4" />
         </Button>
       </div>
     );
