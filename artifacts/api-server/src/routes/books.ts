@@ -4,7 +4,7 @@ import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, usersTable } from "@workspace/db";
+import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, giftEditionsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { parseBook } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
@@ -234,9 +234,23 @@ async function applyBookUpdates(params: {
 }
 
 // Helper: get book with genres and progress
-async function getBookWithDetails(bookId: number, userId: number) {
+async function getBookWithDetails(bookId: number, userId: number, giftEditionBookIds?: ReadonlySet<number>) {
   const [book] = await db.select().from(booksTable).where(eq(booksTable.id, bookId));
   if (!book) return null;
+
+  let isGiftEdition = book.contentBookId !== null;
+  if (!isGiftEdition) {
+    if (giftEditionBookIds) {
+      isGiftEdition = giftEditionBookIds.has(book.id);
+    } else {
+      const [giftEdition] = await db
+        .select({ id: giftEditionsTable.id })
+        .from(giftEditionsTable)
+        .where(eq(giftEditionsTable.bookId, book.id))
+        .limit(1);
+      isGiftEdition = Boolean(giftEdition);
+    }
+  }
 
   const genreRows = await db
     .select({ genre: genresTable })
@@ -281,7 +295,7 @@ async function getBookWithDetails(bookId: number, userId: number) {
     lastReadAt: progress?.lastReadAt ?? null,
     uploadedAt: book.uploadedAt,
     hideFromPopular: book.hideFromPopular,
-    isGiftEdition: book.contentBookId !== null,
+    isGiftEdition,
   };
 }
 
@@ -541,8 +555,19 @@ router.get("/books", requireAuth, async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(orderByClause);
 
+  const giftEditionBookIds = new Set<number>();
+  if (books.length > 0) {
+    const editionRows = await db
+      .select({ bookId: giftEditionsTable.bookId })
+      .from(giftEditionsTable)
+      .where(inArray(giftEditionsTable.bookId, books.map(getContentBookId)));
+    for (const edition of editionRows) {
+      giftEditionBookIds.add(edition.bookId);
+    }
+  }
+
   // Enrich with details
-  const results = await Promise.all(books.map((b) => getBookWithDetails(b.id, user.id)));
+  const results = await Promise.all(books.map((b) => getBookWithDetails(b.id, user.id, giftEditionBookIds)));
   let filtered = results.filter(Boolean);
 
   // Apply filters

@@ -33,7 +33,7 @@ import { trackLibraryViewed } from "@/lib/analytics";
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
 type GroupOption = "none" | "genre" | "author" | "cycle";
-type LibrarySection = "library" | "shelf";
+type LibrarySection = "library" | "gift" | "shelf";
 
 function isFinishedBook(book: any): boolean {
   return book?.readingStatus === "finished";
@@ -46,8 +46,9 @@ function getEffectiveStatus(section: LibrarySection, statusFilter: ListBooksStat
 }
 
 function filterBooksBySection(books: any[], section: LibrarySection): any[] {
-  if (section === "shelf") return books.filter(isFinishedBook);
-  return books.filter((book) => !isFinishedBook(book));
+  if (section === "gift") return books.filter((book) => book?.isGiftEdition);
+  if (section === "shelf") return books.filter((book) => !book?.isGiftEdition && isFinishedBook(book));
+  return books.filter((book) => !book?.isGiftEdition && !isFinishedBook(book));
 }
 
 function filterGroupedBySection(groupedSource: Record<string, any[]>, section: LibrarySection): Record<string, any[]> {
@@ -175,7 +176,7 @@ export default function LibraryPage() {
       setStatusFilter("finished");
       return;
     }
-    if (librarySection === "library" && statusFilter === "finished") {
+    if (librarySection !== "shelf" && statusFilter === "finished") {
       setStatusFilter("all");
     }
   }, [librarySection, statusFilter]);
@@ -464,22 +465,31 @@ function LibrarySectionSwitch({
   setLibrarySection: (section: LibrarySection) => void;
 }>) {
   return (
-    <div className="inline-flex rounded-lg border p-1 mb-6">
+    <div className="flex w-full flex-wrap gap-1 rounded-lg border p-1 mb-6 sm:w-fit">
       <Button
         type="button"
         size="sm"
         variant={librarySection === "library" ? "secondary" : "ghost"}
         onClick={() => setLibrarySection("library")}
-        className="h-8"
+        className="h-8 flex-1 sm:flex-none"
       >
         Библиотека
       </Button>
       <Button
         type="button"
         size="sm"
+        variant={librarySection === "gift" ? "secondary" : "ghost"}
+        onClick={() => setLibrarySection("gift")}
+        className="h-8 flex-1 sm:flex-none"
+      >
+        Подарочные издания
+      </Button>
+      <Button
+        type="button"
+        size="sm"
         variant={librarySection === "shelf" ? "secondary" : "ghost"}
         onClick={() => setLibrarySection("shelf")}
-        className="h-8"
+        className="h-8 flex-1 sm:flex-none"
       >
         Книжная полка
       </Button>
@@ -762,6 +772,24 @@ function EmptyState({ section, hasFilters, onUploadClick }: Readonly<{ section: 
           {hasFilters
             ? "Попробуйте изменить параметры поиска или фильтры."
             : "Отмечайте книги как \"Прочитано\", чтобы они попадали на полку."}
+        </p>
+      </div>
+    );
+  }
+
+  if (section === "gift") {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+          <BookOpen className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h3 className="font-semibold text-lg mb-2">
+          {hasFilters ? "Подарочные издания не найдены" : "Подарочных изданий пока нет"}
+        </h3>
+        <p className="text-muted-foreground text-sm">
+          {hasFilters
+            ? "Попробуйте изменить параметры поиска или фильтры."
+            : "Добавленные подарочные издания будут отображаться в этом разделе."}
         </p>
       </div>
     );
