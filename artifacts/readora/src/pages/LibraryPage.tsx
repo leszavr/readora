@@ -29,6 +29,7 @@ import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import { ShelfView } from "@/components/ShelfView";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
 import { trackLibraryViewed } from "@/lib/analytics";
+import { useAuth } from "@/hooks/use-auth";
 
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
@@ -45,17 +46,17 @@ function getEffectiveStatus(section: LibrarySection, statusFilter: ListBooksStat
   return statusFilter;
 }
 
-function filterBooksBySection(books: any[], section: LibrarySection): any[] {
-  if (section === "gift") return books.filter((book) => book?.isGiftEdition);
-  if (section === "shelf") return books.filter((book) => !book?.isGiftEdition && isFinishedBook(book));
-  return books.filter((book) => !book?.isGiftEdition && !isFinishedBook(book));
+function filterBooksBySection(books: any[], section: LibrarySection, isAdmin: boolean): any[] {
+  if (isAdmin && section === "gift") return books.filter((book) => book?.isGiftEdition);
+  if (section === "shelf") return books.filter((book) => (!isAdmin || !book?.isGiftEdition) && isFinishedBook(book));
+  return books.filter((book) => (!isAdmin || !book?.isGiftEdition) && !isFinishedBook(book));
 }
 
-function filterGroupedBySection(groupedSource: Record<string, any[]>, section: LibrarySection): Record<string, any[]> {
+function filterGroupedBySection(groupedSource: Record<string, any[]>, section: LibrarySection, isAdmin: boolean): Record<string, any[]> {
   const grouped: Record<string, any[]> = {};
 
   for (const [groupName, groupBooks] of Object.entries(groupedSource)) {
-    const filtered = filterBooksBySection(groupBooks, section);
+    const filtered = filterBooksBySection(groupBooks, section, isAdmin);
     if (filtered.length > 0) {
       grouped[groupName] = filtered;
     }
@@ -79,6 +80,7 @@ export default function LibraryPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { toast } = useToast();
+  const { user, isAdmin } = useAuth();
 
   const apiSortBy = sortBy === "cycleNumber" ? undefined : sortBy;
   const effectiveStatus = getEffectiveStatus(librarySection, statusFilter);
@@ -124,8 +126,8 @@ export default function LibraryPage() {
   }, [books, isGrouped, sortBy, sortDir]);
 
   const sectionBookItems = useMemo(() => {
-    return filterBooksBySection(sortedBookItems, librarySection);
-  }, [sortedBookItems, librarySection]);
+    return filterBooksBySection(sortedBookItems, librarySection, isAdmin);
+  }, [sortedBookItems, librarySection, isAdmin]);
 
   const sectionGroupedBooks = useMemo(() => {
     if (!isGrouped || !sortedGroupedBooks || typeof sortedGroupedBooks !== "object" || !("grouped" in sortedGroupedBooks)) {
@@ -133,13 +135,13 @@ export default function LibraryPage() {
     }
 
     const groupedSource = (sortedGroupedBooks as { grouped: Record<string, any[]> }).grouped;
-    const grouped = filterGroupedBySection(groupedSource, librarySection);
+    const grouped = filterGroupedBySection(groupedSource, librarySection, isAdmin);
 
     return {
       ...(sortedGroupedBooks as Record<string, unknown>),
       grouped,
     };
-  }, [isGrouped, sortedGroupedBooks, librarySection]);
+  }, [isGrouped, sortedGroupedBooks, librarySection, isAdmin]);
 
   const visibleBookItems = useMemo(() => {
     if (!isGrouped || !sectionGroupedBooks || typeof sectionGroupedBooks !== "object" || !("grouped" in sectionGroupedBooks)) {
@@ -163,6 +165,10 @@ export default function LibraryPage() {
   useEffect(() => {
     if (location.includes("shelf=1")) setLibrarySection("shelf");
   }, [location, setLibrarySection]);
+
+  useEffect(() => {
+    if (user && !isAdmin && librarySection === "gift") setLibrarySection("library");
+  }, [user, isAdmin, librarySection, setLibrarySection]);
 
   useEffect(() => {
     const filterCount = [search, statusFilter !== "all", genreFilter !== "all", sortBy !== "uploadedAt", groupBy !== "none"].filter(Boolean).length;
@@ -260,6 +266,7 @@ export default function LibraryPage() {
       handleBulkDelete={handleBulkDelete}
       toggleBookSelection={toggleBookSelection}
       hasGiftBooks={bookItems.some((book: any) => book?.isGiftEdition)}
+      isAdmin={isAdmin}
     />
   );
 }
@@ -299,6 +306,7 @@ function LibraryPageLayout({
   handleBulkDelete,
   toggleBookSelection,
   hasGiftBooks,
+  isAdmin,
 }: any) {
   return (
     <ProtectedRoute>
@@ -316,11 +324,12 @@ function LibraryPageLayout({
             setUploadOpen={setUploadOpen}
           />
 
-          {librarySection === "library" && <GiftEditionsBanner hasGiftBooks={hasGiftBooks} />}
+          {!isAdmin && librarySection === "library" && <GiftEditionsBanner hasGiftBooks={hasGiftBooks} />}
 
           <LibrarySectionSwitch
             librarySection={librarySection}
             setLibrarySection={setLibrarySection}
+            showGiftSection={isAdmin}
           />
 
           <LibraryFiltersBar
@@ -460,9 +469,11 @@ function LibraryHeader({
 function LibrarySectionSwitch({
   librarySection,
   setLibrarySection,
+  showGiftSection,
 }: Readonly<{
   librarySection: LibrarySection;
   setLibrarySection: (section: LibrarySection) => void;
+  showGiftSection: boolean;
 }>) {
   return (
     <div className="flex w-full flex-wrap gap-1 rounded-lg border p-1 mb-6 sm:w-fit">
@@ -475,15 +486,17 @@ function LibrarySectionSwitch({
       >
         Библиотека
       </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant={librarySection === "gift" ? "secondary" : "ghost"}
-        onClick={() => setLibrarySection("gift")}
-        className="h-8 flex-1 sm:flex-none"
-      >
-        Подарочные издания
-      </Button>
+      {showGiftSection && (
+        <Button
+          type="button"
+          size="sm"
+          variant={librarySection === "gift" ? "secondary" : "ghost"}
+          onClick={() => setLibrarySection("gift")}
+          className="h-8 flex-1 sm:flex-none"
+        >
+          Подарочные издания
+        </Button>
+      )}
       <Button
         type="button"
         size="sm"
