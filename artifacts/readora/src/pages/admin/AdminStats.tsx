@@ -1,10 +1,11 @@
-import { useGetAdminStats } from "@workspace/api-client-react";
+import { useGetAdminStats, useGetAdminFeedback, getGetAdminFeedbackQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, BookCopy, BookOpen, Activity, Loader2, Server, Cpu, MemoryStick, HardDrive, RefreshCcw } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { Users, BookCopy, BookOpen, Activity, Loader2, Server, Cpu, MemoryStick, HardDrive, RefreshCcw, MessageSquareText, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
@@ -91,7 +92,18 @@ function buildSparklinePath(points: number[], width = 180, height = 40): string 
 
 export default function AdminStats() {
   const { data: stats, isLoading } = useGetAdminStats();
+  const { isAdmin } = useAuth();
   const [loadPoints, setLoadPoints] = useState<number[]>([]);
+
+  const feedbackParams = { summaryOnly: true };
+  const { data: feedbackStats } = useGetAdminFeedback(feedbackParams, {
+    query: {
+      queryKey: getGetAdminFeedbackQueryKey(feedbackParams),
+      enabled: isAdmin,
+      staleTime: 60_000,
+    },
+  });
+  const feedbackSummary = feedbackStats?.summary;
 
   const { data: pwaStats } = useQuery({
     queryKey: ["admin-pwa-stats"],
@@ -254,6 +266,69 @@ export default function AdminStats() {
           </Card>
         ))}
       </div>
+
+      {isAdmin && feedbackSummary && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquareText className="w-4 h-4" />
+              Отзывы пользователей
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: "Всего отзывов", value: new Intl.NumberFormat("ru-RU").format(feedbackSummary.total) },
+                { label: "Средняя оценка", value: feedbackSummary.averageRating.toFixed(2) },
+                { label: "Оценки ниже 5", value: new Intl.NumberFormat("ru-RU").format(feedbackSummary.lowRatings) },
+                { label: "Запросили связь", value: `${feedbackSummary.contactRequests} (${feedbackSummary.contactRate}%)` },
+              ].map((item) => (
+                <div key={item.label} className="rounded-lg border p-3">
+                  <p className="text-xl font-bold">{item.value}</p>
+                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {feedbackSummary.total > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Распределение оценок</p>
+                  {feedbackSummary.distribution.map((entry) => (
+                    <div key={entry.rating} className="flex items-center gap-2">
+                      <span className="flex w-8 items-center gap-1 text-xs text-muted-foreground">
+                        {entry.rating}
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                      </span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${feedbackSummary.total === 0 ? 0 : (entry.count / feedbackSummary.total) * 100}%` }}
+                        />
+                      </div>
+                      <span className="w-8 text-right text-xs font-medium">{entry.count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Частые причины</p>
+                  {feedbackSummary.topPainPoints.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Причины пока не выбраны.</p>
+                  ) : (
+                    feedbackSummary.topPainPoints.map((entry) => (
+                      <div key={entry.label} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="truncate">{entry.label}</span>
+                        <span className="shrink-0 font-medium">{entry.count}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Recent users */}

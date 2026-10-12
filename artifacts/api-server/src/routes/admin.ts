@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import os from "node:os";
 import { statfs } from "node:fs/promises";
@@ -19,9 +19,11 @@ import {
   analyticsDailyUserActivityTable,
   readingProgressTable,
   giftEditionsTable,
+  feedbackResponsesTable,
 } from "@workspace/db";
 import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
+import { FEEDBACK_PAIN_POINTS } from "./feedback";
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
@@ -1109,6 +1111,231 @@ router.delete(
   async (_req, res): Promise<void> => {
     const count = await emailService.clearSavedEmails();
     res.json({ deleted: count });
+  },
+);
+
+// Общий разбор фильтров статистики отзывов (используется в GET и DELETE).
+const FEEDBACK_RANGE_DAYS = [7, 30, 90] as const;
+
+function parseFeedbackFilters(query: Record<string, unknown>):
+  | { daysParam: string; ratingParam: string; painPointParam: string; whereClause: SQL | undefined }
+  | { error: string } {
+  const daysParam = typeof query.days === "string" ? query.days : "all";
+  let rangeStart: Date | null = null;
+  if (daysParam !== "all") {
+    const days = Number.parseInt(daysParam, 10);
+    if (!FEEDBACK_RANGE_DAYS.includes(days as (typeof FEEDBACK_RANGE_DAYS)[number])) {
+      return { error: "Период должен быть 7, 30, 90 дней или all" };
+    }
+    rangeStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  }
+
+  const ratingParam = typeof query.rating === "string" ? query.rating : "all";
+  let ratingFilter: number | null = null;
+  if (ratingParam !== "all") {
+    const rating = Number.parseInt(ratingParam, 10);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return { error: "Оценка должна быть от 1 до 5 или all" };
+    }
+    ratingFilter = rating;
+  }
+
+  const painPointParam = typeof query.painPoint === "string" ? query.painPoint : "all";
+  if (
+    painPointParam !== "all" &&
+    !FEEDBACK_PAIN_POINTS.includes(painPointParam as (typeof FEEDBACK_PAIN_POINTS)[number])
+  ) {
+    return { error: "Неизвестный тип жалобы" };
+  }
+
+  const whereClause = and(
+    rangeStart ? gte(feedbackResponsesTable.createdAt, rangeStart) : undefined,
+    ratingFilter ? eq(feedbackResponsesTable.rating, ratingFilter) : undefined,
+    painPointParam !== "all"
+      ? sql`${feedbackResponsesTable.painPoints} @> ${JSON.stringify([painPointParam])}::jsonb`
+      : undefined,
+  );
+
+  return { daysParam, ratingParam, painPointParam, whereClause };
+}
+
+// GET /admin/feedback - статистика exit-intent опроса с фильтрами (system admin only)
+router.get(
+  "/admin/feedback",
+  requireSystemAdmin,
+  async (req, res): Promise<void> => {
+    const filters = parseFeedbackFilters(req.query);
+    if ("error" in filters) {
+      res.status(400).json({ error: filters.error });
+      return;
+    }
+    const { daysParam, ratingParam, painPointParam, whereClause } = filters;
+    // Лёгкий режим для сводки в «Обзоре»: без тренда и списка отзывов.
+    const summaryOnly =
+      req.query.summaryOnly === "1" || req.query.summaryOnly === "true";
+
+    const requestedLimit = Number.parseInt(String(req.query.limit ?? "200"), 10);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 500)
+      : 200;
+
+    const [summaryRow] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        averageRating: sql<number>`coalesce(avg(${feedbackResponsesTable.rating}), 0)::float`,
+        lowRatings: sql<number>`count(*) filter (where ${feedbackResponsesTable.rating} <= 4)::int`,
+        contactRequests: sql<number>`count(*) filter (where ${feedbackResponsesTable.wantsContact})::int`,
+      })
+      .from(feedbackResponsesTable)
+      .where(whereClause);
+
+    const distributionRows = await db
+      .select({
+        rating: feedbackResponsesTable.rating,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(feedbackResponsesTable)
+      .where(whereClause)
+      .groupBy(feedbackResponsesTable.rating);
+
+    const distributionMap = new Map(distributionRows.map((row) => [row.rating, row.count]));
+    const distribution = [1, 2, 3, 4, 5].map((rating) => ({
+      rating,
+      count: distributionMap.get(rating) ?? 0,
+    }));
+
+    const painPointResult = await db.execute(sql`
+      select point as label, count(*)::int as count
+      from ${feedbackResponsesTable}, jsonb_array_elements_text(${feedbackResponsesTable.painPoints}) as point
+      ${whereClause ? sql`where ${whereClause}` : sql``}
+      group by point
+      order by count(*) desc
+    `);
+    const topPainPoints = (painPointResult.rows as Array<{ label: string; count: number }>).map((row) => ({
+      label: row.label,
+      count: row.count,
+    }));
+
+    const trendRows = summaryOnly
+      ? []
+      : await db
+          .select({
+            day: sql<string>`to_char(${feedbackResponsesTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+            averageRating: sql<number>`coalesce(avg(${feedbackResponsesTable.rating}), 0)::float`,
+          })
+          .from(feedbackResponsesTable)
+          .where(whereClause)
+          .groupBy(sql`to_char(${feedbackResponsesTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`)
+          .orderBy(sql`to_char(${feedbackResponsesTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD') asc`);
+
+    const rows = summaryOnly
+      ? []
+      : await db
+          .select({
+            id: feedbackResponsesTable.id,
+            rating: feedbackResponsesTable.rating,
+            painPoints: feedbackResponsesTable.painPoints,
+            missingFeature: feedbackResponsesTable.missingFeature,
+            wantsContact: feedbackResponsesTable.wantsContact,
+            contactInfo: feedbackResponsesTable.contactInfo,
+            pageUrl: feedbackResponsesTable.pageUrl,
+            createdAt: feedbackResponsesTable.createdAt,
+            userId: feedbackResponsesTable.userId,
+            username: usersTable.username,
+            email: usersTable.email,
+          })
+          .from(feedbackResponsesTable)
+          .leftJoin(usersTable, eq(feedbackResponsesTable.userId, usersTable.id))
+          .where(whereClause)
+          .orderBy(desc(feedbackResponsesTable.createdAt))
+          .limit(limit);
+
+    const total = summaryRow?.total ?? 0;
+    const contactRequests = summaryRow?.contactRequests ?? 0;
+
+    res.json({
+      filters: {
+        days: daysParam,
+        rating: ratingParam,
+        painPoint: painPointParam,
+        painPointOptions: [...FEEDBACK_PAIN_POINTS],
+      },
+      summary: {
+        total,
+        averageRating: Number((summaryRow?.averageRating ?? 0).toFixed(2)),
+        lowRatings: summaryRow?.lowRatings ?? 0,
+        contactRequests,
+        contactRate: total === 0 ? 0 : Number(((contactRequests / total) * 100).toFixed(1)),
+        distribution,
+        topPainPoints,
+        trend: trendRows.map((row) => ({
+          day: row.day,
+          count: row.count,
+          averageRating: Number(row.averageRating.toFixed(2)),
+        })),
+      },
+      items: rows.map((row) => ({
+        id: row.id,
+        rating: row.rating,
+        painPoints: row.painPoints ?? [],
+        missingFeature: row.missingFeature,
+        wantsContact: row.wantsContact,
+        contactInfo: row.wantsContact ? row.contactInfo : null,
+        pageUrl: row.pageUrl,
+        createdAt: row.createdAt,
+        user: row.userId
+          ? { id: row.userId, username: row.username ?? null, email: row.email ?? null }
+          : null,
+      })),
+    });
+  },
+);
+
+// DELETE /admin/feedback - удалить отзывы, соответствующие фильтрам (system admin only)
+router.delete(
+  "/admin/feedback",
+  requireSystemAdmin,
+  async (req, res): Promise<void> => {
+    const filters = parseFeedbackFilters(req.query);
+    if ("error" in filters) {
+      res.status(400).json({ error: filters.error });
+      return;
+    }
+    const { whereClause } = filters;
+
+    const deleted = await db.transaction(async (tx) => {
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(feedbackResponsesTable)
+        .where(whereClause);
+      await tx.delete(feedbackResponsesTable).where(whereClause);
+      return count;
+    });
+
+    res.json({ deleted });
+  },
+);
+
+// DELETE /admin/feedback/:id - удалить один отзыв (system admin only)
+router.delete(
+  "/admin/feedback/:id",
+  requireSystemAdmin,
+  async (req, res): Promise<void> => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Некорректный идентификатор отзыва" });
+      return;
+    }
+    const deleted = await db
+      .delete(feedbackResponsesTable)
+      .where(eq(feedbackResponsesTable.id, id))
+      .returning({ id: feedbackResponsesTable.id });
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "Отзыв не найден" });
+      return;
+    }
+    res.json({ deleted: deleted.length });
   },
 );
 

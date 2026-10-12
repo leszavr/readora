@@ -27,11 +27,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Save, BookOpen, BookMarked, Clock, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Loader2, Save, BookOpen, BookMarked, Clock, Eye, EyeOff, Trash2, MessageSquareText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { Switch } from "@/components/ui/switch";
 import { clearAnalyticsQueue } from "@/lib/analytics";
+import { openFeedbackPrompt } from "@/lib/feedback-prompt";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
@@ -236,6 +237,22 @@ export default function ProfilePage() {
                     disabled={isPending}
                     onCheckedChange={handleAnalyticsOptInChange}
                   />
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Оцените Readora</p>
+                    <p className="text-xs text-muted-foreground">Расскажите, что улучшить, — это займёт минуту.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-2"
+                    onClick={openFeedbackPrompt}
+                  >
+                    <MessageSquareText className="w-4 h-4" />
+                    Оставить отзыв
+                  </Button>
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>

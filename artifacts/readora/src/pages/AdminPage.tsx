@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart, Gift } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart, Gift, MessageSquareText } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -15,10 +15,12 @@ const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
 const AdminLandingBooks = lazy(() => import("@/pages/admin/AdminLandingBooks"));
 const AdminGiftEditions = lazy(() => import("@/pages/admin/AdminGiftEditions"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
+const AdminFeedback = lazy(() => import("@/pages/admin/AdminFeedback"));
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
   { id: "analytics", label: "Аналитика", icon: LineChart },
+  { id: "feedback", label: "Отзывы", icon: MessageSquareText },
   { id: "users", label: "Пользователи", icon: Users },
   { id: "books", label: "Книги", icon: BookCopy },
   { id: "landing-books", label: "Лендинг", icon: PanelsTopLeft },
@@ -34,7 +36,7 @@ type TabId = typeof TABS[number]["id"];
 export default function AdminPage() {
   const { isAdmin } = useAuth();
   const [tab, setTab] = useState<TabId>("stats");
-  const visibleTabs = isAdmin ? TABS : TABS.filter(({ id }) => id !== "analytics");
+  const visibleTabs = isAdmin ? TABS : TABS.filter(({ id }) => id !== "analytics" && id !== "feedback");
 
   return (
     <ProtectedRoute adminOnly>
@@ -79,6 +81,7 @@ export default function AdminPage() {
               <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
                 {tab === "stats" && <AdminStats />}
                 {tab === "analytics" && isAdmin && <AdminAnalytics />}
+                {tab === "feedback" && isAdmin && <AdminFeedback />}
                 {tab === "users" && <AdminUsers />}
                 {tab === "books" && <AdminBooks />}
                 {tab === "landing-books" && <AdminLandingBooks />}

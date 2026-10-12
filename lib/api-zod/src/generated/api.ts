@@ -616,6 +616,45 @@ export const GetRegistrationStatusResponse = zod.object({
 
 
 /**
+ * @summary Public answer options for the exit-intent feedback survey
+ */
+export const GetFeedbackSurveyOptionsResponse = zod.object({
+  "painPoints": zod.array(zod.string()),
+  "missingFeatureTrigger": zod.string(),
+  "maxPainPoints": zod.number()
+})
+
+
+/**
+ * @summary Submit an exit-intent feedback survey response
+ */
+export const submitFeedbackSurveyBodyRatingMax = 5;
+
+export const submitFeedbackSurveyBodyPainPointsMax = 2;
+
+export const submitFeedbackSurveyBodyMissingFeatureMax = 500;
+
+export const submitFeedbackSurveyBodyContactInfoMax = 200;
+
+export const submitFeedbackSurveyBodyPageUrlMax = 500;
+
+
+
+export const SubmitFeedbackSurveyBody = zod.object({
+  "rating": zod.number().min(1).max(submitFeedbackSurveyBodyRatingMax),
+  "painPoints": zod.array(zod.string()).max(submitFeedbackSurveyBodyPainPointsMax).optional(),
+  "missingFeature": zod.string().max(submitFeedbackSurveyBodyMissingFeatureMax).optional(),
+  "wantsContact": zod.boolean().optional(),
+  "contactInfo": zod.string().max(submitFeedbackSurveyBodyContactInfoMax).optional(),
+  "pageUrl": zod.string().max(submitFeedbackSurveyBodyPageUrlMax).optional()
+})
+
+export const SubmitFeedbackSurveyResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * @summary Admin dashboard stats
  */
 export const GetAdminStatsResponse = zod.object({
@@ -729,6 +768,100 @@ export const GetAdminAnalyticsResponse = zod.object({
   "syncAttempts": zod.number(),
   "syncSuccesses": zod.number()
 }))
+})
+
+
+/**
+ * @summary Feedback survey statistics with filters (system admins only)
+ */
+export const getAdminFeedbackQueryDaysDefault = `all`;
+export const getAdminFeedbackQueryRatingDefault = `all`;
+export const getAdminFeedbackQueryPainPointDefault = `all`;
+export const getAdminFeedbackQueryLimitDefault = 200;
+export const getAdminFeedbackQueryLimitMax = 500;
+
+export const getAdminFeedbackQuerySummaryOnlyDefault = false;
+
+export const GetAdminFeedbackQueryParams = zod.object({
+  "days": zod.enum(['all', '7', '30', '90']).default(getAdminFeedbackQueryDaysDefault),
+  "rating": zod.enum(['all', '1', '2', '3', '4', '5']).default(getAdminFeedbackQueryRatingDefault),
+  "painPoint": zod.coerce.string().default(getAdminFeedbackQueryPainPointDefault),
+  "limit": zod.coerce.number().min(1).max(getAdminFeedbackQueryLimitMax).default(getAdminFeedbackQueryLimitDefault),
+  "summaryOnly": zod.coerce.boolean().default(getAdminFeedbackQuerySummaryOnlyDefault)
+})
+
+export const GetAdminFeedbackResponse = zod.object({
+  "filters": zod.object({
+  "days": zod.string(),
+  "rating": zod.string(),
+  "painPoint": zod.string(),
+  "painPointOptions": zod.array(zod.string())
+}),
+  "summary": zod.object({
+  "total": zod.number(),
+  "averageRating": zod.number(),
+  "lowRatings": zod.number(),
+  "contactRequests": zod.number(),
+  "contactRate": zod.number(),
+  "distribution": zod.array(zod.object({
+  "rating": zod.number(),
+  "count": zod.number()
+})),
+  "topPainPoints": zod.array(zod.object({
+  "label": zod.string(),
+  "count": zod.number()
+})),
+  "trend": zod.array(zod.object({
+  "day": zod.string(),
+  "count": zod.number(),
+  "averageRating": zod.number()
+}))
+}),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "rating": zod.number(),
+  "painPoints": zod.array(zod.string()),
+  "missingFeature": zod.string().nullish(),
+  "wantsContact": zod.boolean(),
+  "contactInfo": zod.string().nullish(),
+  "pageUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "user": zod.union([zod.object({
+  "id": zod.number(),
+  "username": zod.string().nullish(),
+  "email": zod.string().nullish()
+}),zod.null()]).optional()
+}))
+})
+
+
+/**
+ * @summary Delete feedback responses matching filters (system admins only)
+ */
+export const deleteAdminFeedbackQueryDaysDefault = `all`;
+export const deleteAdminFeedbackQueryRatingDefault = `all`;
+export const deleteAdminFeedbackQueryPainPointDefault = `all`;
+
+export const DeleteAdminFeedbackQueryParams = zod.object({
+  "days": zod.enum(['all', '7', '30', '90']).default(deleteAdminFeedbackQueryDaysDefault),
+  "rating": zod.enum(['all', '1', '2', '3', '4', '5']).default(deleteAdminFeedbackQueryRatingDefault),
+  "painPoint": zod.coerce.string().default(deleteAdminFeedbackQueryPainPointDefault)
+})
+
+export const DeleteAdminFeedbackResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
+ * @summary Delete a single feedback response (system admins only)
+ */
+export const DeleteAdminFeedbackItemParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAdminFeedbackItemResponse = zod.object({
+  "deleted": zod.number()
 })
 
 
