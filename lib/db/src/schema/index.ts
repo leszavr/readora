@@ -17,3 +17,4 @@ export * from "./remember_tokens";
 export * from "./landing_books";
 export * from "./analytics";
 export * from "./gift_editions";
+export * from "./feedback_responses";

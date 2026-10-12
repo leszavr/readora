@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { BookMarked, BookOpen, Library, Settings, Shield, Smartphone, Sparkles, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BookMarked, BookOpen, Library, Settings, Shield, Smartphone, Sparkles, Star, Upload } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { PwaInstallDialog } from "@/components/PwaInstallDialog";
 import { SiteFooter } from "@/components/SiteFooter";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { markFeedbackBlobShown, openFeedbackPrompt, shouldShowFeedbackBlob } from "@/lib/feedback-prompt";
 import { PublicHeaderNavigation } from "@/components/PublicHeaderNavigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,11 +57,19 @@ export function LandingPage({
   registrationStatus?: LandingData["registrationStatus"];
 }>) {
   const [pwaDialogOpen, setPwaDialogOpen] = useState(false);
+  const [showFeedbackBlob, setShowFeedbackBlob] = useState(false);
   const { isInstalled, isInstallable, promptInstall, isIos } = usePwaInstall();
   const showPwaButton = !isInstalled && (isInstallable || isIos);
   const { isAuthenticated } = useAuth();
   const { data: currentMaintenanceStatus } = useMaintenanceStatus(maintenanceStatus);
   const { data: currentRegistrationStatus } = useRegistrationStatus(registrationStatus);
+
+  useEffect(() => {
+    if (shouldShowFeedbackBlob()) {
+      setShowFeedbackBlob(true);
+      markFeedbackBlobShown();
+    }
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -185,6 +195,21 @@ export function LandingPage({
       </main>
 
       <SiteFooter />
+      {showFeedbackBlob && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={openFeedbackPrompt}
+              aria-label="Оцените Readora"
+              className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Star className="h-5 w-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Оцените Readora</TooltipContent>
+        </Tooltip>
+      )}
       <PwaInstallDialog open={pwaDialogOpen} onOpenChange={setPwaDialogOpen} onInstall={promptInstall} isIos={isIos} />
     </div>
   );

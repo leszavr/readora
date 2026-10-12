@@ -22,6 +22,8 @@ tags:
     description: Admin panel
   - name: analytics
     description: Private analytics operations
+  - name: feedback
+    description: Feedback survey operations
 
 paths:
   /healthz:
@@ -808,6 +810,43 @@ paths:
                 $ref: "#/components/schemas/RegistrationStatus"
 
   # ADMIN
+  /feedback/survey:
+    get:
+      operationId: getFeedbackSurveyOptions
+      tags: [feedback]
+      summary: Public answer options for the exit-intent feedback survey
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackSurveyOptions"
+    post:
+      operationId: submitFeedbackSurvey
+      tags: [feedback]
+      summary: Submit an exit-intent feedback survey response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackSurveyInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackSubmitResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+
   /admin/stats:
     get:
       operationId: getAdminStats
@@ -848,6 +887,139 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
           description: Unsupported analytics period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/feedback:
+    get:
+      operationId: getAdminFeedback
+      tags: [admin]
+      summary: Feedback survey statistics with filters (system admins only)
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: string
+            enum: [all, "7", "30", "90"]
+            default: all
+        - name: rating
+          in: query
+          schema:
+            type: string
+            enum: [all, "1", "2", "3", "4", "5"]
+            default: all
+        - name: painPoint
+          in: query
+          schema:
+            type: string
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+        - name: summaryOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackStatsResponse"
+        "400":
+          description: Invalid filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: System administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAdminFeedback
+      tags: [admin]
+      summary: Delete feedback responses matching filters (system admins only)
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: string
+            enum: [all, "7", "30", "90"]
+            default: all
+        - name: rating
+          in: query
+          schema:
+            type: string
+            enum: [all, "1", "2", "3", "4", "5"]
+            default: all
+        - name: painPoint
+          in: query
+          schema:
+            type: string
+            default: all
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackDeleteResult"
+        "400":
+          description: Invalid filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: System administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/feedback/{id}:
+    delete:
+      operationId: deleteAdminFeedbackItem
+      tags: [admin]
+      summary: Delete a single feedback response (system admins only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackDeleteResult"
+        "400":
+          description: Invalid identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: System administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Feedback response not found
           content:
             application/json:
               schema:
@@ -1458,6 +1630,180 @@ components:
           type: string
       required:
         - status
+
+    FeedbackSurveyOptions:
+      type: object
+      required: [painPoints, missingFeatureTrigger, maxPainPoints]
+      properties:
+        painPoints:
+          type: array
+          items:
+            type: string
+        missingFeatureTrigger:
+          type: string
+        maxPainPoints:
+          type: integer
+
+    FeedbackSurveyInput:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        painPoints:
+          type: array
+          maxItems: 2
+          items:
+            type: string
+        missingFeature:
+          type: string
+          maxLength: 500
+        wantsContact:
+          type: boolean
+        contactInfo:
+          type: string
+          maxLength: 200
+        pageUrl:
+          type: string
+          maxLength: 500
+
+    FeedbackSubmitResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    FeedbackPainPointCount:
+      type: object
+      required: [label, count]
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+
+    FeedbackRatingCount:
+      type: object
+      required: [rating, count]
+      properties:
+        rating:
+          type: integer
+        count:
+          type: integer
+
+    FeedbackTrendPoint:
+      type: object
+      required: [day, count, averageRating]
+      properties:
+        day:
+          type: string
+        count:
+          type: integer
+        averageRating:
+          type: number
+
+    FeedbackItemUser:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+        username:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+
+    FeedbackItem:
+      type: object
+      required: [id, rating, painPoints, wantsContact, createdAt]
+      properties:
+        id:
+          type: integer
+        rating:
+          type: integer
+        painPoints:
+          type: array
+          items:
+            type: string
+        missingFeature:
+          type: ["string", "null"]
+        wantsContact:
+          type: boolean
+        contactInfo:
+          type: ["string", "null"]
+        pageUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/FeedbackItemUser"
+            - type: "null"
+
+    FeedbackSummary:
+      type: object
+      required: [total, averageRating, lowRatings, contactRequests, contactRate, distribution, topPainPoints, trend]
+      properties:
+        total:
+          type: integer
+        averageRating:
+          type: number
+        lowRatings:
+          type: integer
+        contactRequests:
+          type: integer
+        contactRate:
+          type: number
+        distribution:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackRatingCount"
+        topPainPoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackPainPointCount"
+        trend:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackTrendPoint"
+
+    FeedbackFiltersState:
+      type: object
+      required: [days, rating, painPoint, painPointOptions]
+      properties:
+        days:
+          type: string
+        rating:
+          type: string
+        painPoint:
+          type: string
+        painPointOptions:
+          type: array
+          items:
+            type: string
+
+    FeedbackStatsResponse:
+      type: object
+      required: [filters, summary, items]
+      properties:
+        filters:
+          $ref: "#/components/schemas/FeedbackFiltersState"
+        summary:
+          $ref: "#/components/schemas/FeedbackSummary"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackItem"
+
+    FeedbackDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
 
     ErrorResponse:
       type: object

@@ -44,11 +44,18 @@ import type {
   Cycle,
   CycleInput,
   DeleteAccountInput,
+  DeleteAdminFeedbackParams,
   ErrorResponse,
+  FeedbackDeleteResult,
+  FeedbackStatsResponse,
+  FeedbackSubmitResult,
+  FeedbackSurveyInput,
+  FeedbackSurveyOptions,
   Genre,
   GenreInput,
   GenreUpdate,
   GetAdminAnalyticsParams,
+  GetAdminFeedbackParams,
   GetPopularBooksParams,
   GiftEdition,
   GiftEditionCreate,
@@ -2776,6 +2783,154 @@ export function useGetRegistrationStatus<TData = Awaited<ReturnType<typeof getRe
 
 
 
+export const getGetFeedbackSurveyOptionsUrl = () => {
+
+
+
+
+  return `/api/feedback/survey`
+}
+
+/**
+ * @summary Public answer options for the exit-intent feedback survey
+ */
+export const getFeedbackSurveyOptions = async ( options?: RequestInit): Promise<FeedbackSurveyOptions> => {
+
+  return customFetch<FeedbackSurveyOptions>(getGetFeedbackSurveyOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFeedbackSurveyOptionsQueryKey = () => {
+    return [
+    `/api/feedback/survey`
+    ] as const;
+    }
+
+
+export const getGetFeedbackSurveyOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getFeedbackSurveyOptions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackSurveyOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedbackSurveyOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedbackSurveyOptions>>> = ({ signal }) => getFeedbackSurveyOptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFeedbackSurveyOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedbackSurveyOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedbackSurveyOptions>>>
+export type GetFeedbackSurveyOptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Public answer options for the exit-intent feedback survey
+ */
+
+export function useGetFeedbackSurveyOptions<TData = Awaited<ReturnType<typeof getFeedbackSurveyOptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackSurveyOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedbackSurveyOptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSubmitFeedbackSurveyUrl = () => {
+
+
+
+
+  return `/api/feedback/survey`
+}
+
+/**
+ * @summary Submit an exit-intent feedback survey response
+ */
+export const submitFeedbackSurvey = async (feedbackSurveyInput: FeedbackSurveyInput, options?: RequestInit): Promise<FeedbackSubmitResult> => {
+
+  return customFetch<FeedbackSubmitResult>(getSubmitFeedbackSurveyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      feedbackSurveyInput,)
+  }
+);}
+
+
+
+
+export const getSubmitFeedbackSurveyMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitFeedbackSurvey>>, TError,{data: BodyType<FeedbackSurveyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitFeedbackSurvey>>, TError,{data: BodyType<FeedbackSurveyInput>}, TContext> => {
+
+const mutationKey = ['submitFeedbackSurvey'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitFeedbackSurvey>>, {data: BodyType<FeedbackSurveyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitFeedbackSurvey(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitFeedbackSurveyMutationResult = NonNullable<Awaited<ReturnType<typeof submitFeedbackSurvey>>>
+    export type SubmitFeedbackSurveyMutationBody = BodyType<FeedbackSurveyInput>
+    export type SubmitFeedbackSurveyMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Submit an exit-intent feedback survey response
+ */
+export const useSubmitFeedbackSurvey = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitFeedbackSurvey>>, TError,{data: BodyType<FeedbackSurveyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitFeedbackSurvey>>,
+        TError,
+        {data: BodyType<FeedbackSurveyInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitFeedbackSurveyMutationOptions(options));
+    }
+
 export const getGetAdminStatsUrl = () => {
 
 
@@ -2936,6 +3091,237 @@ export function useGetAdminAnalytics<TData = Awaited<ReturnType<typeof getAdminA
 
 
 
+
+export const getGetAdminFeedbackUrl = (params?: GetAdminFeedbackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/feedback?${stringifiedParams}` : `/api/admin/feedback`
+}
+
+/**
+ * @summary Feedback survey statistics with filters (system admins only)
+ */
+export const getAdminFeedback = async (params?: GetAdminFeedbackParams, options?: RequestInit): Promise<FeedbackStatsResponse> => {
+
+  return customFetch<FeedbackStatsResponse>(getGetAdminFeedbackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminFeedbackQueryKey = (params?: GetAdminFeedbackParams,) => {
+    return [
+    `/api/admin/feedback`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminFeedbackQueryOptions = <TData = Awaited<ReturnType<typeof getAdminFeedback>>, TError = ErrorType<ErrorResponse>>(params?: GetAdminFeedbackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFeedback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminFeedbackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminFeedback>>> = ({ signal }) => getAdminFeedback(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminFeedback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminFeedbackQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminFeedback>>>
+export type GetAdminFeedbackQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Feedback survey statistics with filters (system admins only)
+ */
+
+export function useGetAdminFeedback<TData = Awaited<ReturnType<typeof getAdminFeedback>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetAdminFeedbackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFeedback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminFeedbackQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteAdminFeedbackUrl = (params?: DeleteAdminFeedbackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/feedback?${stringifiedParams}` : `/api/admin/feedback`
+}
+
+/**
+ * @summary Delete feedback responses matching filters (system admins only)
+ */
+export const deleteAdminFeedback = async (params?: DeleteAdminFeedbackParams, options?: RequestInit): Promise<FeedbackDeleteResult> => {
+
+  return customFetch<FeedbackDeleteResult>(getDeleteAdminFeedbackUrl(params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAdminFeedbackMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminFeedback>>, TError,{params?: DeleteAdminFeedbackParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminFeedback>>, TError,{params?: DeleteAdminFeedbackParams}, TContext> => {
+
+const mutationKey = ['deleteAdminFeedback'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminFeedback>>, {params?: DeleteAdminFeedbackParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  deleteAdminFeedback(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAdminFeedbackMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminFeedback>>>
+
+    export type DeleteAdminFeedbackMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete feedback responses matching filters (system admins only)
+ */
+export const useDeleteAdminFeedback = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminFeedback>>, TError,{params?: DeleteAdminFeedbackParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAdminFeedback>>,
+        TError,
+        {params?: DeleteAdminFeedbackParams},
+        TContext
+      > => {
+      return useMutation(getDeleteAdminFeedbackMutationOptions(options));
+    }
+
+export const getDeleteAdminFeedbackItemUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/feedback/${id}`
+}
+
+/**
+ * @summary Delete a single feedback response (system admins only)
+ */
+export const deleteAdminFeedbackItem = async (id: number, options?: RequestInit): Promise<FeedbackDeleteResult> => {
+
+  return customFetch<FeedbackDeleteResult>(getDeleteAdminFeedbackItemUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAdminFeedbackItemMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminFeedbackItem>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminFeedbackItem>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteAdminFeedbackItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminFeedbackItem>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAdminFeedbackItem(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAdminFeedbackItemMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminFeedbackItem>>>
+
+    export type DeleteAdminFeedbackItemMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a single feedback response (system admins only)
+ */
+export const useDeleteAdminFeedbackItem = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminFeedbackItem>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAdminFeedbackItem>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteAdminFeedbackItemMutationOptions(options));
+    }
 
 export const getListAdminUsersUrl = (params?: ListAdminUsersParams,) => {
   const normalizedParams = new URLSearchParams();

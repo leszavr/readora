@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { AnalyticsLifecycle } from "@/components/AnalyticsLifecycle";
+import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { ReferralSourceCapture } from "@/components/ReferralSourceCapture";
 
 function createQueryClient() {
@@ -26,6 +27,7 @@ export function AppProviders({ children }: Readonly<{ children: ReactNode }>) {
         <AuthProvider>
           <ReferralSourceCapture />
           <AnalyticsLifecycle />
+          <FeedbackPrompt />
           {children}
         </AuthProvider>
         <Toaster />

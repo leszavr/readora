@@ -9,6 +9,100 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface FeedbackSurveyOptions {
+  painPoints: string[];
+  missingFeatureTrigger: string;
+  maxPainPoints: number;
+}
+
+export interface FeedbackSurveyInput {
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  /** @maxItems 2 */
+  painPoints?: string[];
+  /** @maxLength 500 */
+  missingFeature?: string;
+  wantsContact?: boolean;
+  /** @maxLength 200 */
+  contactInfo?: string;
+  /** @maxLength 500 */
+  pageUrl?: string;
+}
+
+export interface FeedbackSubmitResult {
+  success: boolean;
+}
+
+export interface FeedbackPainPointCount {
+  label: string;
+  count: number;
+}
+
+export interface FeedbackRatingCount {
+  rating: number;
+  count: number;
+}
+
+export interface FeedbackTrendPoint {
+  day: string;
+  count: number;
+  averageRating: number;
+}
+
+export interface FeedbackItemUser {
+  id: number;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  email?: string | null;
+}
+
+export interface FeedbackItem {
+  id: number;
+  rating: number;
+  painPoints: string[];
+  /** @nullable */
+  missingFeature?: string | null;
+  wantsContact: boolean;
+  /** @nullable */
+  contactInfo?: string | null;
+  /** @nullable */
+  pageUrl?: string | null;
+  createdAt: string;
+  user?: FeedbackItemUser | null;
+}
+
+export interface FeedbackSummary {
+  total: number;
+  averageRating: number;
+  lowRatings: number;
+  contactRequests: number;
+  contactRate: number;
+  distribution: FeedbackRatingCount[];
+  topPainPoints: FeedbackPainPointCount[];
+  trend: FeedbackTrendPoint[];
+}
+
+export interface FeedbackFiltersState {
+  days: string;
+  rating: string;
+  painPoint: string;
+  painPointOptions: string[];
+}
+
+export interface FeedbackStatsResponse {
+  filters: FeedbackFiltersState;
+  summary: FeedbackSummary;
+  items: FeedbackItem[];
+}
+
+export interface FeedbackDeleteResult {
+  deleted: number;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -968,6 +1062,68 @@ export const GetAdminAnalyticsDays = {
   NUMBER_7: 7,
   NUMBER_30: 30,
   NUMBER_90: 90,
+} as const;
+
+export type GetAdminFeedbackParams = {
+days?: GetAdminFeedbackDays;
+rating?: GetAdminFeedbackRating;
+painPoint?: string;
+/**
+ * @minimum 1
+ * @maximum 500
+ */
+limit?: number;
+summaryOnly?: boolean;
+};
+
+export type GetAdminFeedbackDays = typeof GetAdminFeedbackDays[keyof typeof GetAdminFeedbackDays];
+
+
+export const GetAdminFeedbackDays = {
+  all: 'all',
+  NUMBER_7: '7',
+  NUMBER_30: '30',
+  NUMBER_90: '90',
+} as const;
+
+export type GetAdminFeedbackRating = typeof GetAdminFeedbackRating[keyof typeof GetAdminFeedbackRating];
+
+
+export const GetAdminFeedbackRating = {
+  all: 'all',
+  NUMBER_1: '1',
+  NUMBER_2: '2',
+  NUMBER_3: '3',
+  NUMBER_4: '4',
+  NUMBER_5: '5',
+} as const;
+
+export type DeleteAdminFeedbackParams = {
+days?: DeleteAdminFeedbackDays;
+rating?: DeleteAdminFeedbackRating;
+painPoint?: string;
+};
+
+export type DeleteAdminFeedbackDays = typeof DeleteAdminFeedbackDays[keyof typeof DeleteAdminFeedbackDays];
+
+
+export const DeleteAdminFeedbackDays = {
+  all: 'all',
+  NUMBER_7: '7',
+  NUMBER_30: '30',
+  NUMBER_90: '90',
+} as const;
+
+export type DeleteAdminFeedbackRating = typeof DeleteAdminFeedbackRating[keyof typeof DeleteAdminFeedbackRating];
+
+
+export const DeleteAdminFeedbackRating = {
+  all: 'all',
+  NUMBER_1: '1',
+  NUMBER_2: '2',
+  NUMBER_3: '3',
+  NUMBER_4: '4',
+  NUMBER_5: '5',
 } as const;
 
 export type ListAdminUsersParams = {
