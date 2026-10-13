@@ -95,7 +95,7 @@ export default function AdminEmails() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
               {emails.map((email) => (
                 <div
                   key={email.id}

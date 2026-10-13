@@ -188,7 +188,7 @@ export default function AdminLandingBooks() {
           <p className="mt-1 text-sm text-muted-foreground">Добавьте книгу с готовой обложкой, чтобы подготовить её к публикации.</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
           {books.map((book) => (
             <article key={book.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
               <img src={book.coverUrl} alt={`Обложка «${book.title}»`} className="aspect-[2/3] w-full bg-muted object-cover" />

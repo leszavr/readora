@@ -347,6 +347,7 @@ export default function ReaderPage() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [readerSessionEpoch, setReaderSessionEpoch] = useState(0);
+  const [sessionReady, setSessionReady] = useState(false);
   const [pendingScrollRestore, setPendingScrollRestore] =
     useState<PendingScrollRestore | null>(null);
   const [pendingNoteHighlight, setPendingNoteHighlight] = useState<{
@@ -391,6 +392,7 @@ export default function ReaderPage() {
   const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
   const programmaticScrollUntilRef = useRef(0);
   const readerSessionRef = useRef<{ startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; interacted: boolean; ended: boolean } | null>(null);
+  const remoteProgressRef = useRef(0);
   const progressAnalyticsRef = useRef({ progressPct: -1, sentAt: 0, activeAt: 0 });
   const chapterNavigationSourceRef = useRef<ChapterNavigationSource>("restore");
   // Note: removed hasInitializedChapterRef - using currentChapterIdx !== null as initialization check (voxlibris pattern)
@@ -409,8 +411,18 @@ export default function ReaderPage() {
   );
 
   useEffect(() => {
-    if (chapterLoading || !chapterContent || readerSessionRef.current) return;
-    const startProgressPct = remoteProgress?.progressPercent ?? 0;
+    remoteProgressRef.current = remoteProgress?.progressPercent ?? 0;
+  }, [remoteProgress?.progressPercent]);
+
+  useEffect(() => {
+    if (sessionReady) return;
+    if (chapterLoading || !chapterContent) return;
+    setSessionReady(true);
+  }, [sessionReady, chapterLoading, chapterContent]);
+
+  useEffect(() => {
+    if (!sessionReady || readerSessionRef.current) return;
+    const startProgressPct = remoteProgressRef.current;
     const session = { startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: Date.now(), interacted: false, ended: false };
     readerSessionRef.current = session;
     trackReaderSessionStarted(bookId, startProgressPct);
@@ -450,6 +462,7 @@ export default function ReaderPage() {
     window.addEventListener("pointerdown", markActive, { passive: true });
     window.addEventListener("keydown", markActive);
     window.addEventListener("touchstart", markActive, { passive: true });
+    window.addEventListener("wheel", markActive, { passive: true });
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       end("unmount");
@@ -458,9 +471,10 @@ export default function ReaderPage() {
       window.removeEventListener("pointerdown", markActive);
       window.removeEventListener("keydown", markActive);
       window.removeEventListener("touchstart", markActive);
+      window.removeEventListener("wheel", markActive);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [bookId, chapterContent, chapterLoading, readerSessionEpoch, remoteProgress?.progressPercent]);
+  }, [bookId, readerSessionEpoch, sessionReady]);
 
   useEffect(() => {
     if (currentChapterIdx === null || chapterLoading || !chapterContent) return;
@@ -990,6 +1004,8 @@ export default function ReaderPage() {
       chapterNavigationSourceRef.current = "restore";
       setCurrentChapterIdx(null);
       setPendingScrollRestore(null);
+      readerSessionRef.current = null;
+      setSessionReady(false);
       prevBookIdRef.current = bookId;
     }
   }, [bookId]);
