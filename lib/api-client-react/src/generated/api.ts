@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminAnalytics,
+  AdminAnalyticsUsers,
   AdminBook,
   AdminStats,
   AdminUser,
@@ -55,6 +56,7 @@ import type {
   GenreInput,
   GenreUpdate,
   GetAdminAnalyticsParams,
+  GetAdminAnalyticsUsersParams,
   GetAdminFeedbackParams,
   GetPopularBooksParams,
   GiftEdition,
@@ -3080,6 +3082,90 @@ export function useGetAdminAnalytics<TData = Awaited<ReturnType<typeof getAdminA
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminAnalyticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetAdminAnalyticsUsersUrl = (params?: GetAdminAnalyticsUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/analytics/users?${stringifiedParams}` : `/api/admin/analytics/users`
+}
+
+/**
+ * @summary Per-user analytics detail (system admins only)
+ */
+export const getAdminAnalyticsUsers = async (params?: GetAdminAnalyticsUsersParams, options?: RequestInit): Promise<AdminAnalyticsUsers> => {
+
+  return customFetch<AdminAnalyticsUsers>(getGetAdminAnalyticsUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminAnalyticsUsersQueryKey = (params?: GetAdminAnalyticsUsersParams,) => {
+    return [
+    `/api/admin/analytics/users`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminAnalyticsUsersQueryOptions = <TData = Awaited<ReturnType<typeof getAdminAnalyticsUsers>>, TError = ErrorType<ErrorResponse>>(params?: GetAdminAnalyticsUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminAnalyticsUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminAnalyticsUsersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminAnalyticsUsers>>> = ({ signal }) => getAdminAnalyticsUsers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminAnalyticsUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminAnalyticsUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminAnalyticsUsers>>>
+export type GetAdminAnalyticsUsersQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Per-user analytics detail (system admins only)
+ */
+
+export function useGetAdminAnalyticsUsers<TData = Awaited<ReturnType<typeof getAdminAnalyticsUsers>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetAdminAnalyticsUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminAnalyticsUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminAnalyticsUsersQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

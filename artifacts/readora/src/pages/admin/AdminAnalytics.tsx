@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { getGetAdminAnalyticsQueryKey, useGetAdminAnalytics } from "@workspace/api-client-react";
+import { getGetAdminAnalyticsQueryKey, getGetAdminAnalyticsUsersQueryKey, useGetAdminAnalytics, useGetAdminAnalyticsUsers } from "@workspace/api-client-react";
 import { Activity, BookCheck, BookCopy, BookOpen, BookOpenCheck, ChartNoAxesCombined, Clock3, Download, MailCheck, RefreshCw, UserCheck, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type AnalyticsRange = 7 | 30 | 90;
 
@@ -18,8 +19,14 @@ function formatNumber(value: number): string {
 }
 
 function formatReadingTime(milliseconds: number): string {
-  const minutes = Math.round(milliseconds / 60_000);
-  if (minutes < 60) return `${minutes} мин`;
+  const totalSeconds = Math.round(milliseconds / 1000);
+  if (totalSeconds < 60) return `${totalSeconds} с`;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) {
+    const seconds = totalSeconds % 60;
+    return seconds === 0 ? `${minutes} мин` : `${minutes} мин ${seconds} с`;
+  }
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
@@ -53,8 +60,21 @@ const REFERRAL_SOURCE_LABELS: Record<string, string> = {
   unknown: "Без данных",
 };
 
+const SESSION_END_REASON_LABELS: Record<string, string> = {
+  hidden: "Ушёл со вкладки (в фон)",
+  inactive: "Бездействие",
+  unmount: "Закрыл страницу",
+};
+
+const DEVICE_LABELS: Record<string, string> = {
+  desktop: "Компьютер",
+  mobile: "Телефон",
+  unknown: "Неизвестно",
+};
+
 export default function AdminAnalytics() {
   const [days, setDays] = useState<AnalyticsRange>(30);
+  const [usersOpen, setUsersOpen] = useState(false);
   const { data, isError, isLoading, refetch, isFetching } = useGetAdminAnalytics(
     { days },
     { query: { queryKey: getGetAdminAnalyticsQueryKey({ days }), retry: false } },
@@ -79,7 +99,7 @@ export default function AdminAnalytics() {
     );
   }
 
-  const { summary, marketing, systemSummary } = data;
+  const { summary, marketing, systemSummary, sessions, engagement, devices } = data;
   const systemCards = [
     { label: "Всего пользователей", value: formatNumber(systemSummary.totalUsers), icon: Users },
     { label: "Всего книг", value: formatNumber(systemSummary.totalBooks), icon: BookCopy },
@@ -243,9 +263,15 @@ export default function AdminAnalytics() {
       </div>
 
       <section className="space-y-3">
-        <div>
-          <h3 className="font-semibold">Приватная аналитика</h3>
-          <p className="text-sm text-muted-foreground">Только данные пользователей, включивших сбор аналитики.</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold">Приватная аналитика</h3>
+            <p className="text-sm text-muted-foreground">Только данные пользователей, включивших сбор аналитики.</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setUsersOpen(true)}>
+            <Users className="mr-1.5 h-4 w-4" />
+            Детализация по пользователям
+          </Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {analyticsCards.map(({ label, value, icon: Icon }) => (
@@ -262,7 +288,90 @@ export default function AdminAnalytics() {
           </Card>
         ))}
         </div>
-        <p className="text-sm text-muted-foreground">Средняя длительность сессии: {formatReadingTime(summary.averageSessionReadingMs)}.</p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Короткая сессия", value: formatReadingTime(sessions.minMs), description: "минимум" },
+            { label: "Средняя сессия", value: formatReadingTime(sessions.avgMs), description: "среднее" },
+            { label: "Долгая сессия", value: formatReadingTime(sessions.maxMs), description: "максимум" },
+            {
+              label: "Короткие сессии (< 30 с)",
+              value: formatNumber(sessions.shortSessions),
+              description: `${formatPercent(sessions.shortShare)} из ${formatNumber(sessions.count)}`,
+            },
+          ].map(({ label, value, description }) => (
+            <Card key={label}>
+              <CardContent className="pb-4 pt-5">
+                <p className="text-2xl font-bold">{value}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Длительность сессий чтения по пользователям, включившим сбор аналитики. Короткой считается сессия до 30 секунд.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "DAU (за день)", value: formatNumber(engagement.dau), description: `на ${formatDate(data.rangeEnd)}` },
+            { label: "WAU (за 7 дней)", value: formatNumber(engagement.wau), description: "уникальных пользователей" },
+            { label: "MAU (за 30 дней)", value: formatNumber(engagement.mau), description: "уникальных пользователей" },
+            { label: "Липкость (DAU/MAU)", value: formatPercent(engagement.stickiness), description: "доля от месячной аудитории" },
+          ].map(({ label, value, description }) => (
+            <Card key={label}>
+              <CardContent className="pb-4 pt-5">
+                <p className="text-2xl font-bold">{value}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Причины завершения сессий</CardTitle>
+              <CardDescription>Почему заканчивается сессия чтения.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {sessions.count === 0 ? (
+                <p className="text-sm text-muted-foreground">Сессий за период нет.</p>
+              ) : (
+                sessions.byEndReason.map((entry) => (
+                  <div key={entry.reason} className="flex items-center justify-between border-b pb-2 text-sm last:border-0">
+                    <span>{SESSION_END_REASON_LABELS[entry.reason] ?? entry.reason}</span>
+                    <span className="font-medium">
+                      {formatNumber(entry.count)} ({formatPercent(sessions.count === 0 ? 0 : (entry.count / sessions.count) * 100)})
+                    </span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Устройства</CardTitle>
+              <CardDescription>Активность по типу устройства.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {devices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Данных за период нет.</p>
+              ) : (
+                devices.map((entry) => (
+                  <div key={entry.deviceMode} className="flex items-center justify-between border-b pb-2 text-sm last:border-0">
+                    <span>{DEVICE_LABELS[entry.deviceMode] ?? entry.deviceMode}</span>
+                    <span className="text-muted-foreground">
+                      {formatNumber(entry.users)} польз. · {formatNumber(entry.readerSessions)} сессий · {formatReadingTime(entry.activeReadingMs)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -342,6 +451,82 @@ export default function AdminAnalytics() {
           )}
         </CardContent>
       </Card>
+
+      <UsersDetailDialog open={usersOpen} onOpenChange={setUsersOpen} days={days} />
     </div>
+  );
+}
+
+function UsersDetailDialog({
+  open,
+  onOpenChange,
+  days,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  days: AnalyticsRange;
+}) {
+  const { data, isLoading, isError } = useGetAdminAnalyticsUsers(
+    { days },
+    { query: { queryKey: getGetAdminAnalyticsUsersQueryKey({ days }), enabled: open, retry: false } },
+  );
+  const items = data?.items ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Детализация по пользователям</DialogTitle>
+          <DialogDescription>
+            {data
+              ? `За ${data.days} дней: ${formatDate(data.rangeStart)} - ${formatDate(data.rangeEnd)}. Только пользователи с включённым сбором аналитики.`
+              : "Загрузка…"}
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="h-40 animate-pulse rounded-lg bg-muted" />
+        ) : isError ? (
+          <p className="text-sm text-muted-foreground">Не удалось загрузить данные.</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Нет данных за выбранный период.</p>
+        ) : (
+          <div className="max-h-[70vh] overflow-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="sticky top-0 border-b bg-background text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2 font-medium">Пользователь</th>
+                  <th className="px-2 py-2 text-right font-medium">Дней</th>
+                  <th className="px-2 py-2 text-right font-medium">Сессий</th>
+                  <th className="px-2 py-2 text-right font-medium">Чтение</th>
+                  <th className="px-2 py-2 text-right font-medium">Ср. сессия</th>
+                  <th className="px-2 py-2 text-right font-medium">Мин / Макс</th>
+                  <th className="px-2 py-2 text-right font-medium">Начато / Завершено</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((row) => (
+                  <tr key={row.userId} className="border-b last:border-0">
+                    <td className="px-2 py-2 font-medium">
+                      {row.username}
+                      {row.role === "admin" ? " (админ)" : ""}
+                    </td>
+                    <td className="px-2 py-2 text-right">{formatNumber(row.activeDays)}</td>
+                    <td className="px-2 py-2 text-right">{formatNumber(row.sessionCount)}</td>
+                    <td className="px-2 py-2 text-right">{formatReadingTime(row.activeReadingMs)}</td>
+                    <td className="px-2 py-2 text-right">{formatReadingTime(row.avgSessionMs)}</td>
+                    <td className="px-2 py-2 text-right">
+                      {formatReadingTime(row.minSessionMs)} / {formatReadingTime(row.maxSessionMs)}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {formatNumber(row.booksStarted)} / {formatNumber(row.booksCompleted)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

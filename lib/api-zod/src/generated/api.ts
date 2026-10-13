@@ -726,6 +726,31 @@ export const GetAdminAnalyticsResponse = zod.object({
   "trackedBooks": zod.number(),
   "averageSessionReadingMs": zod.number()
 }),
+  "sessions": zod.object({
+  "count": zod.number(),
+  "minMs": zod.number(),
+  "avgMs": zod.number(),
+  "maxMs": zod.number(),
+  "shortSessions": zod.number(),
+  "shortShare": zod.number(),
+  "byEndReason": zod.array(zod.object({
+  "reason": zod.enum(['hidden', 'inactive', 'unmount']),
+  "count": zod.number()
+}))
+}),
+  "engagement": zod.object({
+  "dau": zod.number(),
+  "wau": zod.number(),
+  "mau": zod.number(),
+  "stickiness": zod.number()
+}),
+  "devices": zod.array(zod.object({
+  "deviceMode": zod.string(),
+  "users": zod.number(),
+  "appOpens": zod.number(),
+  "readerSessions": zod.number(),
+  "activeReadingMs": zod.number()
+})),
   "marketing": zod.object({
   "registrations": zod.number(),
   "verifiedUsers": zod.number(),
@@ -767,6 +792,40 @@ export const GetAdminAnalyticsResponse = zod.object({
   "booksCompleted": zod.number(),
   "syncAttempts": zod.number(),
   "syncSuccesses": zod.number()
+}))
+})
+
+
+/**
+ * @summary Per-user analytics detail (system admins only)
+ */
+export const getAdminAnalyticsUsersQueryDaysDefault = 30;
+
+export const GetAdminAnalyticsUsersQueryParams = zod.object({
+  "days": zod.union([zod.literal(7),zod.literal(30),zod.literal(90)]).default(getAdminAnalyticsUsersQueryDaysDefault)
+})
+
+export const GetAdminAnalyticsUsersResponse = zod.object({
+  "days": zod.union([zod.literal(7),zod.literal(30),zod.literal(90)]),
+  "rangeStart": zod.coerce.date(),
+  "rangeEnd": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "userId": zod.number(),
+  "username": zod.string(),
+  "role": zod.string(),
+  "activeDays": zod.number(),
+  "appOpens": zod.number(),
+  "readerSessions": zod.number(),
+  "activeReadingMs": zod.number(),
+  "booksStarted": zod.number(),
+  "booksCompleted": zod.number(),
+  "syncAttempts": zod.number(),
+  "syncSuccesses": zod.number(),
+  "lastActiveDate": zod.coerce.date(),
+  "sessionCount": zod.number(),
+  "minSessionMs": zod.number(),
+  "avgSessionMs": zod.number(),
+  "maxSessionMs": zod.number()
 }))
 })
 

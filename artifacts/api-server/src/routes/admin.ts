@@ -17,6 +17,7 @@ import {
   MAINTENANCE_MESSAGE_KEY,
   analyticsDailyBookActivityTable,
   analyticsDailyUserActivityTable,
+  analyticsEventsTable,
   readingProgressTable,
   giftEditionsTable,
   feedbackResponsesTable,
@@ -24,6 +25,11 @@ import {
 import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
 import { FEEDBACK_PAIN_POINTS } from "./feedback";
+import {
+  usersWithBooksSql,
+  usersWithCompletedUploadsSql,
+  usersWithFirstReadSql,
+} from "../lib/analytics-marketing-sql";
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
@@ -167,7 +173,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
   const inRange = sql`${analyticsDailyUserActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyUserActivityTable.activityDate} <= ${rangeEnd}::date`;
   const bookInRange = sql`${analyticsDailyBookActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyBookActivityTable.activityDate} <= ${rangeEnd}::date`;
 
-  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows] = await Promise.all([
+  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows, sessionRows, engagementRows, deviceRows] = await Promise.all([
     db
       .select({
         activeUsers: sql<number>`count(distinct ${analyticsDailyUserActivityTable.userId})::int`,
@@ -224,15 +230,9 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       .select({
         registrations: sql<number>`count(*)::int`,
         verifiedUsers: sql<number>`count(*) filter (where ${usersTable.emailVerifiedAt} is not null)::int`,
-        usersWithBooks: sql<number>`count(*) filter (where exists (
-          select 1 from ${booksTable} as uploaded_book where uploaded_book.owner_user_id = ${usersTable.id}
-        ))::int`,
-        usersWithCompletedUploads: sql<number>`count(*) filter (where exists (
-          select 1 from ${bookUploadJobsTable} as upload_job where upload_job.owner_user_id = ${usersTable.id} and upload_job.status = 'completed'
-        ))::int`,
-        usersWithFirstRead: sql<number>`count(*) filter (where exists (
-          select 1 from ${readEventsTable} as read_event where read_event.user_id = ${usersTable.id}
-        ))::int`,
+        usersWithBooks: usersWithBooksSql,
+        usersWithCompletedUploads: usersWithCompletedUploadsSql,
+        usersWithFirstRead: usersWithFirstReadSql,
       })
       .from(usersTable)
       .where(sql`${usersTable.createdAt} >= ${rangeStart}::date and ${usersTable.createdAt} < (${rangeEnd}::date + interval '1 day')`),
@@ -310,6 +310,48 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     db
       .select({ completedBooks: sql<number>`count(distinct ${readingProgressTable.bookId}) filter (where ${readingProgressTable.completedAt} is not null)::int` })
       .from(readingProgressTable),
+    db.execute(sql`
+      select
+        count(*)::int as sessions,
+        coalesce(min((properties->>'activeReadingMs')::bigint), 0)::bigint as "minMs",
+        coalesce(max((properties->>'activeReadingMs')::bigint), 0)::bigint as "maxMs",
+        coalesce(round(avg((properties->>'activeReadingMs')::bigint)), 0)::bigint as "avgMs",
+        count(*) filter (where (properties->>'activeReadingMs')::bigint < 30000)::int as "shortSessions",
+        count(*) filter (where properties->>'endReason' = 'hidden')::int as "hiddenEnds",
+        count(*) filter (where properties->>'endReason' = 'inactive')::int as "inactiveEnds",
+        count(*) filter (where properties->>'endReason' = 'unmount')::int as "unmountEnds"
+      from ${analyticsEventsTable}
+      where ${analyticsEventsTable.eventName} = 'reader_session_ended'
+        and ${analyticsEventsTable.occurredLocalDate} >= ${rangeStart}::date
+        and ${analyticsEventsTable.occurredLocalDate} <= ${rangeEnd}::date
+    `),
+    db.execute(sql`
+      select
+        count(distinct ${analyticsDailyUserActivityTable.userId}) filter (
+          where ${analyticsDailyUserActivityTable.activityDate} = ${rangeEnd}::date
+        )::int as "dau",
+        count(distinct ${analyticsDailyUserActivityTable.userId}) filter (
+          where ${analyticsDailyUserActivityTable.activityDate} >= ${rangeEnd}::date - 6
+        )::int as "wau",
+        count(distinct ${analyticsDailyUserActivityTable.userId}) filter (
+          where ${analyticsDailyUserActivityTable.activityDate} >= ${rangeEnd}::date - 29
+        )::int as "mau"
+      from ${analyticsDailyUserActivityTable}
+      where ${analyticsDailyUserActivityTable.activityDate} <= ${rangeEnd}::date
+        and ${analyticsDailyUserActivityTable.activityDate} >= ${rangeEnd}::date - 29
+    `),
+    db
+      .select({
+        deviceMode: analyticsDailyUserActivityTable.deviceMode,
+        users: sql<number>`count(distinct ${analyticsDailyUserActivityTable.userId})::int`,
+        appOpens: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.appOpens}), 0)::int`,
+        readerSessions: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.readerSessions}), 0)::int`,
+        activeReadingMs: sql<number>`coalesce(sum(${analyticsDailyUserActivityTable.activeReadingMs}), 0)::bigint`,
+      })
+      .from(analyticsDailyUserActivityTable)
+      .where(inRange)
+      .groupBy(analyticsDailyUserActivityTable.deviceMode)
+      .orderBy(desc(sql`coalesce(sum(${analyticsDailyUserActivityTable.activeReadingMs}), 0)`)),
   ]);
 
   const summary = summaryRows[0];
@@ -332,6 +374,56 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
   const toRate = (numerator: number, denominator: number): number => denominator === 0 ? 0 : Number(((numerator / denominator) * 100).toFixed(1));
   const toRatio = (numerator: number, denominator: number): number => denominator === 0 ? 0 : Number((numerator / denominator).toFixed(1));
   const completedBooks = completionRows[0].completedBooks;
+  const sessionStats = (sessionRows.rows[0] ?? {
+    sessions: 0,
+    minMs: 0,
+    maxMs: 0,
+    avgMs: 0,
+    shortSessions: 0,
+    hiddenEnds: 0,
+    inactiveEnds: 0,
+    unmountEnds: 0,
+  }) as {
+    sessions: number;
+    minMs: number;
+    maxMs: number;
+    avgMs: number;
+    shortSessions: number;
+    hiddenEnds: number;
+    inactiveEnds: number;
+    unmountEnds: number;
+  };
+  const sessions = {
+    count: Number(sessionStats.sessions),
+    minMs: Number(sessionStats.minMs),
+    avgMs: Number(sessionStats.avgMs),
+    maxMs: Number(sessionStats.maxMs),
+    shortSessions: Number(sessionStats.shortSessions),
+    shortShare: toRate(Number(sessionStats.shortSessions), Number(sessionStats.sessions)),
+    byEndReason: [
+      { reason: "hidden", count: Number(sessionStats.hiddenEnds) },
+      { reason: "inactive", count: Number(sessionStats.inactiveEnds) },
+      { reason: "unmount", count: Number(sessionStats.unmountEnds) },
+    ],
+  };
+  const devices = deviceRows.map((row) => ({
+    deviceMode: row.deviceMode,
+    users: Number(row.users),
+    appOpens: Number(row.appOpens),
+    readerSessions: Number(row.readerSessions),
+    activeReadingMs: Number(row.activeReadingMs),
+  }));
+  const engagementRaw = (engagementRows.rows[0] ?? { dau: 0, wau: 0, mau: 0 }) as {
+    dau: number;
+    wau: number;
+    mau: number;
+  };
+  const engagement = {
+    dau: Number(engagementRaw.dau),
+    wau: Number(engagementRaw.wau),
+    mau: Number(engagementRaw.mau),
+    stickiness: toRate(Number(engagementRaw.dau), Number(engagementRaw.mau)),
+  };
 
   res.json({
     days,
@@ -354,6 +446,9 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       trackedBooks: bookSummaryRows[0].trackedBooks,
       averageSessionReadingMs: summary.readerSessions === 0 ? 0 : Math.round(summary.activeReadingMs / summary.readerSessions),
     },
+    sessions,
+    engagement,
+    devices,
     marketing: {
       registrations: marketing.registrations,
       verifiedUsers: marketing.verifiedUsers,
@@ -382,6 +477,84 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     },
     trend,
   });
+});
+
+// GET /admin/analytics/users?days=7|30|90 - детализация по пользователям (system admin only)
+router.get("/admin/analytics/users", requireSystemAdmin, async (req, res): Promise<void> => {
+  const requestedDays = req.query.days;
+  const days = requestedDays === undefined ? 30 : ({ "7": 7, "30": 30, "90": 90 } as const)[
+    typeof requestedDays === "string" ? requestedDays : ""
+  ];
+  if (days === undefined) {
+    res.status(400).json({ error: "Период должен быть равен 7, 30 или 90 дням" });
+    return;
+  }
+
+  const end = new Date();
+  end.setUTCDate(end.getUTCDate() - 1);
+  const rangeEnd = end.toISOString().slice(0, 10);
+  end.setUTCDate(end.getUTCDate() - days + 1);
+  const rangeStart = end.toISOString().slice(0, 10);
+
+  const result = await db.execute(sql`
+    select
+      activity.user_id::int as "userId",
+      users.username,
+      users.role,
+      count(distinct activity.activity_date)::int as "activeDays",
+      coalesce(sum(activity.app_opens), 0)::int as "appOpens",
+      coalesce(sum(activity.reader_sessions), 0)::int as "readerSessions",
+      coalesce(sum(activity.active_reading_ms), 0)::bigint as "activeReadingMs",
+      coalesce(sum(activity.books_started), 0)::int as "booksStarted",
+      coalesce(sum(activity.books_completed), 0)::int as "booksCompleted",
+      coalesce(sum(activity.sync_attempts), 0)::int as "syncAttempts",
+      coalesce(sum(activity.sync_successes), 0)::int as "syncSuccesses",
+      max(activity.activity_date)::text as "lastActiveDate",
+      coalesce(session_stats.sessions, 0)::int as "sessionCount",
+      coalesce(session_stats.min_ms, 0)::bigint as "minSessionMs",
+      coalesce(session_stats.avg_ms, 0)::bigint as "avgSessionMs",
+      coalesce(session_stats.max_ms, 0)::bigint as "maxSessionMs"
+    from analytics_daily_user_activity as activity
+    join users on users.id = activity.user_id
+    left join (
+      select
+        user_id,
+        count(*)::int as sessions,
+        coalesce(min((properties->>'activeReadingMs')::bigint), 0) as min_ms,
+        coalesce(round(avg((properties->>'activeReadingMs')::bigint)), 0) as avg_ms,
+        coalesce(max((properties->>'activeReadingMs')::bigint), 0) as max_ms
+      from ${analyticsEventsTable}
+      where event_name = 'reader_session_ended'
+        and occurred_local_date >= ${rangeStart}::date
+        and occurred_local_date <= ${rangeEnd}::date
+      group by user_id
+    ) as session_stats on session_stats.user_id = activity.user_id
+    where activity.activity_date >= ${rangeStart}::date and activity.activity_date <= ${rangeEnd}::date
+    group by activity.user_id, users.username, users.role, session_stats.sessions, session_stats.min_ms, session_stats.avg_ms, session_stats.max_ms
+    order by "activeReadingMs" desc
+    limit 200
+  `);
+
+  const items = (result.rows as Array<Record<string, unknown>>).map((row) => ({
+    userId: Number(row.userId),
+    username: row.username as string,
+    role: row.role as string,
+    activeDays: Number(row.activeDays),
+    appOpens: Number(row.appOpens),
+    readerSessions: Number(row.readerSessions),
+    activeReadingMs: Number(row.activeReadingMs),
+    booksStarted: Number(row.booksStarted),
+    booksCompleted: Number(row.booksCompleted),
+    syncAttempts: Number(row.syncAttempts),
+    syncSuccesses: Number(row.syncSuccesses),
+    lastActiveDate: row.lastActiveDate as string,
+    sessionCount: Number(row.sessionCount),
+    minSessionMs: Number(row.minSessionMs),
+    avgSessionMs: Number(row.avgSessionMs),
+    maxSessionMs: Number(row.maxSessionMs),
+  }));
+
+  res.json({ days, rangeStart, rangeEnd, items });
 });
 
 // GET /admin/users

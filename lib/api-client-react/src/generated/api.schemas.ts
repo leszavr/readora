@@ -709,6 +709,45 @@ export interface AdminAnalyticsSummary {
   averageSessionReadingMs: number;
 }
 
+export type AdminAnalyticsEndReasonReason = typeof AdminAnalyticsEndReasonReason[keyof typeof AdminAnalyticsEndReasonReason];
+
+
+export const AdminAnalyticsEndReasonReason = {
+  hidden: 'hidden',
+  inactive: 'inactive',
+  unmount: 'unmount',
+} as const;
+
+export interface AdminAnalyticsEndReason {
+  reason: AdminAnalyticsEndReasonReason;
+  count: number;
+}
+
+export interface AdminAnalyticsSessions {
+  count: number;
+  minMs: number;
+  avgMs: number;
+  maxMs: number;
+  shortSessions: number;
+  shortShare: number;
+  byEndReason: AdminAnalyticsEndReason[];
+}
+
+export interface AdminAnalyticsEngagement {
+  dau: number;
+  wau: number;
+  mau: number;
+  stickiness: number;
+}
+
+export interface AdminAnalyticsDevice {
+  deviceMode: string;
+  users: number;
+  appOpens: number;
+  readerSessions: number;
+  activeReadingMs: number;
+}
+
 export type AdminAnalyticsFunnelStepStep = typeof AdminAnalyticsFunnelStepStep[keyof typeof AdminAnalyticsFunnelStepStep];
 
 
@@ -792,8 +831,46 @@ export interface AdminAnalytics {
   rangeEnd: string;
   systemSummary: AdminAnalyticsSystemSummary;
   summary: AdminAnalyticsSummary;
+  sessions: AdminAnalyticsSessions;
+  engagement: AdminAnalyticsEngagement;
+  devices: AdminAnalyticsDevice[];
   marketing: AdminAnalyticsMarketing;
   trend: AdminAnalyticsDailyTrend[];
+}
+
+export interface AdminAnalyticsUserRow {
+  userId: number;
+  username: string;
+  role: string;
+  activeDays: number;
+  appOpens: number;
+  readerSessions: number;
+  activeReadingMs: number;
+  booksStarted: number;
+  booksCompleted: number;
+  syncAttempts: number;
+  syncSuccesses: number;
+  lastActiveDate: string;
+  sessionCount: number;
+  minSessionMs: number;
+  avgSessionMs: number;
+  maxSessionMs: number;
+}
+
+export type AdminAnalyticsUsersDays = typeof AdminAnalyticsUsersDays[keyof typeof AdminAnalyticsUsersDays];
+
+
+export const AdminAnalyticsUsersDays = {
+  NUMBER_7: 7,
+  NUMBER_30: 30,
+  NUMBER_90: 90,
+} as const;
+
+export interface AdminAnalyticsUsers {
+  days: AdminAnalyticsUsersDays;
+  rangeStart: string;
+  rangeEnd: string;
+  items: AdminAnalyticsUserRow[];
 }
 
 export type AdminUserCreateRole = typeof AdminUserCreateRole[keyof typeof AdminUserCreateRole];
@@ -1059,6 +1136,19 @@ export type GetAdminAnalyticsDays = typeof GetAdminAnalyticsDays[keyof typeof Ge
 
 
 export const GetAdminAnalyticsDays = {
+  NUMBER_7: 7,
+  NUMBER_30: 30,
+  NUMBER_90: 90,
+} as const;
+
+export type GetAdminAnalyticsUsersParams = {
+days?: GetAdminAnalyticsUsersDays;
+};
+
+export type GetAdminAnalyticsUsersDays = typeof GetAdminAnalyticsUsersDays[keyof typeof GetAdminAnalyticsUsersDays];
+
+
+export const GetAdminAnalyticsUsersDays = {
   NUMBER_7: 7,
   NUMBER_30: 30,
   NUMBER_90: 90,
