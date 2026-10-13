@@ -892,6 +892,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /admin/analytics/users:
+    get:
+      operationId: getAdminAnalyticsUsers
+      tags: [admin]
+      summary: Per-user analytics detail (system admins only)
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            enum: [7, 30, 90]
+            default: 30
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAnalyticsUsers"
+        "403":
+          description: System administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Unsupported analytics period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/feedback:
     get:
       operationId: getAdminFeedback
@@ -2403,7 +2435,7 @@ components:
 
     AdminAnalytics:
       type: object
-      required: [days, rangeStart, rangeEnd, systemSummary, summary, marketing, trend]
+      required: [days, rangeStart, rangeEnd, systemSummary, summary, sessions, engagement, devices, marketing, trend]
       properties:
         days:
           type: integer
@@ -2418,12 +2450,135 @@ components:
           $ref: "#/components/schemas/AdminAnalyticsSystemSummary"
         summary:
           $ref: "#/components/schemas/AdminAnalyticsSummary"
+        sessions:
+          $ref: "#/components/schemas/AdminAnalyticsSessions"
+        engagement:
+          $ref: "#/components/schemas/AdminAnalyticsEngagement"
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsDevice"
         marketing:
           $ref: "#/components/schemas/AdminAnalyticsMarketing"
         trend:
           type: array
           items:
             $ref: "#/components/schemas/AdminAnalyticsDailyTrend"
+
+    AdminAnalyticsEngagement:
+      type: object
+      required: [dau, wau, mau, stickiness]
+      properties:
+        dau:
+          type: integer
+        wau:
+          type: integer
+        mau:
+          type: integer
+        stickiness:
+          type: number
+
+    AdminAnalyticsSessions:
+      type: object
+      required: [count, minMs, avgMs, maxMs, shortSessions, shortShare, byEndReason]
+      properties:
+        count:
+          type: integer
+        minMs:
+          type: integer
+        avgMs:
+          type: integer
+        maxMs:
+          type: integer
+        shortSessions:
+          type: integer
+        shortShare:
+          type: number
+        byEndReason:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsEndReason"
+
+    AdminAnalyticsEndReason:
+      type: object
+      required: [reason, count]
+      properties:
+        reason:
+          type: string
+          enum: [hidden, inactive, unmount]
+        count:
+          type: integer
+
+    AdminAnalyticsDevice:
+      type: object
+      required: [deviceMode, users, appOpens, readerSessions, activeReadingMs]
+      properties:
+        deviceMode:
+          type: string
+        users:
+          type: integer
+        appOpens:
+          type: integer
+        readerSessions:
+          type: integer
+        activeReadingMs:
+          type: integer
+
+    AdminAnalyticsUserRow:
+      type: object
+      required: [userId, username, role, activeDays, appOpens, readerSessions, activeReadingMs, booksStarted, booksCompleted, syncAttempts, syncSuccesses, lastActiveDate, sessionCount, minSessionMs, avgSessionMs, maxSessionMs]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+        activeDays:
+          type: integer
+        appOpens:
+          type: integer
+        readerSessions:
+          type: integer
+        activeReadingMs:
+          type: integer
+        booksStarted:
+          type: integer
+        booksCompleted:
+          type: integer
+        syncAttempts:
+          type: integer
+        syncSuccesses:
+          type: integer
+        lastActiveDate:
+          type: string
+          format: date
+        sessionCount:
+          type: integer
+        minSessionMs:
+          type: integer
+        avgSessionMs:
+          type: integer
+        maxSessionMs:
+          type: integer
+
+    AdminAnalyticsUsers:
+      type: object
+      required: [days, rangeStart, rangeEnd, items]
+      properties:
+        days:
+          type: integer
+          enum: [7, 30, 90]
+        rangeStart:
+          type: string
+          format: date
+        rangeEnd:
+          type: string
+          format: date
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsUserRow"
 
     AdminAnalyticsSystemSummary:
       type: object
