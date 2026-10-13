@@ -420,9 +420,9 @@ export default function AdminAnalytics() {
               Данных пока нет. Они появятся после ежедневного пересчёта аналитики.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
               <table className="w-full min-w-[640px] text-sm">
-                <thead className="border-b text-left text-xs text-muted-foreground">
+                <thead className="sticky top-0 z-10 border-b bg-card text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="pb-3 font-medium">Дата</th>
                     <th className="pb-3 text-right font-medium">Пользователи</th>

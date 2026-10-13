@@ -359,7 +359,7 @@ export default function AdminFeedback() {
               По выбранным фильтрам отзывов нет.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
               {items.map((item) => (
                 <div key={item.id} className="rounded-lg border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">

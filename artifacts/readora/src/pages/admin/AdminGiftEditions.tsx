@@ -130,7 +130,7 @@ export default function AdminGiftEditions() {
           <p className="mt-1 text-sm text-muted-foreground">Нажмите «Добавить книгу» и загрузите FB2 или EPUB из public domain — или отметьте уже загруженную книгу в разделе «Книги».</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 2xl:grid-cols-3">
           {editions.map((edition) => (
             <article key={edition.id} className="flex gap-3 rounded-xl border bg-card p-3 shadow-sm">
               <GiftCover edition={edition} />
