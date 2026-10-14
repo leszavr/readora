@@ -188,6 +188,7 @@ export const AnalyticsClientEventEventName = {
   library_viewed: 'library_viewed',
   book_upload_started: 'book_upload_started',
   reader_session_started: 'reader_session_started',
+  reader_session_heartbeat: 'reader_session_heartbeat',
   reader_session_ended: 'reader_session_ended',
   reading_progressed: 'reading_progressed',
   chapter_opened: 'chapter_opened',
@@ -669,7 +670,7 @@ export interface AdminStats {
   totalUsers: number;
   totalBooks: number;
   activeReaders: number;
-  openCount7d?: number;
+  progressSaves7d: number;
   recentBooks: AdminBook[];
   recentUsers: AdminUser[];
 }
@@ -687,10 +688,10 @@ export interface AdminAnalyticsSystemSummary {
   totalUsers: number;
   totalBooks: number;
   activeReaders: number;
-  bookOpens: number;
-  pwaInstallAccepted: number;
+  progressSaves: number;
+  pwaInstallConfirmations: number;
   booksPerUser: number;
-  readEventsPerActiveReader: number;
+  progressSavesPerReader: number;
   completedBooks: number;
   completedBooksRate: number;
 }
@@ -716,6 +717,7 @@ export const AdminAnalyticsEndReasonReason = {
   hidden: 'hidden',
   inactive: 'inactive',
   unmount: 'unmount',
+  timeout: 'timeout',
 } as const;
 
 export interface AdminAnalyticsEndReason {
@@ -802,10 +804,8 @@ export interface AdminAnalyticsMarketing {
   registrations: number;
   verifiedUsers: number;
   emailVerificationRate: number;
-  usersWithBooks: number;
-  firstBookUploadRate: number;
-  usersWithCompletedUploads: number;
-  completedUploadRate: number;
+  firstSuccessfulUploads: number;
+  firstSuccessfulUploadRate: number;
   usersWithFirstRead: number;
   firstReadRate: number;
   funnel: AdminAnalyticsFunnelStep[];
@@ -836,6 +836,7 @@ export interface AdminAnalytics {
   devices: AdminAnalyticsDevice[];
   marketing: AdminAnalyticsMarketing;
   trend: AdminAnalyticsDailyTrend[];
+  provisionalCurrentDay: AdminAnalyticsDailyTrend;
 }
 
 export interface AdminAnalyticsUserRow {

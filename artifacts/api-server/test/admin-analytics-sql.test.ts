@@ -4,7 +4,6 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "@workspace/db/schema";
 import {
-  usersWithBooksSql,
   usersWithCompletedUploadsSql,
   usersWithFirstReadSql,
 } from "../src/lib/analytics-marketing-sql";
@@ -15,7 +14,6 @@ const db = drizzle({} as never, { schema });
 function renderAggregates(): string {
   return db
     .select({
-      usersWithBooks: usersWithBooksSql,
       usersWithCompletedUploads: usersWithCompletedUploadsSql,
       usersWithFirstRead: usersWithFirstReadSql,
     })
@@ -33,15 +31,14 @@ test("коррелированные подзапросы ссылаются н�
   assert.doesNotMatch(rendered, /owner_user_id = "id"/);
   assert.doesNotMatch(rendered, /user_id = "id"/);
 
-  assert.match(rendered, /uploaded_book\.owner_user_id = "users"\.id/);
   assert.match(rendered, /upload_job\.owner_user_id = "users"\.id/);
   assert.match(rendered, /read_event\.user_id = "users"\.id/);
 });
 
-test("подзапросы обращаются к книгам, заданиям загрузки и событиям чтения", () => {
+test("подзапросы обращаются к успешным заданиям загрузки и фактическим сохранениям прогресса", () => {
   const rendered = renderAggregates();
-  assert.match(rendered, /from "books" as uploaded_book/);
   assert.match(rendered, /from "book_upload_jobs" as upload_job/);
   assert.match(rendered, /status = 'completed'/);
   assert.match(rendered, /from "read_events" as read_event/);
+  assert.match(rendered, /event_type = 'progress_saved'/);
 });

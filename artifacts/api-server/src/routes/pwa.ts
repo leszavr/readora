@@ -1,13 +1,21 @@
 import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
+import { rateLimit } from "express-rate-limit";
 import { appSettingsTable, db } from "@workspace/db";
 import { requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 const PWA_INSTALL_ACCEPTED_KEY = "pwa_install_accepted_count";
+const pwaInstallAcceptedLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много подтверждений установки PWA. Попробуйте позже" },
+});
 
 // POST /pwa/install-accepted
-router.post("/pwa/install-accepted", async (_req, res): Promise<void> => {
+router.post("/pwa/install-accepted", pwaInstallAcceptedLimiter, async (_req, res): Promise<void> => {
   await db.execute(sql`
     insert into app_settings ("key", "value")
     values (${PWA_INSTALL_ACCEPTED_KEY}, '1')

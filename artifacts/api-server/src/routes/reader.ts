@@ -62,9 +62,6 @@ router.get("/books/:id/chapters", requireAuth, async (req, res): Promise<void> =
     .where(eq(chaptersTable.bookId, getContentBookId(book)))
     .orderBy(chaptersTable.index);
 
-  // Log open event
-  await db.insert(readEventsTable).values({ bookId, userId: user.id, eventType: "open" }).catch(() => {});
-
   res.json(chapters.map((chapter) => ({ ...chapter, bookId })));
 });
 
@@ -185,6 +182,7 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
         completedAt: values.completedAt,
       },
     });
+  await db.insert(readEventsTable).values({ bookId, userId: user.id, eventType: "progress_saved" }).catch(() => {});
 
   const previousStatus = previous?.readingStatus ?? "not_started";
   if (previousStatus !== normalizedReadingStatus) {

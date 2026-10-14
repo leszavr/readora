@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import { analyticsEventsTable, db, type User } from "@workspace/db";
+import { getUtcDate } from "./analytics-time";
+import { logger } from "./logger";
 
 type ServerAnalyticsEvent = {
   bookId?: number;
@@ -23,9 +25,15 @@ export async function recordServerAnalyticsEvent(
     eventName: event.eventName,
     producer: "server",
     occurredAt,
+    eventDay: getUtcDate(occurredAt),
     occurredLocalDate: occurredAt.toISOString().slice(0, 10),
     platform: "web",
     deviceMode: event.deviceMode ?? "unknown",
     properties: event.properties,
-  }).catch(() => undefined);
+  }).catch((error: unknown) => {
+    logger.error({
+      eventName: event.eventName,
+      error: error instanceof Error ? error.message : "Неизвестная ошибка",
+    }, "Не удалось сохранить серверное событие аналитики");
+  });
 }

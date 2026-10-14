@@ -26,7 +26,6 @@ import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
 import { FEEDBACK_PAIN_POINTS } from "./feedback";
 import {
-  usersWithBooksSql,
   usersWithCompletedUploadsSql,
   usersWithFirstReadSql,
 } from "../lib/analytics-marketing-sql";
@@ -105,17 +104,17 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
     .from(booksTable);
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const [{ openCount7d }] = await db
-    .select({ openCount7d: sql<number>`count(*)::int` })
+  const [{ progressSaves7d }] = await db
+    .select({ progressSaves7d: sql<number>`count(*)::int` })
     .from(readEventsTable)
-    .where(sql`${readEventsTable.createdAt} > ${sevenDaysAgo}`);
+    .where(sql`${readEventsTable.createdAt} > ${sevenDaysAgo} and ${readEventsTable.eventType} = 'progress_saved'`);
 
   const [{ activeReaders }] = await db
     .select({
       activeReaders: sql<number>`count(distinct ${readEventsTable.userId})::int`,
     })
     .from(readEventsTable)
-    .where(sql`${readEventsTable.createdAt} > ${sevenDaysAgo}`);
+    .where(sql`${readEventsTable.createdAt} > ${sevenDaysAgo} and ${readEventsTable.eventType} = 'progress_saved'`);
 
   const recentBooksRaw = await db
     .select()
@@ -146,7 +145,7 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
     totalUsers,
     totalBooks,
     activeReaders,
-    openCount7d,
+    progressSaves7d,
     recentBooks,
     recentUsers,
   });
@@ -168,12 +167,12 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
   const rangeEnd = end.toISOString().slice(0, 10);
   end.setUTCDate(end.getUTCDate() - days + 1);
   const rangeStart = end.toISOString().slice(0, 10);
-  const periodStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const currentDay = new Date().toISOString().slice(0, 10);
 
   const inRange = sql`${analyticsDailyUserActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyUserActivityTable.activityDate} <= ${rangeEnd}::date`;
   const bookInRange = sql`${analyticsDailyBookActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyBookActivityTable.activityDate} <= ${rangeEnd}::date`;
 
-  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows, sessionRows, engagementRows, deviceRows] = await Promise.all([
+  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows, sessionRows, engagementRows, deviceRows, currentDayRows] = await Promise.all([
     db
       .select({
         activeUsers: sql<number>`count(distinct ${analyticsDailyUserActivityTable.userId})::int`,
@@ -217,10 +216,10 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     db
       .select({
         activeReaders: sql<number>`count(distinct ${readEventsTable.userId})::int`,
-        bookOpens: sql<number>`count(*)::int`,
+        progressSaves: sql<number>`count(*)::int`,
       })
       .from(readEventsTable)
-      .where(sql`${readEventsTable.createdAt} > ${periodStart}`),
+      .where(sql`${readEventsTable.createdAt} >= ${rangeStart}::date and ${readEventsTable.createdAt} < (${rangeEnd}::date + interval '1 day') and ${readEventsTable.eventType} = 'progress_saved'`),
     db
       .select({ value: appSettingsTable.value })
       .from(appSettingsTable)
@@ -230,8 +229,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       .select({
         registrations: sql<number>`count(*)::int`,
         verifiedUsers: sql<number>`count(*) filter (where ${usersTable.emailVerifiedAt} is not null)::int`,
-        usersWithBooks: usersWithBooksSql,
-        usersWithCompletedUploads: usersWithCompletedUploadsSql,
+        firstSuccessfulUploads: usersWithCompletedUploadsSql,
         usersWithFirstRead: usersWithFirstReadSql,
       })
       .from(usersTable)
@@ -262,6 +260,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
             and exists (
               select 1 from read_events as day_zero_event
               where day_zero_event.user_id = cohort_user.id
+                and day_zero_event.event_type = 'progress_saved'
                 and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
             )
         )::int as "d7EligibleUsers",
@@ -270,13 +269,14 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
             and exists (
               select 1 from read_events as day_zero_event
               where day_zero_event.user_id = cohort_user.id
+                and day_zero_event.event_type = 'progress_saved'
                 and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
             )
             and exists (
               select 1 from read_events as return_event
               where return_event.user_id = cohort_user.id
-                and (return_event.created_at at time zone 'UTC')::date > registered_at
-                and (return_event.created_at at time zone 'UTC')::date <= registered_at + 7
+                and return_event.event_type = 'progress_saved'
+                and (return_event.created_at at time zone 'UTC')::date = registered_at + 7
             )
         )::int as "d7RetainedUsers",
         count(*) filter (
@@ -284,6 +284,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
             and exists (
               select 1 from read_events as day_zero_event
               where day_zero_event.user_id = cohort_user.id
+                and day_zero_event.event_type = 'progress_saved'
                 and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
             )
         )::int as "d30EligibleUsers",
@@ -292,13 +293,14 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
             and exists (
               select 1 from read_events as day_zero_event
               where day_zero_event.user_id = cohort_user.id
+                and day_zero_event.event_type = 'progress_saved'
                 and (day_zero_event.created_at at time zone 'UTC')::date = registered_at
             )
             and exists (
               select 1 from read_events as return_event
               where return_event.user_id = cohort_user.id
-                and (return_event.created_at at time zone 'UTC')::date > registered_at
-                and (return_event.created_at at time zone 'UTC')::date <= registered_at + 30
+                and return_event.event_type = 'progress_saved'
+                and (return_event.created_at at time zone 'UTC')::date = registered_at + 30
             )
         )::int as "d30RetainedUsers"
       from (
@@ -319,11 +321,12 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
         count(*) filter (where (properties->>'activeReadingMs')::bigint < 30000)::int as "shortSessions",
         count(*) filter (where properties->>'endReason' = 'hidden')::int as "hiddenEnds",
         count(*) filter (where properties->>'endReason' = 'inactive')::int as "inactiveEnds",
-        count(*) filter (where properties->>'endReason' = 'unmount')::int as "unmountEnds"
+        count(*) filter (where properties->>'endReason' = 'unmount')::int as "unmountEnds",
+        count(*) filter (where properties->>'endReason' = 'timeout')::int as "timeoutEnds"
       from ${analyticsEventsTable}
       where ${analyticsEventsTable.eventName} = 'reader_session_ended'
-        and ${analyticsEventsTable.occurredLocalDate} >= ${rangeStart}::date
-        and ${analyticsEventsTable.occurredLocalDate} <= ${rangeEnd}::date
+        and ${analyticsEventsTable.eventDay} >= ${rangeStart}::date
+        and ${analyticsEventsTable.eventDay} <= ${rangeEnd}::date
     `),
     db.execute(sql`
       select
@@ -352,6 +355,19 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       .where(inRange)
       .groupBy(analyticsDailyUserActivityTable.deviceMode)
       .orderBy(desc(sql`coalesce(sum(${analyticsDailyUserActivityTable.activeReadingMs}), 0)`)),
+    db.execute(sql`
+      select
+        count(distinct user_id)::int as "activeUsers",
+        count(*) filter (where event_name = 'app_opened')::int as "appOpens",
+        count(*) filter (where event_name = 'reader_session_ended')::int as "readerSessions",
+        coalesce(sum((properties->>'activeReadingMs')::bigint) filter (where event_name = 'reader_session_ended'), 0)::bigint as "activeReadingMs",
+        count(*) filter (where event_name = 'reader_session_started' and coalesce((properties->>'startProgressPct')::numeric, 0) = 0)::int as "booksStarted",
+        count(*) filter (where event_name = 'book_completed')::int as "booksCompleted",
+        count(*) filter (where event_name = 'progress_sync_finished')::int as "syncAttempts",
+        count(*) filter (where event_name = 'progress_sync_finished' and properties->>'outcome' = 'success')::int as "syncSuccesses"
+      from ${analyticsEventsTable}
+      where ${analyticsEventsTable.eventDay} = ${currentDay}::date
+    `),
   ]);
 
   const summary = summaryRows[0];
@@ -383,6 +399,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     hiddenEnds: 0,
     inactiveEnds: 0,
     unmountEnds: 0,
+    timeoutEnds: 0,
   }) as {
     sessions: number;
     minMs: number;
@@ -392,6 +409,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     hiddenEnds: number;
     inactiveEnds: number;
     unmountEnds: number;
+    timeoutEnds: number;
   };
   const sessions = {
     count: Number(sessionStats.sessions),
@@ -404,6 +422,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       { reason: "hidden", count: Number(sessionStats.hiddenEnds) },
       { reason: "inactive", count: Number(sessionStats.inactiveEnds) },
       { reason: "unmount", count: Number(sessionStats.unmountEnds) },
+      { reason: "timeout", count: Number(sessionStats.timeoutEnds) },
     ],
   };
   const devices = deviceRows.map((row) => ({
@@ -424,6 +443,27 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     mau: Number(engagementRaw.mau),
     stickiness: toRate(Number(engagementRaw.dau), Number(engagementRaw.mau)),
   };
+  const currentDayRaw = (currentDayRows.rows[0] ?? {
+    activeUsers: 0,
+    appOpens: 0,
+    readerSessions: 0,
+    activeReadingMs: 0,
+    booksStarted: 0,
+    booksCompleted: 0,
+    syncAttempts: 0,
+    syncSuccesses: 0,
+  }) as Record<string, number | string>;
+  const provisionalCurrentDay = {
+    activityDate: currentDay,
+    activeUsers: Number(currentDayRaw.activeUsers),
+    appOpens: Number(currentDayRaw.appOpens),
+    readerSessions: Number(currentDayRaw.readerSessions),
+    activeReadingMs: Number(currentDayRaw.activeReadingMs),
+    booksStarted: Number(currentDayRaw.booksStarted),
+    booksCompleted: Number(currentDayRaw.booksCompleted),
+    syncAttempts: Number(currentDayRaw.syncAttempts),
+    syncSuccesses: Number(currentDayRaw.syncSuccesses),
+  };
 
   res.json({
     days,
@@ -433,10 +473,10 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       totalUsers: totalUserRows[0].totalUsers,
       totalBooks: totalBookRows[0].totalBooks,
       activeReaders: readingRows[0].activeReaders,
-      bookOpens: readingRows[0].bookOpens,
-      pwaInstallAccepted: Number.isFinite(pwaInstallAccepted) ? pwaInstallAccepted : 0,
+      progressSaves: readingRows[0].progressSaves,
+      pwaInstallConfirmations: Number.isFinite(pwaInstallAccepted) ? pwaInstallAccepted : 0,
       booksPerUser: toRatio(totalBookRows[0].totalBooks, totalUserRows[0].totalUsers),
-      readEventsPerActiveReader: toRatio(readingRows[0].bookOpens, readingRows[0].activeReaders),
+      progressSavesPerReader: toRatio(readingRows[0].progressSaves, readingRows[0].activeReaders),
       completedBooks,
       completedBooksRate: toRate(completedBooks, totalBookRows[0].totalBooks),
     },
@@ -453,15 +493,13 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       registrations: marketing.registrations,
       verifiedUsers: marketing.verifiedUsers,
       emailVerificationRate: toRate(marketing.verifiedUsers, marketing.registrations),
-      usersWithBooks: marketing.usersWithBooks,
-      firstBookUploadRate: toRate(marketing.usersWithBooks, marketing.registrations),
-      usersWithCompletedUploads: marketing.usersWithCompletedUploads,
-      completedUploadRate: toRate(marketing.usersWithCompletedUploads, marketing.registrations),
+      firstSuccessfulUploads: marketing.firstSuccessfulUploads,
+      firstSuccessfulUploadRate: toRate(marketing.firstSuccessfulUploads, marketing.registrations),
       usersWithFirstRead: marketing.usersWithFirstRead,
       firstReadRate: toRate(marketing.usersWithFirstRead, marketing.registrations),
       funnel: [
         { step: "registered", label: "Регистрация", count: marketing.registrations },
-        { step: "upload_completed", label: "Первая успешная загрузка", count: marketing.usersWithCompletedUploads },
+        { step: "upload_completed", label: "Первая успешная загрузка", count: marketing.firstSuccessfulUploads },
         { step: "first_read", label: "Первое чтение", count: marketing.usersWithFirstRead },
       ],
       retention: {
@@ -476,6 +514,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       referralSources,
     },
     trend,
+    provisionalCurrentDay,
   });
 });
 
@@ -525,8 +564,8 @@ router.get("/admin/analytics/users", requireSystemAdmin, async (req, res): Promi
         coalesce(max((properties->>'activeReadingMs')::bigint), 0) as max_ms
       from ${analyticsEventsTable}
       where event_name = 'reader_session_ended'
-        and occurred_local_date >= ${rangeStart}::date
-        and occurred_local_date <= ${rangeEnd}::date
+        and event_day >= ${rangeStart}::date
+        and event_day <= ${rangeEnd}::date
       group by user_id
     ) as session_stats on session_stats.user_id = activity.user_id
     where activity.activity_date >= ${rangeStart}::date and activity.activity_date <= ${rangeEnd}::date

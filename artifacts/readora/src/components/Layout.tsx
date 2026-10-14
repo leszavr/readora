@@ -15,7 +15,6 @@ import { Library, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { SiteFooter } from "@/components/SiteFooter";
-import { clearAnalyticsQueue } from "@/lib/analytics";
 
 function BrandWordmark({ className }: Readonly<{ className?: string }>) {
   return (
@@ -40,7 +39,6 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const showAdminMaintenanceBanner = isAdmin && maintenanceStatus?.enabled;
 
   async function handleLogout() {
-    if (user) await clearAnalyticsQueue(user.id);
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     qc.setQueryData(getGetMeQueryKey(), null);
     qc.clear();

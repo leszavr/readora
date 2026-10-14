@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { getGetAdminAnalyticsQueryKey, getGetAdminAnalyticsUsersQueryKey, useGetAdminAnalytics, useGetAdminAnalyticsUsers } from "@workspace/api-client-react";
-import { Activity, BookCheck, BookCopy, BookOpen, BookOpenCheck, ChartNoAxesCombined, Clock3, Download, MailCheck, RefreshCw, UserCheck, Users } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { Activity, BookCheck, BookCopy, BookOpenCheck, Clock3, Download, MailCheck, RefreshCw, UserCheck, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type AnalyticsRange = 7 | 30 | 90;
@@ -13,6 +16,29 @@ const RANGES: ReadonlyArray<{ value: AnalyticsRange; label: string }> = [
   { value: 30, label: "30 дней" },
   { value: 90, label: "90 дней" },
 ];
+
+const trendConfig = {
+  activeUsers: { label: "Активные пользователи", color: "hsl(var(--primary))" },
+  readerSessions: { label: "Сессии чтения", color: "hsl(38 92% 50%)" },
+  provisionalActiveUsers: { label: "Сегодня: пользователи", color: "hsl(24 95% 53%)" },
+  provisionalReaderSessions: { label: "Сегодня: сессии", color: "hsl(340 82% 52%)" },
+} satisfies ChartConfig;
+
+const funnelConfig = {
+  count: { label: "Пользователи", color: "hsl(var(--primary))" },
+} satisfies ChartConfig;
+
+const registrationsConfig = {
+  registrations: { label: "Регистрации", color: "hsl(var(--primary))" },
+} satisfies ChartConfig;
+
+const countConfig = {
+  count: { label: "Сессии", color: "hsl(38 92% 50%)" },
+} satisfies ChartConfig;
+
+const sessionsConfig = {
+  readerSessions: { label: "Сессии чтения", color: "hsl(var(--primary))" },
+} satisfies ChartConfig;
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("ru-RU").format(value);
@@ -61,9 +87,10 @@ const REFERRAL_SOURCE_LABELS: Record<string, string> = {
 };
 
 const SESSION_END_REASON_LABELS: Record<string, string> = {
-  hidden: "Ушёл со вкладки (в фон)",
+  hidden: "Ушёл со вкладки",
   inactive: "Бездействие",
   unmount: "Закрыл страницу",
+  timeout: "Нет сигнала более 10 минут",
 };
 
 const DEVICE_LABELS: Record<string, string> = {
@@ -79,6 +106,34 @@ export default function AdminAnalytics() {
     { days },
     { query: { queryKey: getGetAdminAnalyticsQueryKey({ days }), retry: false } },
   );
+
+  const trendChartData = useMemo(() => {
+    if (!data) return [];
+
+    const historical = data.trend.map((day) => ({
+      activityDate: day.activityDate,
+      activeUsers: day.activeUsers,
+      readerSessions: day.readerSessions,
+      provisionalActiveUsers: null,
+      provisionalReaderSessions: null,
+    }));
+    const currentDay = data.provisionalCurrentDay;
+
+    if (historical.some((day) => day.activityDate === currentDay.activityDate)) {
+      return historical;
+    }
+
+    return [
+      ...historical,
+      {
+        activityDate: currentDay.activityDate,
+        activeUsers: null,
+        readerSessions: null,
+        provisionalActiveUsers: currentDay.activeUsers,
+        provisionalReaderSessions: currentDay.readerSessions,
+      },
+    ];
+  }, [data]);
 
   if (isLoading) {
     return <div className="h-72 animate-pulse rounded-xl bg-muted" />;
@@ -104,15 +159,38 @@ export default function AdminAnalytics() {
     { label: "Всего пользователей", value: formatNumber(systemSummary.totalUsers), icon: Users },
     { label: "Всего книг", value: formatNumber(systemSummary.totalBooks), icon: BookCopy },
     { label: `Активных читателей (${data.days} дней)`, value: formatNumber(systemSummary.activeReaders), icon: Activity },
-    { label: `Открытий книг (${data.days} дней)`, value: formatNumber(systemSummary.bookOpens), icon: BookOpen },
-    { label: "Установок PWA (accepted)", value: formatNumber(systemSummary.pwaInstallAccepted), icon: Download },
+    { label: `Сохранений прогресса (${data.days} дней)`, value: formatNumber(systemSummary.progressSaves), icon: BookOpenCheck },
+    { label: "Подтверждения установки PWA", value: formatNumber(systemSummary.pwaInstallConfirmations), icon: Download },
   ];
   const analyticsCards = [
     { label: "Активные пользователи с аналитикой", value: formatNumber(summary.activeUsers), icon: Users },
     { label: "Открытия приложения", value: formatNumber(summary.appOpens), icon: Activity },
-    { label: "Сессии чтения", value: formatNumber(summary.readerSessions), icon: BookOpenCheck },
+    { label: "Завершённые сессии чтения", value: formatNumber(summary.readerSessions), icon: BookOpenCheck },
     { label: "Время чтения", value: formatReadingTime(summary.activeReadingMs), icon: Clock3 },
   ];
+  const hasFunnelData = marketing.funnel.some((step) => step.count > 0);
+  const hasTrendData = trendChartData.some((day) => (
+    (day.activeUsers ?? 0) > 0
+    || (day.readerSessions ?? 0) > 0
+    || (day.provisionalActiveUsers ?? 0) > 0
+    || (day.provisionalReaderSessions ?? 0) > 0
+  ));
+  const registrationChartData = marketing.registrationTrend.map((week) => ({
+    ...week,
+    label: formatWeek(week.weekStart),
+  }));
+  const sourceChartData = marketing.referralSources.map((source) => ({
+    ...source,
+    label: REFERRAL_SOURCE_LABELS[source.source] ?? source.source,
+  }));
+  const sessionEndChartData = sessions.byEndReason.map((entry) => ({
+    ...entry,
+    label: SESSION_END_REASON_LABELS[entry.reason] ?? entry.reason,
+  }));
+  const deviceChartData = devices.map((device) => ({
+    ...device,
+    label: DEVICE_LABELS[device.deviceMode] ?? device.deviceMode,
+  }));
 
   return (
     <div className="space-y-6">
@@ -120,7 +198,7 @@ export default function AdminAnalytics() {
         <div>
           <h2 className="text-lg font-semibold">Системная аналитика</h2>
           <p className="text-sm text-muted-foreground">
-            Приватная аналитика за {formatDate(data.rangeStart)} - {formatDate(data.rangeEnd)}. Обновление перечитывает готовые агрегаты; данные текущего дня появятся после суточного пересчёта.
+            Готовые агрегаты за {formatDate(data.rangeStart)} - {formatDate(data.rangeEnd)}. Данные за {formatDate(data.provisionalCurrentDay.activityDate)} предварительные и обновляются из сырых событий.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -177,19 +255,25 @@ export default function AdminAnalytics() {
       <section className="space-y-3">
         <div>
           <h3 className="font-semibold">Рост и активация</h3>
-          <p className="text-sm text-muted-foreground">Системные показатели по всем пользователям за выбранный период.</p>
+          <p className="text-sm text-muted-foreground">Показатели по всем пользователям, зарегистрированным в выбранном периоде.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: "Регистрации", value: formatNumber(marketing.registrations), description: `за ${data.days} дней`, icon: Users },
             { label: "Подтвердили email", value: formatPercent(marketing.emailVerificationRate), description: `${formatNumber(marketing.verifiedUsers)} пользователей`, icon: MailCheck },
-            { label: "Загрузили первую книгу", value: formatPercent(marketing.firstBookUploadRate), description: `${formatNumber(marketing.usersWithBooks)} пользователей`, icon: UserCheck },
+            { label: "Первая успешная загрузка", value: formatPercent(marketing.firstSuccessfulUploadRate), description: `${formatNumber(marketing.firstSuccessfulUploads)} пользователей`, icon: UserCheck },
             { label: "Дочитанные книги", value: formatPercent(systemSummary.completedBooksRate), description: `${formatNumber(systemSummary.completedBooks)} из ${formatNumber(systemSummary.totalBooks)}`, icon: BookCheck },
           ].map(({ label, value, description, icon: Icon }) => (
             <Card key={label}>
               <CardContent className="flex items-center gap-3 pb-4 pt-5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></div>
-                <div className="min-w-0"><p className="text-2xl font-bold">{value}</p><p className="text-xs text-muted-foreground">{label}</p><p className="text-xs text-muted-foreground">{description}</p></div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-2xl font-bold">{value}</p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground">{description}</p>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -199,44 +283,21 @@ export default function AdminAnalytics() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle>Воронка активации</CardTitle>
-          <CardDescription>Новые пользователи за период: от регистрации до первого чтения. Доля — относительно всех регистраций.</CardDescription>
+          <CardDescription>Новые пользователи за период: от регистрации до первого сохранения прогресса.</CardDescription>
         </CardHeader>
         <CardContent>
-          {marketing.funnel.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Данных пока нет.</p>
+          {hasFunnelData ? (
+            <ChartContainer config={funnelConfig} className="h-64 w-full">
+              <BarChart data={marketing.funnel} layout="vertical" margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
+                <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={170} tick={{ fontSize: 12 }} />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                <Bar dataKey="count" fill="var(--color-count)" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ChartContainer>
           ) : (
-            <div className="space-y-3">
-              {marketing.funnel.map((step, index) => {
-                const previous = index > 0 ? marketing.funnel[index - 1] : null;
-                const shareOfFirst = marketing.funnel[0].count === 0 ? 0 : Math.round((step.count / marketing.funnel[0].count) * 100);
-                const dropOff = previous && previous.count > 0 ? Math.round(((previous.count - step.count) / previous.count) * 100) : null;
-                return (
-                  <div key={step.step} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{step.label}</span>
-                      <span className="text-muted-foreground">
-                        {formatNumber(step.count)}
-                        {previous && dropOff !== null && (
-                          <span className="ml-2 text-xs">−{dropOff}% с прошлого шага</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${shareOfFirst}%` }}
-                        role="progressbar"
-                        aria-valuenow={shareOfFirst}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`${step.label}: ${step.count}`}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">{shareOfFirst}% от регистраций</p>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="py-8 text-center text-sm text-muted-foreground">Данных за выбранный период пока нет.</p>
           )}
         </CardContent>
       </Card>
@@ -245,33 +306,78 @@ export default function AdminAnalytics() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle>Возвращаемость читателей</CardTitle>
-            <CardDescription>Пользователь читал в день регистрации и вернулся к чтению в указанный срок.</CardDescription>
+            <CardDescription>Первое сохранение прогресса в день регистрации и повторное — ровно на D7 или D30.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
-            <div><p className="text-2xl font-bold">{formatPercent(marketing.retention.d7Rate)}</p><p className="text-sm text-muted-foreground">Вернулись через 7 дней: {formatNumber(marketing.retention.d7RetainedUsers)} из {formatNumber(marketing.retention.d7EligibleUsers)}</p></div>
-            <div><p className="text-2xl font-bold">{formatPercent(marketing.retention.d30Rate)}</p><p className="text-sm text-muted-foreground">Вернулись через 30 дней: {formatNumber(marketing.retention.d30RetainedUsers)} из {formatNumber(marketing.retention.d30EligibleUsers)}</p></div>
+            <div>
+              <p className="text-2xl font-bold">{formatPercent(marketing.retention.d7Rate)}</p>
+              <p className="text-sm text-muted-foreground">D7: {formatNumber(marketing.retention.d7RetainedUsers)} из {formatNumber(marketing.retention.d7EligibleUsers)}</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{formatPercent(marketing.retention.d30Rate)}</p>
+              <p className="text-sm text-muted-foreground">D30: {formatNumber(marketing.retention.d30RetainedUsers)} из {formatNumber(marketing.retention.d30EligibleUsers)}</p>
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-3"><CardTitle>Глубина использования</CardTitle><CardDescription>Системные счётчики без зависимости от согласия на аналитику.</CardDescription></CardHeader>
+          <CardHeader className="pb-3">
+            <CardTitle>Глубина использования</CardTitle>
+            <CardDescription>Системные счётчики без зависимости от согласия на аналитику.</CardDescription>
+          </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
-            <div><p className="text-2xl font-bold">{formatNumber(systemSummary.booksPerUser)}</p><p className="text-sm text-muted-foreground">книг на пользователя</p></div>
-            <div><p className="text-2xl font-bold">{formatNumber(systemSummary.readEventsPerActiveReader)}</p><p className="text-sm text-muted-foreground">открытий на активного читателя</p></div>
+            <div>
+              <p className="text-2xl font-bold">{formatNumber(systemSummary.booksPerUser)}</p>
+              <p className="text-sm text-muted-foreground">книг на пользователя</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{formatNumber(systemSummary.progressSavesPerReader)}</p>
+              <p className="text-sm text-muted-foreground">сохранений прогресса на активного читателя</p>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader className="pb-3"><CardTitle>Регистрации по неделям</CardTitle><CardDescription>Текущая и семь предыдущих недель.</CardDescription></CardHeader>
+          <CardHeader className="pb-3">
+            <CardTitle>Регистрации по неделям</CardTitle>
+            <CardDescription>Текущая и семь предыдущих недель.</CardDescription>
+          </CardHeader>
           <CardContent>
-            {marketing.registrationTrend.length === 0 ? <p className="text-sm text-muted-foreground">Регистраций пока нет.</p> : <div className="space-y-2">{marketing.registrationTrend.map((week) => <div key={week.weekStart} className="flex items-center justify-between border-b pb-2 last:border-0"><span className="text-sm">С {formatWeek(week.weekStart)}</span><span className="font-medium">{formatNumber(week.registrations)}</span></div>)}</div>}
+            {registrationChartData.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Регистраций пока нет.</p>
+            ) : (
+              <ChartContainer config={registrationsConfig} className="h-56 w-full">
+                <BarChart data={registrationChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent labelFormatter={(value) => `С ${value}`} />} />
+                  <Bar dataKey="registrations" fill="var(--color-registrations)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-3"><CardTitle>Источники регистраций</CardTitle><CardDescription>Только нормализованные категории; адреса и UTM-метки не сохраняются.</CardDescription></CardHeader>
+          <CardHeader className="pb-3">
+            <CardTitle>Источники регистраций</CardTitle>
+            <CardDescription>Только нормализованные категории; адреса и UTM-метки не сохраняются.</CardDescription>
+          </CardHeader>
           <CardContent>
-            {marketing.referralSources.length === 0 ? <p className="text-sm text-muted-foreground">За период нет регистраций.</p> : <div className="space-y-2">{marketing.referralSources.map((source) => <div key={source.source} className="flex items-center justify-between border-b pb-2 last:border-0"><span className="text-sm">{REFERRAL_SOURCE_LABELS[source.source]}</span><span className="font-medium">{formatNumber(source.registrations)}</span></div>)}</div>}
+            {sourceChartData.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">За период нет регистраций.</p>
+            ) : (
+              <ChartContainer config={registrationsConfig} className="h-56 w-full">
+                <BarChart data={sourceChartData} layout="vertical" margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                  <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={110} />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                  <Bar dataKey="registrations" fill="var(--color-registrations)" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -288,19 +394,19 @@ export default function AdminAnalytics() {
           </Button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {analyticsCards.map(({ label, value, icon: Icon }) => (
-          <Card key={label}>
-            <CardContent className="flex items-center gap-3 pb-4 pt-5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{value}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+          {analyticsCards.map(({ label, value, icon: Icon }) => (
+            <Card key={label}>
+              <CardContent className="flex items-center gap-3 pb-4 pt-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{value}</p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -322,9 +428,6 @@ export default function AdminAnalytics() {
             </Card>
           ))}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Длительность сессий чтения по пользователям, включившим сбор аналитики. Короткой считается сессия до 30 секунд.
-        </p>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -347,20 +450,21 @@ export default function AdminAnalytics() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Причины завершения сессий</CardTitle>
-              <CardDescription>Почему заканчивается сессия чтения.</CardDescription>
+              <CardDescription>Сессии без heartbeat более 10 минут завершаются на сервере по тайм-ауту.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent>
               {sessions.count === 0 ? (
-                <p className="text-sm text-muted-foreground">Сессий за период нет.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">Сессий за период нет.</p>
               ) : (
-                sessions.byEndReason.map((entry) => (
-                  <div key={entry.reason} className="flex items-center justify-between border-b pb-2 text-sm last:border-0">
-                    <span>{SESSION_END_REASON_LABELS[entry.reason] ?? entry.reason}</span>
-                    <span className="font-medium">
-                      {formatNumber(entry.count)} ({formatPercent(sessions.count === 0 ? 0 : (entry.count / sessions.count) * 100)})
-                    </span>
-                  </div>
-                ))
+                <ChartContainer config={countConfig} className="h-56 w-full">
+                  <BarChart data={sessionEndChartData} layout="vertical" margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                    <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={175} tick={{ fontSize: 11 }} />
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ChartContainer>
               )}
             </CardContent>
           </Card>
@@ -368,20 +472,21 @@ export default function AdminAnalytics() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Устройства</CardTitle>
-              <CardDescription>Активность по типу устройства.</CardDescription>
+              <CardDescription>Завершённые сессии чтения по типу устройства.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {devices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Данных за период нет.</p>
+            <CardContent>
+              {deviceChartData.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Данных за период нет.</p>
               ) : (
-                devices.map((entry) => (
-                  <div key={entry.deviceMode} className="flex items-center justify-between border-b pb-2 text-sm last:border-0">
-                    <span>{DEVICE_LABELS[entry.deviceMode] ?? entry.deviceMode}</span>
-                    <span className="text-muted-foreground">
-                      {formatNumber(entry.users)} польз. · {formatNumber(entry.readerSessions)} сессий · {formatReadingTime(entry.activeReadingMs)}
-                    </span>
-                  </div>
-                ))
+                <ChartContainer config={sessionsConfig} className="h-56 w-full">
+                  <BarChart data={deviceChartData} layout="vertical" margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                    <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={110} />
+                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                    <Bar dataKey="readerSessions" fill="var(--color-readerSessions)" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ChartContainer>
               )}
             </CardContent>
           </Card>
@@ -401,7 +506,7 @@ export default function AdminAnalytics() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Успешная синхронизация</CardDescription>
-            <CardTitle>{summary.syncSuccessRate}%</CardTitle>
+            <CardTitle>{formatPercent(summary.syncSuccessRate)}</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             {formatNumber(summary.syncSuccesses)} из {formatNumber(summary.syncAttempts)} попыток.
@@ -413,52 +518,40 @@ export default function AdminAnalytics() {
             <CardTitle>Дневные агрегаты</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Сырые события и персональные данные не выводятся.
+            Для текущего UTC-дня добавлены предварительные сырые события.
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
           <div>
             <CardTitle>Динамика по дням</CardTitle>
-            <CardDescription>Дни без данных не включаются в таблицу.</CardDescription>
+            <CardDescription>Активные пользователи и завершённые сессии чтения. Дни без активности не включаются.</CardDescription>
           </div>
+          <Badge variant="outline" className="shrink-0 border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300">
+            Сегодня предварительно
+          </Badge>
         </CardHeader>
         <CardContent>
-          {data.trend.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Данных пока нет. Они появятся после ежедневного пересчёта аналитики.
-            </p>
+          {hasTrendData ? (
+            <ChartContainer config={trendConfig} className="h-72 w-full">
+              <LineChart data={trendChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="activityDate" tickLine={false} axisLine={false} tickFormatter={(value) => formatDate(String(value))} />
+                <YAxis tickLine={false} axisLine={false} width={32} allowDecimals={false} />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent labelFormatter={(value) => formatDate(String(value))} />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Line type="monotone" dataKey="activeUsers" stroke="var(--color-activeUsers)" strokeWidth={2} dot={{ r: 2 }} />
+                <Line type="monotone" dataKey="readerSessions" stroke="var(--color-readerSessions)" strokeWidth={2} dot={{ r: 2 }} />
+                <Line type="monotone" dataKey="provisionalActiveUsers" stroke="var(--color-provisionalActiveUsers)" strokeWidth={0} dot={{ r: 5 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="provisionalReaderSessions" stroke="var(--color-provisionalReaderSessions)" strokeWidth={0} dot={{ r: 5 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ChartContainer>
           ) : (
-            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="sticky top-0 z-10 border-b bg-card text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="pb-3 font-medium">Дата</th>
-                    <th className="pb-3 text-right font-medium">Пользователи</th>
-                    <th className="pb-3 text-right font-medium">Открытия</th>
-                    <th className="pb-3 text-right font-medium">Сессии</th>
-                    <th className="pb-3 text-right font-medium">Чтение</th>
-                    <th className="pb-3 text-right font-medium">Завершено</th>
-                    <th className="pb-3 text-right font-medium">Синхронизация</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.trend.map((day) => (
-                    <tr key={day.activityDate} className="border-b last:border-0">
-                      <td className="py-3 font-medium">{formatDate(day.activityDate)}</td>
-                      <td className="py-3 text-right">{formatNumber(day.activeUsers)}</td>
-                      <td className="py-3 text-right">{formatNumber(day.appOpens)}</td>
-                      <td className="py-3 text-right">{formatNumber(day.readerSessions)}</td>
-                      <td className="py-3 text-right">{formatReadingTime(day.activeReadingMs)}</td>
-                      <td className="py-3 text-right">{formatNumber(day.booksCompleted)}</td>
-                      <td className="py-3 text-right">{formatNumber(day.syncSuccesses)} / {formatNumber(day.syncAttempts)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Данных пока нет. Готовые агрегаты появятся после суточного пересчёта; предварительные данные за сегодня — после первых событий.
+            </p>
           )}
         </CardContent>
       </Card>

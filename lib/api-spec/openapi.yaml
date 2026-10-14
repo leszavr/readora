@@ -1943,7 +1943,7 @@ components:
           format: uuid
         eventName:
           type: string
-          enum: [app_opened, library_viewed, book_upload_started, reader_session_started, reader_session_ended, reading_progressed, chapter_opened, progress_sync_finished]
+          enum: [app_opened, library_viewed, book_upload_started, reader_session_started, reader_session_heartbeat, reader_session_ended, reading_progressed, chapter_opened, progress_sync_finished]
         occurredAt:
           type: string
           format: date-time
@@ -2414,7 +2414,7 @@ components:
     # ADMIN
     AdminStats:
       type: object
-      required: [totalUsers, totalBooks, activeReaders, recentBooks, recentUsers]
+      required: [totalUsers, totalBooks, activeReaders, progressSaves7d, recentBooks, recentUsers]
       properties:
         totalUsers:
           type: integer
@@ -2422,7 +2422,7 @@ components:
           type: integer
         activeReaders:
           type: integer
-        openCount7d:
+        progressSaves7d:
           type: integer
         recentBooks:
           type: array
@@ -2435,7 +2435,7 @@ components:
 
     AdminAnalytics:
       type: object
-      required: [days, rangeStart, rangeEnd, systemSummary, summary, sessions, engagement, devices, marketing, trend]
+      required: [days, rangeStart, rangeEnd, systemSummary, summary, sessions, engagement, devices, marketing, trend, provisionalCurrentDay]
       properties:
         days:
           type: integer
@@ -2464,6 +2464,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminAnalyticsDailyTrend"
+        provisionalCurrentDay:
+          $ref: "#/components/schemas/AdminAnalyticsDailyTrend"
 
     AdminAnalyticsEngagement:
       type: object
@@ -2505,7 +2507,7 @@ components:
       properties:
         reason:
           type: string
-          enum: [hidden, inactive, unmount]
+          enum: [hidden, inactive, unmount, timeout]
         count:
           type: integer
 
@@ -2582,7 +2584,7 @@ components:
 
     AdminAnalyticsSystemSummary:
       type: object
-      required: [totalUsers, totalBooks, activeReaders, bookOpens, pwaInstallAccepted, booksPerUser, readEventsPerActiveReader, completedBooks, completedBooksRate]
+      required: [totalUsers, totalBooks, activeReaders, progressSaves, pwaInstallConfirmations, booksPerUser, progressSavesPerReader, completedBooks, completedBooksRate]
       properties:
         totalUsers:
           type: integer
@@ -2590,13 +2592,13 @@ components:
           type: integer
         activeReaders:
           type: integer
-        bookOpens:
+        progressSaves:
           type: integer
-        pwaInstallAccepted:
+        pwaInstallConfirmations:
           type: integer
         booksPerUser:
           type: number
-        readEventsPerActiveReader:
+        progressSavesPerReader:
           type: number
         completedBooks:
           type: integer
@@ -2632,7 +2634,7 @@ components:
 
     AdminAnalyticsMarketing:
       type: object
-      required: [registrations, verifiedUsers, emailVerificationRate, usersWithBooks, firstBookUploadRate, usersWithCompletedUploads, completedUploadRate, usersWithFirstRead, firstReadRate, funnel, retention, registrationTrend, referralSources]
+      required: [registrations, verifiedUsers, emailVerificationRate, firstSuccessfulUploads, firstSuccessfulUploadRate, usersWithFirstRead, firstReadRate, funnel, retention, registrationTrend, referralSources]
       properties:
         registrations:
           type: integer
@@ -2640,13 +2642,9 @@ components:
           type: integer
         emailVerificationRate:
           type: number
-        usersWithBooks:
+        firstSuccessfulUploads:
           type: integer
-        firstBookUploadRate:
-          type: number
-        usersWithCompletedUploads:
-          type: integer
-        completedUploadRate:
+        firstSuccessfulUploadRate:
           type: number
         usersWithFirstRead:
           type: integer
