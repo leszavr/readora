@@ -1,0 +1,12 @@
+[Unit]
+Description=Safe Docker cleanup for Readora host
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/readora-docker-cleanup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=20m

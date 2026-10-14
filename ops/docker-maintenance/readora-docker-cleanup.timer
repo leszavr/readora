@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily safe Docker cleanup for Readora host
+
+[Timer]
+OnCalendar=*-*-* 18:30:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+Unit=readora-docker-cleanup.service
+
+[Install]
+WantedBy=timers.target
