@@ -131,7 +131,7 @@ export const submitAnalyticsEventsBatchBodyEventsMax = 50;
 export const SubmitAnalyticsEventsBatchBody = zod.object({
   "events": zod.array(zod.object({
   "eventId": zod.string().uuid(),
-  "eventName": zod.enum(['app_opened', 'library_viewed', 'book_upload_started', 'reader_session_started', 'reader_session_ended', 'reading_progressed', 'chapter_opened', 'progress_sync_finished']),
+  "eventName": zod.enum(['app_opened', 'library_viewed', 'book_upload_started', 'reader_session_started', 'reader_session_heartbeat', 'reader_session_ended', 'reading_progressed', 'chapter_opened', 'progress_sync_finished']),
   "occurredAt": zod.coerce.date(),
   "localDate": zod.coerce.date(),
   "sessionId": zod.string().uuid().optional(),
@@ -661,7 +661,7 @@ export const GetAdminStatsResponse = zod.object({
   "totalUsers": zod.number(),
   "totalBooks": zod.number(),
   "activeReaders": zod.number(),
-  "openCount7d": zod.number().optional(),
+  "progressSaves7d": zod.number(),
   "recentBooks": zod.array(zod.object({
   "id": zod.number(),
   "title": zod.string(),
@@ -706,10 +706,10 @@ export const GetAdminAnalyticsResponse = zod.object({
   "totalUsers": zod.number(),
   "totalBooks": zod.number(),
   "activeReaders": zod.number(),
-  "bookOpens": zod.number(),
-  "pwaInstallAccepted": zod.number(),
+  "progressSaves": zod.number(),
+  "pwaInstallConfirmations": zod.number(),
   "booksPerUser": zod.number(),
-  "readEventsPerActiveReader": zod.number(),
+  "progressSavesPerReader": zod.number(),
   "completedBooks": zod.number(),
   "completedBooksRate": zod.number()
 }),
@@ -734,7 +734,7 @@ export const GetAdminAnalyticsResponse = zod.object({
   "shortSessions": zod.number(),
   "shortShare": zod.number(),
   "byEndReason": zod.array(zod.object({
-  "reason": zod.enum(['hidden', 'inactive', 'unmount']),
+  "reason": zod.enum(['hidden', 'inactive', 'unmount', 'timeout']),
   "count": zod.number()
 }))
 }),
@@ -755,10 +755,8 @@ export const GetAdminAnalyticsResponse = zod.object({
   "registrations": zod.number(),
   "verifiedUsers": zod.number(),
   "emailVerificationRate": zod.number(),
-  "usersWithBooks": zod.number(),
-  "firstBookUploadRate": zod.number(),
-  "usersWithCompletedUploads": zod.number(),
-  "completedUploadRate": zod.number(),
+  "firstSuccessfulUploads": zod.number(),
+  "firstSuccessfulUploadRate": zod.number(),
   "usersWithFirstRead": zod.number(),
   "firstReadRate": zod.number(),
   "funnel": zod.array(zod.object({
@@ -792,7 +790,17 @@ export const GetAdminAnalyticsResponse = zod.object({
   "booksCompleted": zod.number(),
   "syncAttempts": zod.number(),
   "syncSuccesses": zod.number()
-}))
+})),
+  "provisionalCurrentDay": zod.object({
+  "activityDate": zod.coerce.date(),
+  "activeUsers": zod.number(),
+  "appOpens": zod.number(),
+  "readerSessions": zod.number(),
+  "activeReadingMs": zod.number(),
+  "booksCompleted": zod.number(),
+  "syncAttempts": zod.number(),
+  "syncSuccesses": zod.number()
+})
 })
 
 

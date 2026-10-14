@@ -85,6 +85,7 @@ import {
 import {
   trackChapterOpened,
   trackProgressSyncFinished,
+  trackReaderSessionHeartbeat,
   trackReaderSessionEnded,
   trackReaderSessionStarted,
   trackReadingProgressed,
@@ -392,7 +393,7 @@ export default function ReaderPage() {
   const tocActiveChapterRef = useRef<HTMLButtonElement | null>(null);
   const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
   const programmaticScrollUntilRef = useRef(0);
-  const readerSessionRef = useRef<{ startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; ended: boolean } | null>(null);
+  const readerSessionRef = useRef<{ id: string; startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; ended: boolean } | null>(null);
   const remoteProgressRef = useRef(0);
   const progressAnalyticsRef = useRef({ progressPct: -1, sentAt: 0, activeAt: 0 });
   const chapterNavigationSourceRef = useRef<ChapterNavigationSource>("restore");
@@ -425,10 +426,10 @@ export default function ReaderPage() {
     if (!sessionReady || readerSessionRef.current) return;
     const startProgressPct = remoteProgressRef.current;
     const startedAt = Date.now();
-    const session = { startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: startedAt, ended: false };
+    const session = { id: crypto.randomUUID(), startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: startedAt, ended: false };
     let lastTickAt = startedAt;
     readerSessionRef.current = session;
-    trackReaderSessionStarted(bookId, startProgressPct);
+    trackReaderSessionStarted(session.id, bookId, startProgressPct);
 
     const markActive = () => {
       if (session.ended) {
@@ -444,13 +445,16 @@ export default function ReaderPage() {
       lastTickAt = now;
       if (document.visibilityState === "visible" && now - session.lastActiveAt <= READER_IDLE_TIMEOUT_MS) {
         session.activeReadingMs += elapsedMs;
+        if (session.activeReadingMs > 0 && Math.floor(session.activeReadingMs / 30_000) > Math.floor((session.activeReadingMs - elapsedMs) / 30_000)) {
+          trackReaderSessionHeartbeat(session.id, bookId, session.activeReadingMs);
+        }
       }
     }, 1_000);
     const end = (endReason: "hidden" | "unmount" | "inactive") => {
       if (session.ended) return;
       session.ended = true;
       const endProgressPct = Math.max(0, Math.min(100, progressAnalyticsRef.current.progressPct >= 0 ? progressAnalyticsRef.current.progressPct : startProgressPct));
-      trackReaderSessionEnded(bookId, startProgressPct, endProgressPct, Math.max(session.maxProgressPct, endProgressPct), session.activeReadingMs, endReason);
+      trackReaderSessionEnded(session.id, bookId, startProgressPct, endProgressPct, Math.max(session.maxProgressPct, endProgressPct), session.activeReadingMs, endReason);
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -558,7 +562,10 @@ export default function ReaderPage() {
               const session = readerSessionRef.current;
               if (session) session.maxProgressPct = Math.max(session.maxProgressPct, progressPct);
               if (analytics.progressPct < 0 || now - analytics.sentAt >= 30_000 || Math.abs(progressPct - analytics.progressPct) >= 5) {
-                trackReadingProgressed(bookId, Math.max(0, currentChapterIdx ?? 0), progressPct, Math.max(0, now - (analytics.activeAt || syncStartedAt)));
+                const readerSessionId = readerSessionRef.current?.id;
+                if (readerSessionId) {
+                  trackReadingProgressed(readerSessionId, bookId, Math.max(0, currentChapterIdx ?? 0), progressPct, Math.max(0, now - (analytics.activeAt || syncStartedAt)));
+                }
                 progressAnalyticsRef.current = { progressPct, sentAt: now, activeAt: now };
               }
               trackProgressSyncFinished("success", syncDurationMs);

@@ -154,8 +154,8 @@ export default function AdminStats() {
     { label: "Всего пользователей", value: stats.totalUsers, icon: Users, color: "text-blue-500" },
     { label: "Всего книг", value: stats.totalBooks, icon: BookCopy, color: "text-green-500" },
     { label: "Активных читателей (7 дней)", value: stats.activeReaders, icon: Activity, color: "text-purple-500" },
-    { label: "Открытий книг (7 дней)", value: stats.openCount7d, icon: BookOpen, color: "text-orange-500" },
-    { label: "Установок PWA (accepted)", value: pwaStats?.acceptedCount ?? 0, icon: BookOpen, color: "text-indigo-500" },
+    { label: "Сохранений прогресса (7 дней)", value: stats.progressSaves7d, icon: BookOpen, color: "text-orange-500" },
+    { label: "Подтверждения установки PWA", value: pwaStats?.acceptedCount ?? 0, icon: BookOpen, color: "text-indigo-500" },
   ];
 
   return (

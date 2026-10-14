@@ -1,12 +1,23 @@
+import crypto from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "./client";
 
 const ROLLUP_LOCK_KEY = "readora-analytics-rollup-v1";
-const DEFAULT_BATCH_SIZE = 31;
+const DEFAULT_BATCH_SIZE = 366;
 const RETENTION_DELETE_BATCH_SIZE = 10_000;
+const SESSION_FINALIZATION_TIMEOUT_MINUTES = 10;
 
 type LockRow = { acquired: boolean };
 type ActivityDateRow = { activityDate: string };
+type TimedOutSessionRow = {
+  sessionId: string;
+  userId: number;
+  bookId: number;
+  deviceMode: string;
+  startedAt: Date;
+  lastSeenAt: Date;
+  activeReadingMs: number;
+};
 
 export type AnalyticsRollupResult = {
   processedDates: string[];
@@ -28,22 +39,25 @@ async function rebuildAnalyticsDay(client: PoolClient, activityDate: string): Pr
     `
       insert into analytics_daily_user_activity (
         activity_date, user_id, device_mode, app_opens, reader_sessions,
-        active_reading_ms, books_started, books_completed, sync_attempts, sync_successes
+        reader_session_starts, reader_session_ends, active_reading_ms,
+        books_started, books_completed, sync_attempts, sync_successes
       )
       select
-        occurred_local_date,
+        event_day,
         user_id,
         device_mode,
         count(*) filter (where event_name = 'app_opened')::int,
+        count(*) filter (where event_name = 'reader_session_ended')::int,
         count(*) filter (where event_name = 'reader_session_started')::int,
+        count(*) filter (where event_name = 'reader_session_ended')::int,
         coalesce(sum((properties->>'activeReadingMs')::bigint) filter (where event_name = 'reader_session_ended'), 0),
         count(*) filter (where event_name = 'reader_session_started' and coalesce((properties->>'startProgressPct')::numeric, 0) = 0)::int,
         count(*) filter (where event_name = 'book_completed')::int,
         count(*) filter (where event_name = 'progress_sync_finished')::int,
         count(*) filter (where event_name = 'progress_sync_finished' and properties->>'outcome' = 'success')::int
       from analytics_events
-      where occurred_local_date = $1::date
-      group by occurred_local_date, user_id, device_mode
+      where event_day = $1::date
+      group by event_day, user_id, device_mode
     `,
     [activityDate],
   );
@@ -51,22 +65,84 @@ async function rebuildAnalyticsDay(client: PoolClient, activityDate: string): Pr
   await client.query(
     `
       insert into analytics_daily_book_activity (
-        activity_date, book_id, readers, reader_sessions, active_reading_ms, starts, completions
+        activity_date, book_id, readers, reader_sessions, reader_session_starts,
+        reader_session_ends, active_reading_ms, starts, completions
       )
       select
-        occurred_local_date,
+        event_day,
         book_id,
         count(distinct user_id)::int,
+        count(*) filter (where event_name = 'reader_session_ended')::int,
         count(*) filter (where event_name = 'reader_session_started')::int,
+        count(*) filter (where event_name = 'reader_session_ended')::int,
         coalesce(sum((properties->>'activeReadingMs')::bigint) filter (where event_name = 'reader_session_ended'), 0),
         count(*) filter (where event_name = 'reader_session_started' and coalesce((properties->>'startProgressPct')::numeric, 0) = 0)::int,
         count(*) filter (where event_name = 'book_completed')::int
       from analytics_events
-      where occurred_local_date = $1::date and book_id is not null
-      group by occurred_local_date, book_id
+      where event_day = $1::date and book_id is not null
+      group by event_day, book_id
     `,
     [activityDate],
   );
+}
+
+async function finalizeInactiveReaderSessions(client: PoolClient): Promise<void> {
+  await client.query("begin");
+  try {
+    const timedOut = await client.query<TimedOutSessionRow>(
+      `
+        update analytics_reader_sessions
+        set ended_at = last_seen_at
+        where ended_at is null
+          and last_seen_at < now() - make_interval(mins => $1)
+        returning
+          session_id as "sessionId",
+          user_id as "userId",
+          book_id as "bookId",
+          device_mode as "deviceMode",
+          started_at as "startedAt",
+          last_seen_at as "lastSeenAt",
+          active_reading_ms as "activeReadingMs"
+      `,
+      [SESSION_FINALIZATION_TIMEOUT_MINUTES],
+    );
+
+    for (const session of timedOut.rows) {
+      const activityDate = session.lastSeenAt.toISOString().slice(0, 10);
+      await client.query(
+        `
+          insert into analytics_events (
+            event_id, user_id, book_id, event_name, producer, occurred_at,
+            event_day, occurred_local_date, session_id, platform, device_mode, properties
+          ) values (
+            $1::uuid, $2, $3, 'reader_session_ended', 'server', $4::timestamptz,
+            $5::date, $5::date, $6::uuid, 'web', $7,
+            jsonb_build_object(
+              'startProgressPct', 0,
+              'endProgressPct', 0,
+              'maxProgressPct', 0,
+              'activeReadingMs', $8::bigint,
+              'endReason', 'timeout'
+            )
+          )
+        `,
+        [
+          crypto.randomUUID(),
+          session.userId,
+          session.bookId,
+          session.lastSeenAt,
+          activityDate,
+          session.sessionId,
+          session.deviceMode,
+          session.activeReadingMs,
+        ],
+      );
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
 }
 
 async function rebuildQueuedDay(client: PoolClient, activityDate: string): Promise<boolean> {
@@ -103,7 +179,7 @@ async function deleteExpiredRawEvents(client: PoolClient): Promise<number> {
           and not exists (
             select 1
             from analytics_rollup_queue as queue
-            where queue.activity_date = event.occurred_local_date
+            where queue.activity_date = event.event_day
           )
         order by event.received_at asc
         limit $1
@@ -134,6 +210,8 @@ export async function rollupAnalyticsDay(activityDate: string): Promise<Analytic
   try {
     lockAcquired = await tryAcquireRollupLock(client);
     if (!lockAcquired) return { processedDates: [], retentionDeleted: 0, skipped: true };
+
+    await finalizeInactiveReaderSessions(client);
 
     await client.query("begin");
     try {
@@ -170,6 +248,8 @@ export async function rollupPendingAnalyticsDays(batchSize = DEFAULT_BATCH_SIZE)
   try {
     lockAcquired = await tryAcquireRollupLock(client);
     if (!lockAcquired) return { processedDates: [], retentionDeleted: 0, skipped: true };
+
+    await finalizeInactiveReaderSessions(client);
 
     const pending = await client.query<ActivityDateRow>(
       `

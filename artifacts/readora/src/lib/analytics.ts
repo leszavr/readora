@@ -6,7 +6,7 @@ type UploadFormat = "fb2" | "epub";
 
 type AnalyticsEvent = {
   eventId: string;
-  eventName: "app_opened" | "library_viewed" | "book_upload_started" | "reader_session_started" | "reader_session_ended" | "reading_progressed" | "chapter_opened" | "progress_sync_finished";
+  eventName: "app_opened" | "library_viewed" | "book_upload_started" | "reader_session_started" | "reader_session_heartbeat" | "reader_session_ended" | "reading_progressed" | "chapter_opened" | "progress_sync_finished";
   occurredAt: string;
   localDate: string;
   sessionId: string;
@@ -120,6 +120,7 @@ function queue(
   properties: AnalyticsEvent["properties"],
   bookId?: number,
   flushAfterPersist = false,
+  sessionIdOverride?: string,
 ): void {
   if (!enabled || accountId === null || typeof window === "undefined") return;
   const now = new Date();
@@ -129,7 +130,7 @@ function queue(
     eventName,
     occurredAt: now.toISOString(),
     localDate: getLocalDate(now),
-    sessionId,
+    sessionId: sessionIdOverride ?? sessionId,
     clientId: getClientId(),
     platform: "web",
     deviceMode: getDeviceMode(),
@@ -195,10 +196,9 @@ export async function clearAnalyticsQueue(currentAccountId?: number): Promise<vo
 }
 
 export function configureAnalytics(user: { id: number; analyticsOptIn: boolean } | null): void {
-  const previousAccountId = accountId;
   accountId = user?.id ?? null;
   enabled = user?.analyticsOptIn === true;
-  if (!enabled && previousAccountId !== null) void clearAnalyticsQueue(previousAccountId);
+  if (user && !user.analyticsOptIn) void clearAnalyticsQueue(user.id);
   if (enabled && !sessionId) sessionId = newId();
   if (flushTimer) clearInterval(flushTimer);
   flushTimer = enabled ? setInterval(() => void flush().catch(() => undefined), 10_000) : null;
@@ -232,16 +232,20 @@ export function trackBookUploadStarted(format: UploadFormat, fileSize: number): 
   queue("book_upload_started", { format, fileSizeBucket });
 }
 
-export function trackReaderSessionStarted(bookId: number, startProgressPct: number): void {
-  queue("reader_session_started", { startProgressPct }, bookId);
+export function trackReaderSessionStarted(readerSessionId: string, bookId: number, startProgressPct: number): void {
+  queue("reader_session_started", { startProgressPct }, bookId, false, readerSessionId);
 }
 
-export function trackReaderSessionEnded(bookId: number, startProgressPct: number, endProgressPct: number, maxProgressPct: number, activeReadingMs: number, endReason: EndReason): void {
-  queue("reader_session_ended", { startProgressPct, endProgressPct, maxProgressPct, activeReadingMs, endReason }, bookId, true);
+export function trackReaderSessionHeartbeat(readerSessionId: string, bookId: number, activeReadingMs: number): void {
+  queue("reader_session_heartbeat", { activeReadingMs }, bookId, false, readerSessionId);
 }
 
-export function trackReadingProgressed(bookId: number, chapterIndex: number, progressPct: number, intervalActiveMs: number): void {
-  queue("reading_progressed", { chapterIndex, progressPct, intervalActiveMs }, bookId);
+export function trackReaderSessionEnded(readerSessionId: string, bookId: number, startProgressPct: number, endProgressPct: number, maxProgressPct: number, activeReadingMs: number, endReason: EndReason): void {
+  queue("reader_session_ended", { startProgressPct, endProgressPct, maxProgressPct, activeReadingMs, endReason }, bookId, true, readerSessionId);
+}
+
+export function trackReadingProgressed(readerSessionId: string, bookId: number, chapterIndex: number, progressPct: number, intervalActiveMs: number): void {
+  queue("reading_progressed", { chapterIndex, progressPct, intervalActiveMs }, bookId, false, readerSessionId);
 }
 
 export function trackChapterOpened(bookId: number, chapterIndex: number, navigationSource: NavigationSource): void {

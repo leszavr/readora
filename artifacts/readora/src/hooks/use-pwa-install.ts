@@ -5,8 +5,12 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-function reportInstallAccepted() {
-  fetch("/api/pwa/install-accepted", { method: "POST" }).catch(() => {});
+const PWA_INSTALL_REPORTED_STORAGE_KEY = "readora.pwa-install-confirmed";
+
+async function reportInstallAccepted(): Promise<void> {
+  if (localStorage.getItem(PWA_INSTALL_REPORTED_STORAGE_KEY)) return;
+  const response = await fetch("/api/pwa/install-accepted", { method: "POST" });
+  if (response.ok) localStorage.setItem(PWA_INSTALL_REPORTED_STORAGE_KEY, "1");
 }
 
 export function usePwaInstall() {

@@ -119,6 +119,7 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use("/api/analytics", express.json({ limit: "64kb" }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
