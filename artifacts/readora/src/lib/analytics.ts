@@ -115,7 +115,12 @@ async function pruneQueue(currentAccountId: number): Promise<void> {
   await removeEvents([...stale, ...overflow].map((event) => event.eventId));
 }
 
-function queue(eventName: AnalyticsEvent["eventName"], properties: AnalyticsEvent["properties"], bookId?: number): void {
+function queue(
+  eventName: AnalyticsEvent["eventName"],
+  properties: AnalyticsEvent["properties"],
+  bookId?: number,
+  flushAfterPersist = false,
+): void {
   if (!enabled || accountId === null || typeof window === "undefined") return;
   const now = new Date();
   const event: StoredEvent = {
@@ -132,11 +137,12 @@ function queue(eventName: AnalyticsEvent["eventName"], properties: AnalyticsEven
     properties,
     createdAt: now.getTime(),
   };
-  const schedule = typeof requestIdleCallback === "function" ? requestIdleCallback : (callback: IdleRequestCallback) => setTimeout(callback, 0) as unknown as number;
-  schedule(() => {
+  void Promise.resolve().then(async () => {
     if (!enabled || accountId !== event.accountId) return;
-    void withStore("readwrite", (store) => store.put(event)).then(() => pruneQueue(event.accountId)).catch(() => undefined);
-  });
+    await withStore("readwrite", (store) => store.put(event));
+    await pruneQueue(event.accountId);
+    if (flushAfterPersist && enabled && accountId === event.accountId) await flush();
+  }).catch(() => undefined);
 }
 
 async function flush(): Promise<void> {
@@ -231,7 +237,7 @@ export function trackReaderSessionStarted(bookId: number, startProgressPct: numb
 }
 
 export function trackReaderSessionEnded(bookId: number, startProgressPct: number, endProgressPct: number, maxProgressPct: number, activeReadingMs: number, endReason: EndReason): void {
-  queue("reader_session_ended", { startProgressPct, endProgressPct, maxProgressPct, activeReadingMs, endReason }, bookId);
+  queue("reader_session_ended", { startProgressPct, endProgressPct, maxProgressPct, activeReadingMs, endReason }, bookId, true);
 }
 
 export function trackReadingProgressed(bookId: number, chapterIndex: number, progressPct: number, intervalActiveMs: number): void {
