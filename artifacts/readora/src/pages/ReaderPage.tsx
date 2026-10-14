@@ -95,6 +95,7 @@ import { NotesPanel } from "@/components/reader/NotesPanel";
 import { TextSelectionToolbar } from "@/components/reader/TextSelectionToolbar";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
+const READER_IDLE_TIMEOUT_MS = 5 * 60_000;
 
 type DeviceMode = "desktop" | "mobile";
 type ChapterNavigationSource = "toc" | "next_chapter" | "prev_chapter" | "restore";
@@ -391,7 +392,7 @@ export default function ReaderPage() {
   const tocActiveChapterRef = useRef<HTMLButtonElement | null>(null);
   const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
   const programmaticScrollUntilRef = useRef(0);
-  const readerSessionRef = useRef<{ startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; interacted: boolean; ended: boolean } | null>(null);
+  const readerSessionRef = useRef<{ startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; ended: boolean } | null>(null);
   const remoteProgressRef = useRef(0);
   const progressAnalyticsRef = useRef({ progressPct: -1, sentAt: 0, activeAt: 0 });
   const chapterNavigationSourceRef = useRef<ChapterNavigationSource>("restore");
@@ -423,7 +424,9 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!sessionReady || readerSessionRef.current) return;
     const startProgressPct = remoteProgressRef.current;
-    const session = { startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: Date.now(), interacted: false, ended: false };
+    const startedAt = Date.now();
+    const session = { startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: startedAt, ended: false };
+    let lastTickAt = startedAt;
     readerSessionRef.current = session;
     trackReaderSessionStarted(bookId, startProgressPct);
 
@@ -433,13 +436,14 @@ export default function ReaderPage() {
         setReaderSessionEpoch((epoch) => epoch + 1);
         return;
       }
-      session.interacted = true;
       session.lastActiveAt = Date.now();
     };
     const timer = window.setInterval(() => {
       const now = Date.now();
-      if (document.visibilityState === "visible" && session.interacted && now - session.lastActiveAt <= 60_000) {
-        session.activeReadingMs += 1_000;
+      const elapsedMs = now - lastTickAt;
+      lastTickAt = now;
+      if (document.visibilityState === "visible" && now - session.lastActiveAt <= READER_IDLE_TIMEOUT_MS) {
+        session.activeReadingMs += elapsedMs;
       }
     }, 1_000);
     const end = (endReason: "hidden" | "unmount" | "inactive") => {
@@ -457,7 +461,7 @@ export default function ReaderPage() {
       }
     };
     const inactivityTimer = window.setInterval(() => {
-      if (session.interacted && Date.now() - session.lastActiveAt > 60_000) end("inactive");
+      if (Date.now() - session.lastActiveAt > READER_IDLE_TIMEOUT_MS) end("inactive");
     }, 5_000);
     window.addEventListener("pointerdown", markActive, { passive: true });
     window.addEventListener("keydown", markActive);

@@ -120,21 +120,35 @@ export default function AdminAnalytics() {
         <div>
           <h2 className="text-lg font-semibold">Системная аналитика</h2>
           <p className="text-sm text-muted-foreground">
-            Приватная аналитика за {formatDate(data.rangeStart)} - {formatDate(data.rangeEnd)}.
+            Приватная аналитика за {formatDate(data.rangeStart)} - {formatDate(data.rangeEnd)}. Обновление перечитывает готовые агрегаты; данные текущего дня появятся после суточного пересчёта.
           </p>
         </div>
-        <div className="flex rounded-lg border p-1" aria-label="Период аналитики">
-          {RANGES.map((range) => (
-            <Button
-              key={range.value}
-              type="button"
-              variant={days === range.value ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setDays(range.value)}
-            >
-              {range.label}
-            </Button>
-          ))}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 rounded-lg border p-1" aria-label="Период аналитики">
+            {RANGES.map((range) => (
+              <Button
+                key={range.value}
+                type="button"
+                variant={days === range.value ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setDays(range.value)}
+              >
+                {range.label}
+              </Button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            aria-label="Обновить аналитику"
+            title={isFetching ? "Обновление аналитики" : "Обновить аналитику"}
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+          </Button>
         </div>
       </div>
 
@@ -410,9 +424,6 @@ export default function AdminAnalytics() {
             <CardTitle>Динамика по дням</CardTitle>
             <CardDescription>Дни без данных не включаются в таблицу.</CardDescription>
           </div>
-          <Button type="button" variant="ghost" size="icon" onClick={() => void refetch()} disabled={isFetching} aria-label="Обновить аналитику">
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          </Button>
         </CardHeader>
         <CardContent>
           {data.trend.length === 0 ? (
