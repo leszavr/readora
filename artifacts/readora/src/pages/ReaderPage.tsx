@@ -69,7 +69,10 @@ import {
 import { useReaderSyncState } from "@/components/reader/core/use-reader-sync-state";
 import { useReaderPanelsAutoclose } from "@/components/reader/core/use-reader-panels-autoclose";
 import { useSmoothReaderSpaceScroll } from "@/components/reader/core/use-smooth-reader-space-scroll";
-import { usePreserveReaderVisualAnchor } from "@/components/reader/core/use-preserve-reader-visual-anchor";
+import {
+  usePreserveReaderVisualAnchor,
+  usePreserveReaderVisualAnchorOnViewportResize,
+} from "@/components/reader/core/use-preserve-reader-visual-anchor";
 import { ReaderProgressIndicators } from "@/components/reader/ReaderProgressIndicators";
 import {
   loadReaderProgressFromStorage,
@@ -592,7 +595,11 @@ export default function ReaderPage() {
   // ---------------------------------------------------------------------------
   // Debounced save on scroll (with semantic positioning v2)
   // ---------------------------------------------------------------------------
-  const { scheduleSave: scheduleProgressSave, saveNow: saveProgressNow } =
+  const {
+    scheduleSave: scheduleProgressSave,
+    saveNow: saveProgressNow,
+    cancelPendingSave: cancelPendingProgressSave,
+  } =
     useDebouncedReaderProgressSave({
       scrollContainerRef: scrollElementRef,
       contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
@@ -602,6 +609,7 @@ export default function ReaderPage() {
       onSave: saveWithSync,
       debounceMs: 1500,
       enabled: currentChapterId !== null && chapters.length > 0,
+      isProgrammaticScroll,
       useSemanticPosition: true, // Включаем семантическое позиционирование v2
     });
 
@@ -767,6 +775,19 @@ export default function ReaderPage() {
   const preserveReaderVisualAnchor = usePreserveReaderVisualAnchor({
     scrollContainerRef: scrollElementRef,
     contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
+  });
+
+  const handleViewportResizeStart = useCallback(() => {
+    setProgrammaticScroll(1_000);
+    cancelPendingProgressSave();
+  }, [cancelPendingProgressSave, setProgrammaticScroll]);
+
+  usePreserveReaderVisualAnchorOnViewportResize({
+    scrollContainerRef: scrollElementRef,
+    contentAreaRef: contentAreaRef as RefObject<HTMLElement | null>,
+    onProgrammaticScroll: setProgrammaticScroll,
+    onViewportResizeStart: handleViewportResizeStart,
+    onViewportRestored: saveProgressNow,
   });
 
   // ---------------------------------------------------------------------------

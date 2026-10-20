@@ -1,10 +1,16 @@
 // Direct port from voxlibris use-preserve-reader-visual-anchor.ts
 
-import { useCallback, type RefObject } from "react";
+import { useCallback, useEffect, type RefObject } from "react";
 
 interface PreserveReaderVisualAnchorOptions {
   scrollContainerRef: RefObject<HTMLElement | null>;
   contentAreaRef: RefObject<HTMLElement | null>;
+}
+
+interface PreserveReaderVisualAnchorOnViewportResizeOptions extends PreserveReaderVisualAnchorOptions {
+  onProgrammaticScroll?: (holdMs: number) => void;
+  onViewportResizeStart?: () => void;
+  onViewportRestored?: () => void;
 }
 
 interface CaretAnchor {
@@ -185,20 +191,21 @@ function getCurrentAnchorTop(anchor: ReaderVisualAnchor): number | null {
   return anchor.element.getBoundingClientRect().top;
 }
 
-function restoreReaderVisualAnchor(scrollContainer: HTMLElement, anchor: ReaderVisualAnchor): void {
+function restoreReaderVisualAnchor(scrollContainer: HTMLElement, anchor: ReaderVisualAnchor): boolean {
   const currentTop = getCurrentAnchorTop(anchor);
   if (currentTop === null) {
-    return;
+    return false;
   }
 
   const delta = currentTop - anchor.top;
   if (Math.abs(delta) < 0.5) {
-    return;
+    return true;
   }
 
   const nextScrollTop = scrollContainer.scrollTop + delta;
   const maxScrollTop = Math.max(scrollContainer.scrollHeight - scrollContainer.clientHeight, 0);
   scrollContainer.scrollTop = clampCoordinate(nextScrollTop, 0, maxScrollTop);
+  return true;
 }
 
 export function usePreserveReaderVisualAnchor({
@@ -230,4 +237,85 @@ export function usePreserveReaderVisualAnchor({
     },
     [contentAreaRef, scrollContainerRef]
   );
+}
+
+export function usePreserveReaderVisualAnchorOnViewportResize({
+  scrollContainerRef,
+  contentAreaRef,
+  onProgrammaticScroll,
+  onViewportResizeStart,
+  onViewportRestored,
+}: PreserveReaderVisualAnchorOnViewportResizeOptions): void {
+  useEffect(() => {
+    let scrollCaptureFrame = 0;
+    let restoreFrame = 0;
+    let nestedRestoreFrame = 0;
+    let resizeTimeout: number | null = null;
+    let isSettlingViewport = false;
+    let anchor: ReaderVisualAnchor | null = null;
+
+    const captureAnchor = () => {
+      const scrollContainer = scrollContainerRef.current;
+      const contentArea = contentAreaRef.current;
+      if (scrollContainer && contentArea) {
+        anchor = captureReaderVisualAnchor(scrollContainer, contentArea);
+      }
+    };
+
+    const restoreAnchorAfterLayout = () => {
+      const anchorToRestore = anchor;
+      if (!anchorToRestore) {
+        isSettlingViewport = false;
+        return;
+      }
+
+      restoreFrame = requestAnimationFrame(() => {
+        nestedRestoreFrame = requestAnimationFrame(() => {
+          const scrollContainer = scrollContainerRef.current;
+          if (!scrollContainer) {
+            isSettlingViewport = false;
+            return;
+          }
+          onProgrammaticScroll?.(350);
+          const restored = restoreReaderVisualAnchor(scrollContainer, anchorToRestore);
+          isSettlingViewport = false;
+          if (restored) onViewportRestored?.();
+        });
+      });
+    };
+
+    const onScroll = () => {
+      if (isSettlingViewport) return;
+      if (scrollCaptureFrame) return;
+      scrollCaptureFrame = requestAnimationFrame(() => {
+        scrollCaptureFrame = 0;
+        captureAnchor();
+      });
+    };
+
+    const onViewportResize = () => {
+      isSettlingViewport = true;
+      onViewportResizeStart?.();
+      cancelAnimationFrame(restoreFrame);
+      cancelAnimationFrame(nestedRestoreFrame);
+      if (resizeTimeout !== null) window.clearTimeout(resizeTimeout);
+      resizeTimeout = window.setTimeout(restoreAnchorAfterLayout, 200);
+    };
+
+    captureAnchor();
+    const scrollContainer = scrollContainerRef.current;
+    scrollContainer?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onViewportResize);
+    window.addEventListener("orientationchange", onViewportResize);
+
+    return () => {
+      scrollContainer?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onViewportResize);
+      window.removeEventListener("orientationchange", onViewportResize);
+      cancelAnimationFrame(scrollCaptureFrame);
+      cancelAnimationFrame(restoreFrame);
+      cancelAnimationFrame(nestedRestoreFrame);
+      if (resizeTimeout !== null) window.clearTimeout(resizeTimeout);
+    };
+  }, [contentAreaRef, onProgrammaticScroll, onViewportResizeStart, onViewportRestored, scrollContainerRef]);
 }

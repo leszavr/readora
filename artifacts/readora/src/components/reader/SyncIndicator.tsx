@@ -49,13 +49,18 @@ export function SyncIndicator({
   };
 
   return (
-    <div className={`flex items-center gap-2 text-xs text-muted-foreground transition-opacity duration-300 ${className}`}>
-      {getStatusIcon()}
-      <span className={error ? "text-destructive" : ""}>
+    <div
+      role="status"
+      aria-live={error ? "assertive" : "polite"}
+      aria-label={`${getStatusText()}${lastSyncTime && !isSyncing && !error ? `, ${getTimeAgo()}` : ""}`}
+      className={`flex items-center gap-2 text-xs text-muted-foreground transition-opacity duration-300 ${className}`}
+    >
+      <span aria-hidden="true">{getStatusIcon()}</span>
+      <span className={`sr-only [@media(hover:hover)_and_(pointer:fine)]:not-sr-only ${error ? "text-destructive" : ""}`}>
         {getStatusText()}
       </span>
       {lastSyncTime && !isSyncing && !error && (
-        <span className="text-xs opacity-70">
+        <span className="sr-only text-xs opacity-70 [@media(hover:hover)_and_(pointer:fine)]:not-sr-only">
           {getTimeAgo()}
         </span>
       )}
@@ -82,7 +87,7 @@ export function CompactSyncIndicator({
     >
       <SyncIndicator
         {...props}
-        className={`bg-background/90 backdrop-blur-sm border rounded-md px-2 py-1 shadow-sm ${className}`}
+        className={`bg-background/65 backdrop-blur-sm border border-border/70 rounded-md px-2 py-1 shadow-sm ${className}`}
       />
     </div>
   );
