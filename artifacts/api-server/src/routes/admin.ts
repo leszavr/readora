@@ -1371,7 +1371,7 @@ function parseFeedbackFilters(query: Record<string, unknown>):
   return { daysParam, ratingParam, painPointParam, whereClause };
 }
 
-// GET /admin/feedback - статистика exit-intent опроса с фильтрами (system admin only)
+// GET /admin/feedback - статистика опроса с фильтрами (system admin only)
 router.get(
   "/admin/feedback",
   requireSystemAdmin,

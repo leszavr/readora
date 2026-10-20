@@ -2,6 +2,7 @@ import { renderToString } from "react-dom/server";
 import { Router as WouterRouter } from "wouter";
 import { AboutPage, aboutFaqItems } from "@/components/AboutPage";
 import { AppProviders } from "@/components/AppProviders";
+import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { LandingPage } from "@/components/LandingPage";
 import { LegalDocumentPage, type LegalDocumentKind } from "@/components/LegalDocumentPage";
 import type { LandingData } from "@/landing-data";
@@ -63,7 +64,10 @@ function renderDocument(template: string, publicBaseUrl: string, metadata: PageM
   return renderTemplate(template, publicBaseUrl, metadata, structuredData)
     .replace("<!--app-html-->", renderToString(
       <AppProviders>
-        <WouterRouter ssrPath={metadata.path}>{page}</WouterRouter>
+        <WouterRouter ssrPath={metadata.path}>
+          <FeedbackPrompt />
+          {page}
+        </WouterRouter>
       </AppProviders>,
     ))
     .replace("<!--landing-data-->", data);

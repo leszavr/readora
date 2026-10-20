@@ -65,3 +65,8 @@ attached_assets/
 .harvimodes
 .cursor/
 .gigacode
+
+# Kilo/local assistant state (команды и агенты в .kilo/ можно коммитить)
+.kilo/kilo.jsonc
+.kilo/kilo.json
+.kilo/agent-manager.json

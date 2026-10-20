@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { AppProviders } from "@/components/AppProviders";
 import { AboutPage } from "@/components/AboutPage";
+import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { useLocation } from "wouter";
@@ -60,6 +61,7 @@ function App() {
     <AppProviders>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
         <MaintenanceGate />
+        <FeedbackPrompt />
         <Router />
       </WouterRouter>
     </AppProviders>

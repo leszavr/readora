@@ -50,6 +50,7 @@ import type {
   FeedbackDeleteResult,
   FeedbackStatsResponse,
   FeedbackSubmitResult,
+  FeedbackSurveyEligibility,
   FeedbackSurveyInput,
   FeedbackSurveyOptions,
   Genre,
@@ -2794,7 +2795,7 @@ export const getGetFeedbackSurveyOptionsUrl = () => {
 }
 
 /**
- * @summary Public answer options for the exit-intent feedback survey
+ * @summary Public answer options for the feedback survey
  */
 export const getFeedbackSurveyOptions = async ( options?: RequestInit): Promise<FeedbackSurveyOptions> => {
 
@@ -2841,7 +2842,7 @@ export type GetFeedbackSurveyOptionsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Public answer options for the exit-intent feedback survey
+ * @summary Public answer options for the feedback survey
  */
 
 export function useGetFeedbackSurveyOptions<TData = Awaited<ReturnType<typeof getFeedbackSurveyOptions>>, TError = ErrorType<unknown>>(
@@ -2871,7 +2872,7 @@ export const getSubmitFeedbackSurveyUrl = () => {
 }
 
 /**
- * @summary Submit an exit-intent feedback survey response
+ * @summary Submit a feedback survey response
  */
 export const submitFeedbackSurvey = async (feedbackSurveyInput: FeedbackSurveyInput, options?: RequestInit): Promise<FeedbackSubmitResult> => {
 
@@ -2920,7 +2921,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SubmitFeedbackSurveyMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Submit an exit-intent feedback survey response
+ * @summary Submit a feedback survey response
  */
 export const useSubmitFeedbackSurvey = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitFeedbackSurvey>>, TError,{data: BodyType<FeedbackSurveyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2932,6 +2933,83 @@ export const useSubmitFeedbackSurvey = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getSubmitFeedbackSurveyMutationOptions(options));
     }
+
+export const getGetFeedbackSurveyEligibilityUrl = () => {
+
+
+
+
+  return `/api/feedback/survey/eligibility`
+}
+
+/**
+ * @summary Check whether the authenticated user should see the feedback survey
+ */
+export const getFeedbackSurveyEligibility = async ( options?: RequestInit): Promise<FeedbackSurveyEligibility> => {
+
+  return customFetch<FeedbackSurveyEligibility>(getGetFeedbackSurveyEligibilityUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFeedbackSurveyEligibilityQueryKey = () => {
+    return [
+    `/api/feedback/survey/eligibility`
+    ] as const;
+    }
+
+
+export const getGetFeedbackSurveyEligibilityQueryOptions = <TData = Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedbackSurveyEligibilityQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>> = ({ signal }) => getFeedbackSurveyEligibility({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedbackSurveyEligibilityQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>>
+export type GetFeedbackSurveyEligibilityQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Check whether the authenticated user should see the feedback survey
+ */
+
+export function useGetFeedbackSurveyEligibility<TData = Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackSurveyEligibility>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedbackSurveyEligibilityQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetAdminStatsUrl = () => {
 
