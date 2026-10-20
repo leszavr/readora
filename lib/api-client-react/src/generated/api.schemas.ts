@@ -355,7 +355,20 @@ export interface Book {
   uploadedAt: string;
 }
 
+/**
+ * Catalog sources can be uploaded only by administrators
+ */
+export type BookUploadInputTarget = typeof BookUploadInputTarget[keyof typeof BookUploadInputTarget];
+
+
+export const BookUploadInputTarget = {
+  personal: 'personal',
+  catalog_source: 'catalog_source',
+} as const;
+
 export interface BookUploadInput {
+  /** Catalog sources can be uploaded only by administrators */
+  target?: BookUploadInputTarget;
   cycleId?: number;
   cycleName?: string;
   cycleNumber?: number;
@@ -407,6 +420,142 @@ export interface PublicBook {
   /** @nullable */
   description?: string | null;
   coverUrl: string;
+}
+
+export interface CatalogGenre {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export type CatalogEditionFormat = typeof CatalogEditionFormat[keyof typeof CatalogEditionFormat];
+
+
+export const CatalogEditionFormat = {
+  fb2: 'fb2',
+  epub: 'epub',
+} as const;
+
+export type CatalogEditionStatus = typeof CatalogEditionStatus[keyof typeof CatalogEditionStatus];
+
+
+export const CatalogEditionStatus = {
+  draft: 'draft',
+  published: 'published',
+  hidden: 'hidden',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface CatalogEdition {
+  id: number;
+  title: string;
+  /** @nullable */
+  author?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  coverUrl?: string | null;
+  /** @nullable */
+  publicCoverUrl?: string | null;
+  format: CatalogEditionFormat;
+  /** @nullable */
+  language?: string | null;
+  /** @nullable */
+  publicationYear?: number | null;
+  genres: Genre[];
+  primaryGenre?: CatalogGenre | null;
+  /** @nullable */
+  publishedAt?: string | null;
+  isClaimed: boolean;
+  isLandingFeatured: boolean;
+  landingFeaturedSortOrder: number;
+  status: CatalogEditionStatus;
+}
+
+export interface CatalogEditionPage {
+  items: CatalogEdition[];
+  hasNextPage: boolean;
+  /** @nullable */
+  nextCursor: string | null;
+}
+
+export interface CatalogEditionClaimResult {
+  added: number;
+}
+
+export interface PublicCatalogEdition {
+  title: string;
+  /** @nullable */
+  author?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  coverUrl?: string | null;
+  genres: string[];
+  /** @nullable */
+  publicationYear?: number | null;
+}
+
+export interface CatalogShowcase {
+  featured: PublicCatalogEdition[];
+  recent: PublicCatalogEdition[];
+}
+
+export type CatalogAdminEdition = CatalogEdition & {
+  sourceBookId: number;
+  copiesCount: number;
+  autoGrantOnSignup: boolean;
+};
+
+export type CatalogEditionUpdateStatus = typeof CatalogEditionUpdateStatus[keyof typeof CatalogEditionUpdateStatus];
+
+
+export const CatalogEditionUpdateStatus = {
+  draft: 'draft',
+  published: 'published',
+  hidden: 'hidden',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface CatalogEditionUpdate {
+  /** @maxLength 500 */
+  title?: string;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  author?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  description?: string | null;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  language?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 9999
+     * @nullable
+     */
+  publicationYear?: number | null;
+  genreIds?: number[];
+  /** @nullable */
+  primaryGenreId?: number | null;
+  status?: CatalogEditionUpdateStatus;
+  isLandingFeatured?: boolean;
+  autoGrantOnSignup?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  landingFeaturedSortOrder?: number;
+}
+
+export interface CatalogEditionCoverUploadInput {
+  cover: Blob;
 }
 
 export interface LandingBook {
@@ -932,6 +1081,7 @@ export const GiftEditionFormat = {
 
 export interface GiftEdition {
   id: number;
+  catalogEditionId: number;
   bookId: number;
   title: string;
   /** @nullable */
@@ -939,21 +1089,33 @@ export interface GiftEdition {
   format: GiftEditionFormat;
   /** @nullable */
   coverUrl?: string | null;
-  ownerUserId: number;
   sortOrder: number;
   isPublished: boolean;
+  /** @nullable */
+  availableFrom?: string | null;
+  /** @nullable */
+  availableUntil?: string | null;
+  autoGrantOnSignup: boolean;
   copiesCount: number;
   createdAt: string;
 }
 
 export interface GiftEditionCreate {
-  bookId: number;
+  /** Preferred identifier of the catalog edition */
+  catalogEditionId?: number;
+  /** Compatibility identifier of the canonical source book */
+  bookId?: number;
   /**
      * @minimum 0
      * @maximum 10000
      */
   sortOrder?: number;
   isPublished?: boolean;
+  /** @nullable */
+  availableFrom?: string | null;
+  /** @nullable */
+  availableUntil?: string | null;
+  autoGrantOnSignup?: boolean;
 }
 
 export interface GiftEditionUpdate {
@@ -963,6 +1125,11 @@ export interface GiftEditionUpdate {
      */
   sortOrder?: number;
   isPublished?: boolean;
+  /** @nullable */
+  availableFrom?: string | null;
+  /** @nullable */
+  availableUntil?: string | null;
+  autoGrantOnSignup?: boolean;
 }
 
 export interface AppSettings {
@@ -1128,6 +1295,46 @@ export const ListBooksGroupBy = {
 export type GetPopularBooksParams = {
 limit?: number;
 };
+
+export type ListCatalogEditionsParams = {
+/**
+ * @maxLength 200
+ */
+q?: string;
+/**
+ * @maxLength 320
+ */
+author?: string;
+genreId?: number;
+yearFrom?: number;
+yearTo?: number;
+sortBy?: ListCatalogEditionsSortBy;
+sortDir?: ListCatalogEditionsSortDir;
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 48
+ */
+limit?: number;
+};
+
+export type ListCatalogEditionsSortBy = typeof ListCatalogEditionsSortBy[keyof typeof ListCatalogEditionsSortBy];
+
+
+export const ListCatalogEditionsSortBy = {
+  publishedAt: 'publishedAt',
+  title: 'title',
+  author: 'author',
+  publicationYear: 'publicationYear',
+} as const;
+
+export type ListCatalogEditionsSortDir = typeof ListCatalogEditionsSortDir[keyof typeof ListCatalogEditionsSortDir];
+
+
+export const ListCatalogEditionsSortDir = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
 
 export type GetAdminAnalyticsParams = {
 days?: GetAdminAnalyticsDays;

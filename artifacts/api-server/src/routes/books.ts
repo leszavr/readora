@@ -4,7 +4,7 @@ import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, giftEditionsTable, usersTable } from "@workspace/db";
+import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, catalogEditionsTable, catalogGiftOffersTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { parseBook } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
@@ -13,7 +13,7 @@ import { optimizeImage } from "../lib/image-optimizer";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
-import { getContentBookId, GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside } from "../lib/gift-editions-service";
+import { getContentBookId } from "../lib/gift-editions-service";
 import type { Request } from "express";
 
 const router = Router();
@@ -244,9 +244,10 @@ async function getBookWithDetails(bookId: number, userId: number, giftEditionBoo
       isGiftEdition = giftEditionBookIds.has(book.id);
     } else {
       const [giftEdition] = await db
-        .select({ id: giftEditionsTable.id })
-        .from(giftEditionsTable)
-        .where(eq(giftEditionsTable.bookId, book.id))
+        .select({ id: catalogGiftOffersTable.id })
+        .from(catalogGiftOffersTable)
+        .innerJoin(catalogEditionsTable, eq(catalogGiftOffersTable.catalogEditionId, catalogEditionsTable.id))
+        .where(eq(catalogEditionsTable.sourceBookId, book.id))
         .limit(1);
       isGiftEdition = Boolean(giftEdition);
     }
@@ -325,11 +326,12 @@ async function processBookUploadJob(jobId: number): Promise<void> {
       fs.writeFileSync(filePath, buffer);
     }
 
+    const isCatalogSource = job.target === "catalog_source";
     let finalCycleId: number | null = null;
     let finalCycleName: string | null = null;
-    if (job.cycleId) {
+    if (!isCatalogSource && job.cycleId) {
       finalCycleId = job.cycleId;
-    } else if (job.cycleName) {
+    } else if (!isCatalogSource && job.cycleName) {
       const [existingCycle] = await db.select().from(cyclesTable).where(and(eq(cyclesTable.ownerUserId, job.ownerUserId), eq(cyclesTable.name, job.cycleName)));
       if (existingCycle) {
         finalCycleId = existingCycle.id;
@@ -345,43 +347,56 @@ async function processBookUploadJob(jobId: number): Promise<void> {
       coverPath = await storeOptimizedCover(Buffer.from(parsed.coverBase64, "base64"), fileHash);
     }
 
-    const [book] = await db.insert(booksTable).values({
-      ownerUserId: job.ownerUserId,
-      title: parsed.title,
-      author: parsed.author,
-      description: parsed.description,
-      language: parsed.language,
-      publicationYear: parsed.publicationYear,
-      coverPath,
-      format: ext,
-      storageKey,
-      fileHash,
-      fileSize: job.fileSize,
-      cycleId: finalCycleId,
-      cycleName: finalCycleName,
-      cycleNumber: job.cycleNumber ?? null,
-      hideFromPopular: job.hideFromPopular,
-    }).returning();
+    const book = await db.transaction(async (tx) => {
+      const [createdBook] = await tx.insert(booksTable).values({
+        ownerUserId: isCatalogSource ? null : job.ownerUserId,
+        title: parsed.title,
+        author: parsed.author,
+        description: parsed.description,
+        language: parsed.language,
+        publicationYear: parsed.publicationYear,
+        coverPath,
+        format: ext,
+        storageKey,
+        fileHash,
+        fileSize: job.fileSize,
+        cycleId: finalCycleId,
+        cycleName: finalCycleName,
+        cycleNumber: isCatalogSource ? null : job.cycleNumber ?? null,
+        hideFromPopular: isCatalogSource || job.hideFromPopular,
+        scope: isCatalogSource ? "catalog_source" : "personal",
+      }).returning();
 
-    if (parsed.chapters.length > 0) {
-      await db.insert(chaptersTable).values(
-        parsed.chapters.map((ch) => ({
-          bookId: book.id,
-          index: ch.index,
-          title: ch.title,
-          htmlContent: ch.htmlContent,
-          wordCount: ch.wordCount,
-        }))
-      );
-    }
-
-    if (parsed.genres.length > 0) {
-      const allGenres = await db.select().from(genresTable);
-      const matchedIds = resolveGenreIds(parsed.genres, allGenres);
-      if (matchedIds.length > 0) {
-        await db.insert(bookGenresTable).values(matchedIds.map((gId) => ({ bookId: book.id, genreId: gId }))).onConflictDoNothing();
+      if (parsed.chapters.length > 0) {
+        await tx.insert(chaptersTable).values(
+          parsed.chapters.map((ch) => ({
+            bookId: createdBook.id,
+            index: ch.index,
+            title: ch.title,
+            htmlContent: ch.htmlContent,
+            wordCount: ch.wordCount,
+          })),
+        );
       }
-    }
+
+      let matchedIds: number[] = [];
+      if (parsed.genres.length > 0) {
+        const allGenres = await tx.select().from(genresTable);
+        matchedIds = resolveGenreIds(parsed.genres, allGenres);
+        if (matchedIds.length > 0) {
+          await tx.insert(bookGenresTable).values(matchedIds.map((genreId) => ({ bookId: createdBook.id, genreId }))).onConflictDoNothing();
+        }
+      }
+
+      if (isCatalogSource) {
+        await tx.insert(catalogEditionsTable).values({
+          sourceBookId: createdBook.id,
+          createdByUserId: job.ownerUserId,
+          primaryGenreId: matchedIds[0] ?? null,
+        });
+      }
+      return createdBook;
+    });
 
     await updateUploadJob(jobId, { status: "completed", stage: "completed", progress: 100, bookId: book.id, completedAt: new Date() });
     const durationMs = Math.max(0, Date.now() - job.createdAt.getTime());
@@ -558,9 +573,10 @@ router.get("/books", requireAuth, async (req, res): Promise<void> => {
   const giftEditionBookIds = new Set<number>();
   if (books.length > 0) {
     const editionRows = await db
-      .select({ bookId: giftEditionsTable.bookId })
-      .from(giftEditionsTable)
-      .where(inArray(giftEditionsTable.bookId, books.map(getContentBookId)));
+        .select({ bookId: catalogEditionsTable.sourceBookId })
+        .from(catalogGiftOffersTable)
+        .innerJoin(catalogEditionsTable, eq(catalogGiftOffersTable.catalogEditionId, catalogEditionsTable.id))
+        .where(inArray(catalogEditionsTable.sourceBookId, books.map(getContentBookId)));
     for (const edition of editionRows) {
       giftEditionBookIds.add(edition.bookId);
     }
@@ -599,6 +615,15 @@ router.post("/books/upload", requireAuth, uploadBookFile, async (req, res): Prom
     res.status(400).json({ error: "Файл не загружен" });
     return;
   }
+  const target = req.body?.target === "catalog_source" ? "catalog_source" : "personal";
+  if (target === "catalog_source" && user.role !== "admin") {
+    res.status(403).json({ error: "Загрузка в каталог доступна только администраторам" });
+    return;
+  }
+  if (target === "catalog_source" && (req.body?.cycleId || req.body?.cycleName || req.body?.cycleNumber)) {
+    res.status(400).json({ error: "Каталожное издание не может принадлежать личному циклу" });
+    return;
+  }
 
   const ext = path.extname(req.file.originalname).toLowerCase().replace(".", "") as "fb2" | "epub";
   const tempStorageKey = `${crypto.randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
@@ -616,10 +641,11 @@ router.post("/books/upload", requireAuth, uploadBookFile, async (req, res): Prom
       status: "queued",
       stage: "queued",
       progress: 5,
-      cycleId: req.body?.cycleId ? Number.parseInt(req.body.cycleId, 10) : null,
-      cycleName: req.body?.cycleName || null,
-      cycleNumber: req.body?.cycleNumber ? Number.parseFloat(req.body.cycleNumber) : null,
-      hideFromPopular: parseBoolean(req.body?.hideFromPopular) ?? false,
+      cycleId: target === "personal" && req.body?.cycleId ? Number.parseInt(req.body.cycleId, 10) : null,
+      cycleName: target === "personal" ? req.body?.cycleName || null : null,
+      cycleNumber: target === "personal" && req.body?.cycleNumber ? Number.parseFloat(req.body.cycleNumber) : null,
+      hideFromPopular: target === "catalog_source" || (parseBoolean(req.body?.hideFromPopular) ?? false),
+      target,
     });
   } catch (error) {
     fs.rmSync(tempPath, { force: true });
@@ -706,7 +732,6 @@ router.delete("/books/:id", requireAuth, async (req, res): Promise<void> => {
   const id = Number.parseInt(String(req.params.id), 10);
   const [book] = await db.select().from(booksTable).where(and(eq(booksTable.id, id), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
-  if (await hasGiftCopiesOutside([book.id])) { res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE }); return; }
   await deleteStoredFilesIfUnreferenced(book);
   await db.delete(booksTable).where(eq(booksTable.id, id));
   res.sendStatus(204);
@@ -724,10 +749,6 @@ router.post("/books/delete-bulk", requireAuth, async (req, res): Promise<void> =
   const deletingIds = booksToDelete.map((book) => book.id);
   if (deletingIds.length === 0) {
     res.json({ deleted: 0 });
-    return;
-  }
-  if (await hasGiftCopiesOutside(deletingIds)) {
-    res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE });
     return;
   }
   for (const book of booksToDelete) {

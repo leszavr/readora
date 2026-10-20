@@ -21,6 +21,8 @@ interface Props {
   title?: string;
   /** Вызывается для каждой успешно обработанной книги. */
   onBookUploaded?: (bookId: number) => void;
+  /** Административная загрузка сразу создаёт канонический источник каталога. */
+  catalogSource?: boolean;
 }
 
 interface FileUploadState {
@@ -126,7 +128,7 @@ function applyMarkProcessing(
 }
 
 type UploadMutate = (
-  vars: { file: File; cycleId?: number; cycleNumber?: number },
+  vars: { file: File; cycleId?: number; cycleNumber?: number; target?: "catalog_source" },
   cbs: { onSuccess: (job: UploadJob) => void; onError: (err: unknown) => void },
 ) => void;
 
@@ -137,6 +139,7 @@ function uploadSingleFile(
   setFiles: React.Dispatch<React.SetStateAction<FileUploadState[]>>,
   upload: UploadMutate,
   invalidateQuota: () => void,
+  catalogSource: boolean,
 ): Promise<void> {
   setFiles((prev) => applyMarkUploading(prev, fileState.file));
   return new Promise<void>((resolve) => {
@@ -151,13 +154,13 @@ function uploadSingleFile(
       resolve();
     };
     upload(
-      { file: fileState.file, cycleId: cycleIdToUse, cycleNumber },
+      { file: fileState.file, cycleId: cycleIdToUse, cycleNumber, target: catalogSource ? "catalog_source" : undefined },
       { onSuccess: handleSuccess, onError: handleError },
     );
   });
 }
 
-export function UploadBookDialog({ open, onClose, title = "Загрузить книги", onBookUploaded }: Readonly<Props>) {
+export function UploadBookDialog({ open, onClose, title = "Загрузить книги", onBookUploaded, catalogSource = false }: Readonly<Props>) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -277,7 +280,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
   ): Promise<void> {
     const format = fileState.file.name.toLowerCase().endsWith(".epub") ? "epub" : "fb2";
     trackBookUploadStarted(format, fileState.file.size);
-    return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload, invalidateQuota);
+    return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload, invalidateQuota, catalogSource);
   }
 
   async function handleUploadAll() {
@@ -410,7 +413,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
           />
 
           {/* Cycle settings */}
-          {files.length > 0 && (
+          {files.length > 0 && !catalogSource && (
             <div className="space-y-3 border rounded-lg p-4">
               <div className="flex items-center gap-2">
                 <Checkbox

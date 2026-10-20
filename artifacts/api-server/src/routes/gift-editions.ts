@@ -1,8 +1,8 @@
 import { Router, type Request } from "express";
-import { asc, eq, sql } from "drizzle-orm";
-import { db, booksTable, giftEditionsTable, type usersTable } from "@workspace/db";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { booksTable, catalogEditionsTable, catalogGiftOffersTable, db, type usersTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../middlewares/auth";
-import { countAvailableGiftEditions, grantGiftEditions, resolveGiftSourceBook } from "../lib/gift-editions-service";
+import { countAvailableGiftEditions, grantGiftEditions } from "../lib/gift-editions-service";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
@@ -18,30 +18,42 @@ function parseSortOrder(value: unknown): number | undefined {
   return Number.isInteger(parsed) && parsed >= 0 && parsed <= 10_000 ? parsed : Number.NaN;
 }
 
-function coverUrl(bookId: number, coverPath: string | null): string | null {
-  return coverPath ? `/api/books/${bookId}/cover?v=${encodeURIComponent(coverPath)}` : null;
+function parseOptionalDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function coverUrl(catalogEditionId: number, coverPath: string | null): string | null {
+  return coverPath ? `/api/catalog/editions/${catalogEditionId}/cover?v=${encodeURIComponent(coverPath)}` : null;
 }
 
 async function listEditions() {
   const copiesCount = sql<number>`(select count(*)::int from ${booksTable} as copies where copies.content_book_id = ${booksTable.id})`;
   const rows = await db
-    .select({ edition: giftEditionsTable, book: booksTable, copiesCount })
-    .from(giftEditionsTable)
-    .innerJoin(booksTable, eq(giftEditionsTable.bookId, booksTable.id))
-    .orderBy(asc(giftEditionsTable.sortOrder), asc(giftEditionsTable.id));
+    .select({ offer: catalogGiftOffersTable, catalogEdition: catalogEditionsTable, book: booksTable, copiesCount })
+    .from(catalogGiftOffersTable)
+    .innerJoin(catalogEditionsTable, eq(catalogGiftOffersTable.catalogEditionId, catalogEditionsTable.id))
+    .innerJoin(booksTable, eq(catalogEditionsTable.sourceBookId, booksTable.id))
+    .orderBy(asc(catalogGiftOffersTable.sortOrder), asc(catalogGiftOffersTable.id));
 
-  return rows.map(({ edition, book, copiesCount }) => ({
-    id: edition.id,
+  return rows.map(({ offer, catalogEdition, book, copiesCount }) => ({
+    id: offer.id,
+    catalogEditionId: catalogEdition.id,
     bookId: book.id,
     title: book.title,
     author: book.author ?? null,
     format: book.format,
-    coverUrl: coverUrl(book.id, book.coverPath),
-    ownerUserId: book.ownerUserId,
-    sortOrder: edition.sortOrder,
-    isPublished: edition.isPublished,
+    coverUrl: coverUrl(catalogEdition.id, book.coverPath),
+    sortOrder: offer.sortOrder,
+    isPublished: offer.isPublished,
+    availableFrom: offer.availableFrom,
+    availableUntil: offer.availableUntil,
+    autoGrantOnSignup: offer.autoGrantOnSignup,
     copiesCount,
-    createdAt: edition.createdAt,
+    createdAt: offer.createdAt,
   }));
 }
 
@@ -62,22 +74,42 @@ router.get("/admin/gift-editions", requireAdmin, async (_req, res): Promise<void
 });
 
 router.post("/admin/gift-editions", requireAdmin, async (req, res): Promise<void> => {
-  const user = (req as AuthReq).user;
+  const catalogEditionId = parseId(req.body?.catalogEditionId);
   const bookId = parseId(req.body?.bookId);
   const sortOrder = parseSortOrder(req.body?.sortOrder);
-  if (!bookId) { res.status(400).json({ error: "Выберите книгу" }); return; }
+  const availableFrom = parseOptionalDate(req.body?.availableFrom);
+  const availableUntil = parseOptionalDate(req.body?.availableUntil);
+  if (!catalogEditionId && !bookId) { res.status(400).json({ error: "Выберите каталожное издание" }); return; }
   if (Number.isNaN(sortOrder)) { res.status(400).json({ error: "Порядок должен быть целым числом от 0 до 10000" }); return; }
+  if (req.body?.availableFrom !== undefined && availableFrom === undefined || req.body?.availableUntil !== undefined && availableUntil === undefined) {
+    res.status(400).json({ error: "Некорректный период выдачи" });
+    return;
+  }
+  if (availableFrom && availableUntil && availableUntil <= availableFrom) {
+    res.status(400).json({ error: "Дата окончания должна быть позже даты начала" });
+    return;
+  }
 
-  const [book] = await db.select().from(booksTable).where(eq(booksTable.id, bookId));
-  if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
-  if (book.contentBookId !== null) { res.status(400).json({ error: "Подарочную копию нельзя сделать подарочным изданием" }); return; }
-  if (book.status !== "active") { res.status(400).json({ error: "Заблокированную книгу нельзя сделать подарочным изданием" }); return; }
-
-  const source = await resolveGiftSourceBook(book, user.id);
+  const [catalogEdition] = await db
+    .select({ id: catalogEditionsTable.id })
+    .from(catalogEditionsTable)
+    .innerJoin(booksTable, eq(catalogEditionsTable.sourceBookId, booksTable.id))
+    .where(and(
+      eq(booksTable.scope, "catalog_source"),
+      catalogEditionId ? eq(catalogEditionsTable.id, catalogEditionId) : eq(catalogEditionsTable.sourceBookId, bookId!),
+    ));
+  if (!catalogEdition) { res.status(404).json({ error: "Каталожное издание не найдено" }); return; }
 
   const [edition] = await db
-    .insert(giftEditionsTable)
-    .values({ bookId: source.id, sortOrder: sortOrder ?? 0, isPublished: req.body?.isPublished !== false })
+    .insert(catalogGiftOffersTable)
+    .values({
+      catalogEditionId: catalogEdition.id,
+      sortOrder: sortOrder ?? 0,
+      isPublished: req.body?.isPublished !== false,
+      availableFrom: availableFrom ?? null,
+      availableUntil: availableUntil ?? null,
+      autoGrantOnSignup: req.body?.autoGrantOnSignup !== false,
+    })
     .onConflictDoNothing()
     .returning();
   if (!edition) { res.status(409).json({ error: "Книга уже добавлена в подарочные издания" }); return; }
@@ -89,14 +121,32 @@ router.patch("/admin/gift-editions/:id", requireAdmin, async (req, res): Promise
   const id = parseId(req.params.id);
   if (!id) { res.status(400).json({ error: "Некорректный идентификатор" }); return; }
 
-  const updates: Partial<typeof giftEditionsTable.$inferInsert> = {};
+  const updates: Partial<typeof catalogGiftOffersTable.$inferInsert> = {};
   const sortOrder = parseSortOrder(req.body?.sortOrder);
+  const availableFrom = parseOptionalDate(req.body?.availableFrom);
+  const availableUntil = parseOptionalDate(req.body?.availableUntil);
   if (Number.isNaN(sortOrder)) { res.status(400).json({ error: "Порядок должен быть целым числом от 0 до 10000" }); return; }
+  if (req.body?.availableFrom !== undefined && availableFrom === undefined || req.body?.availableUntil !== undefined && availableUntil === undefined) {
+    res.status(400).json({ error: "Некорректный период выдачи" });
+    return;
+  }
   if (sortOrder !== undefined) updates.sortOrder = sortOrder;
   if (typeof req.body?.isPublished === "boolean") updates.isPublished = req.body.isPublished;
+  if (req.body?.availableFrom !== undefined) updates.availableFrom = availableFrom ?? null;
+  if (req.body?.availableUntil !== undefined) updates.availableUntil = availableUntil ?? null;
+  if (typeof req.body?.autoGrantOnSignup === "boolean") updates.autoGrantOnSignup = req.body.autoGrantOnSignup;
   if (Object.keys(updates).length === 0) { res.status(400).json({ error: "Нет данных для обновления" }); return; }
 
-  const [edition] = await db.update(giftEditionsTable).set(updates).where(eq(giftEditionsTable.id, id)).returning();
+  const [current] = await db.select().from(catalogGiftOffersTable).where(eq(catalogGiftOffersTable.id, id));
+  if (!current) { res.status(404).json({ error: "Подарочное издание не найдено" }); return; }
+  const effectiveFrom = updates.availableFrom === undefined ? current.availableFrom : updates.availableFrom;
+  const effectiveUntil = updates.availableUntil === undefined ? current.availableUntil : updates.availableUntil;
+  if (effectiveFrom && effectiveUntil && effectiveUntil <= effectiveFrom) {
+    res.status(400).json({ error: "Дата окончания должна быть позже даты начала" });
+    return;
+  }
+
+  const [edition] = await db.update(catalogGiftOffersTable).set(updates).where(eq(catalogGiftOffersTable.id, id)).returning();
   if (!edition) { res.status(404).json({ error: "Подарочное издание не найдено" }); return; }
 
   res.json((await listEditions()).find((item) => item.id === edition.id));
@@ -106,7 +156,7 @@ router.patch("/admin/gift-editions/:id", requireAdmin, async (req, res): Promise
 router.delete("/admin/gift-editions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = parseId(req.params.id);
   if (!id) { res.status(400).json({ error: "Некорректный идентификатор" }); return; }
-  const [edition] = await db.delete(giftEditionsTable).where(eq(giftEditionsTable.id, id)).returning();
+  const [edition] = await db.delete(catalogGiftOffersTable).where(eq(catalogGiftOffersTable.id, id)).returning();
   if (!edition) { res.status(404).json({ error: "Подарочное издание не найдено" }); return; }
   res.sendStatus(204);
 });

@@ -19,7 +19,6 @@ import {
   analyticsDailyUserActivityTable,
   analyticsEventsTable,
   readingProgressTable,
-  giftEditionsTable,
   feedbackResponsesTable,
 } from "@workspace/db";
 import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
@@ -32,7 +31,6 @@ import {
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
-import { GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import {
@@ -789,10 +787,6 @@ router.delete(
   requireAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
-    if (await userOwnsGiftSourcesInUse(id)) {
-      res.status(409).json({ error: "У пользователя есть книги, выданные как подарочные издания. Сначала передайте или снимите их с публикации." });
-      return;
-    }
     await db.delete(usersTable).where(eq(usersTable.id, id));
     res.sendStatus(204);
   },
@@ -829,17 +823,11 @@ router.post(
 // GET /admin/books
 router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
   const { search } = req.query as Record<string, string>;
-  // Подарочные копии пользователей не показываем: это не загрузки, а ссылки на эталон.
-  const giftEditionId = sql<number | null>`(
-    select ge.id from ${giftEditionsTable} ge join ${booksTable} src on src.id = ge.book_id
-    where src.id = ${booksTable.id} or (src.file_hash is not null and src.file_hash = ${booksTable.fileHash})
-    order by (src.id = ${booksTable.id}) desc limit 1
-  )`;
   const books = await db
-    .select({ book: booksTable, username: usersTable.username, giftEditionId })
+    .select({ book: booksTable, username: usersTable.username })
     .from(booksTable)
     .leftJoin(usersTable, eq(booksTable.ownerUserId, usersTable.id))
-    .where(isNull(booksTable.contentBookId))
+    .where(and(isNull(booksTable.contentBookId), eq(booksTable.scope, "personal")))
     .orderBy(desc(booksTable.uploadedAt));
 
   let result = books;
@@ -861,7 +849,7 @@ router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
       ownerId: r.book.ownerUserId,
       fileSize: r.book.fileSize,
       uploadedAt: r.book.uploadedAt,
-      giftEditionId: r.giftEditionId ?? null,
+      giftEditionId: null,
     })),
   );
 });
@@ -906,10 +894,6 @@ router.delete(
       res.status(404).json({ error: "Книга не найдена" });
       return;
     }
-    if (await hasGiftCopiesOutside([book.id])) {
-      res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE });
-      return;
-    }
     await deleteStoredFilesIfUnreferenced(book);
     await db.delete(booksTable).where(eq(booksTable.id, id));
     res.sendStatus(204);
@@ -928,10 +912,6 @@ router.post("/admin/books/delete-bulk", requireAdmin, async (req, res): Promise<
   const deletingIds = booksToDelete.map((book) => book.id);
   if (deletingIds.length === 0) {
     res.json({ deleted: 0 });
-    return;
-  }
-  if (await hasGiftCopiesOutside(deletingIds)) {
-    res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE });
     return;
   }
   for (const book of booksToDelete) {
@@ -960,10 +940,12 @@ router.post(
       .set({ status: book.status === "active" ? "blocked" : "active" })
       .where(eq(booksTable.id, id))
       .returning();
-    const [owner] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, updated.ownerUserId));
+    const [owner] = updated.ownerUserId === null
+      ? []
+      : await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, updated.ownerUserId));
     res.json({
       id: updated.id,
       title: updated.title,

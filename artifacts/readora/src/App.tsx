@@ -21,6 +21,7 @@ const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const ConfirmPasswordChangePage = lazy(() => import("@/pages/ConfirmPasswordChangePage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
+const CatalogPage = lazy(() => import("@/pages/CatalogPage"));
 
 function Router() {
   return (
@@ -37,6 +38,7 @@ function Router() {
         <Route path="/reset-password/:token" component={ResetPasswordPage} />
         <Route path="/confirm-password-change/:token" component={ConfirmPasswordChangePage} />
         <Route path="/library" component={LibraryPage} />
+        <Route path="/catalog" component={CatalogPage} />
         <Route path="/book/:id" component={BookPage} />
         <Route path="/reader/:id" component={ReaderPage} />
         <Route path="/profile" component={ProfilePage} />

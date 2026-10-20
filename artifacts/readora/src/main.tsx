@@ -13,12 +13,18 @@ function readLandingData(): LandingData | null {
   if (!landingDataElement?.textContent) return null;
   try {
     const data = JSON.parse(landingDataElement.textContent) as LandingData;
-    return Array.isArray(data.popularBooks) && isMaintenanceStatus(data.maintenanceStatus) && isRegistrationStatus(data.registrationStatus)
+    return isCatalogShowcase(data.catalogShowcase) && isMaintenanceStatus(data.maintenanceStatus) && isRegistrationStatus(data.registrationStatus)
       ? data
       : null;
   } catch {
     return null;
   }
+}
+
+function isCatalogShowcase(value: unknown): value is LandingData["catalogShowcase"] {
+  if (!value || typeof value !== "object") return false;
+  const showcase = value as Record<string, unknown>;
+  return Array.isArray(showcase.featured) && Array.isArray(showcase.recent);
 }
 
 function isMaintenanceStatus(value: unknown): value is LandingData["maintenanceStatus"] {
@@ -42,7 +48,7 @@ if (landingData) {
     root,
     <AppProviders>
       <LandingPage
-        popularBooks={landingData.popularBooks}
+        catalogShowcase={landingData.catalogShowcase}
         maintenanceStatus={landingData.maintenanceStatus}
         registrationStatus={landingData.registrationStatus}
       />

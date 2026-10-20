@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Library, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
+import { Landmark, Library, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -71,6 +71,12 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                   Библиотека
                 </Button>
               </Link>
+              <Link href="/catalog">
+                <Button variant={location.startsWith("/catalog") ? "secondary" : "ghost"} size="sm" className="gap-2">
+                  <Landmark className="w-4 h-4" />
+                  Каталог
+                </Button>
+              </Link>
               {isModerator && (
                 <Link href="/admin">
                   <Button variant={location.startsWith("/admin") ? "secondary" : "ghost"} size="sm" className="gap-2">
@@ -101,6 +107,11 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                   <Link href="/library">
                     <DropdownMenuItem className="gap-2 cursor-pointer">
                       <Library className="w-4 h-4" /> Моя библиотека
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/catalog">
+                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                      <Landmark className="w-4 h-4" /> Каталог
                     </DropdownMenuItem>
                   </Link>
                   <Link href="/profile">

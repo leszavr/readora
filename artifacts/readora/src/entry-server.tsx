@@ -34,7 +34,7 @@ const legalPageMetadata = {
 type HomeDocumentInput = {
   template: string;
   publicBaseUrl: string;
-  popularBooks: LandingData["popularBooks"];
+  catalogShowcase: LandingData["catalogShowcase"];
   maintenanceStatus: LandingData["maintenanceStatus"];
   registrationStatus: LandingData["registrationStatus"];
 };
@@ -69,12 +69,12 @@ function renderDocument(template: string, publicBaseUrl: string, metadata: PageM
     .replace("<!--landing-data-->", data);
 }
 
-export function renderHomeDocument({ template, publicBaseUrl, popularBooks, maintenanceStatus, registrationStatus }: HomeDocumentInput): string {
-  const data = { popularBooks, maintenanceStatus, registrationStatus };
-  return renderDocument(template, publicBaseUrl, homePageMetadata, <LandingPage popularBooks={popularBooks} maintenanceStatus={maintenanceStatus} registrationStatus={registrationStatus} />, `<script id="landing-data" type="application/json">${serializeJson(data)}</script>`);
+export function renderHomeDocument({ template, publicBaseUrl, catalogShowcase, maintenanceStatus, registrationStatus }: HomeDocumentInput): string {
+  const data = { catalogShowcase, maintenanceStatus, registrationStatus };
+  return renderDocument(template, publicBaseUrl, homePageMetadata, <LandingPage catalogShowcase={catalogShowcase} maintenanceStatus={maintenanceStatus} registrationStatus={registrationStatus} />, `<script id="landing-data" type="application/json">${serializeJson(data)}</script>`);
 }
 
-export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "popularBooks">): string {
+export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "catalogShowcase">): string {
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -90,11 +90,11 @@ export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocume
   return renderDocument(template, publicBaseUrl, aboutPageMetadata, <AboutPage />, "", renderJsonLd(faqSchema));
 }
 
-export function renderLegalDocument({ template, publicBaseUrl, kind }: Omit<HomeDocumentInput, "popularBooks"> & { kind: LegalDocumentKind }): string {
+export function renderLegalDocument({ template, publicBaseUrl, kind }: Omit<HomeDocumentInput, "catalogShowcase"> & { kind: LegalDocumentKind }): string {
   return renderDocument(template, publicBaseUrl, legalPageMetadata[kind], <LegalDocumentPage kind={kind} />);
 }
 
-export function renderPrivateSpaDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "popularBooks">): string {
+export function renderPrivateSpaDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "catalogShowcase">): string {
   return renderTemplate(template, publicBaseUrl, homePageMetadata)
     .replace("<!--app-html-->", "")
     .replace("<!--landing-data-->", "");

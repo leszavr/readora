@@ -313,6 +313,7 @@ export const ListBooksResponse = zod.array(ListBooksResponseItem)
  * @summary Upload a book file (FB2 or EPUB)
  */
 export const UploadBookBody = zod.object({
+  "target": zod.enum(['personal', 'catalog_source']).optional().describe('Catalog sources can be uploaded only by administrators'),
   "cycleId": zod.number().optional(),
   "cycleName": zod.string().optional(),
   "cycleNumber": zod.number().optional(),
@@ -586,6 +587,313 @@ export const GetPopularBooksResponseItem = zod.object({
   "coverUrl": zod.string()
 })
 export const GetPopularBooksResponse = zod.array(GetPopularBooksResponseItem)
+
+
+/**
+ * @summary Get featured and recent published catalog editions for the landing page
+ */
+export const GetCatalogShowcaseResponse = zod.object({
+  "featured": zod.array(zod.object({
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "genres": zod.array(zod.string()),
+  "publicationYear": zod.number().nullish()
+})),
+  "recent": zod.array(zod.object({
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "genres": zod.array(zod.string()),
+  "publicationYear": zod.number().nullish()
+}))
+})
+
+
+/**
+ * @summary Get a published catalog edition cover
+ */
+export const GetPublicCatalogEditionCoverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List published catalog editions for the current user
+ */
+export const listCatalogEditionsQueryQMax = 200;
+
+export const listCatalogEditionsQueryAuthorMax = 320;
+
+export const listCatalogEditionsQueryLimitMax = 48;
+
+
+
+export const ListCatalogEditionsQueryParams = zod.object({
+  "q": zod.coerce.string().max(listCatalogEditionsQueryQMax).optional(),
+  "author": zod.coerce.string().max(listCatalogEditionsQueryAuthorMax).optional(),
+  "genreId": zod.coerce.number().optional(),
+  "yearFrom": zod.coerce.number().optional(),
+  "yearTo": zod.coerce.number().optional(),
+  "sortBy": zod.enum(['publishedAt', 'title', 'author', 'publicationYear']).optional(),
+  "sortDir": zod.enum(['asc', 'desc']).optional(),
+  "cursor": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().min(1).max(listCatalogEditionsQueryLimitMax).optional()
+})
+
+export const ListCatalogEditionsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "publicCoverUrl": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "language": zod.string().nullish(),
+  "publicationYear": zod.number().nullish(),
+  "genres": zod.array(zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isActive": zod.boolean()
+})),
+  "primaryGenre": zod.union([zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "isClaimed": zod.boolean(),
+  "isLandingFeatured": zod.boolean(),
+  "landingFeaturedSortOrder": zod.number(),
+  "status": zod.enum(['draft', 'published', 'hidden', 'withdrawn'])
+})),
+  "hasNextPage": zod.boolean(),
+  "nextCursor": zod.string().nullable()
+})
+
+
+/**
+ * @summary Get one published catalog edition for the current user
+ */
+export const GetCatalogEditionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCatalogEditionResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "publicCoverUrl": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "language": zod.string().nullish(),
+  "publicationYear": zod.number().nullish(),
+  "genres": zod.array(zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isActive": zod.boolean()
+})),
+  "primaryGenre": zod.union([zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "isClaimed": zod.boolean(),
+  "isLandingFeatured": zod.boolean(),
+  "landingFeaturedSortOrder": zod.number(),
+  "status": zod.enum(['draft', 'published', 'hidden', 'withdrawn'])
+})
+
+
+/**
+ * @summary Add a published catalog edition to the current user's library
+ */
+export const ClaimCatalogEditionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ClaimCatalogEditionResponse = zod.object({
+  "added": zod.number()
+})
+
+
+/**
+ * @summary Get a catalog edition cover for the current user
+ */
+export const GetCatalogEditionCoverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List catalog editions in every lifecycle state (admin)
+ */
+export const ListAdminCatalogEditionsResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "publicCoverUrl": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "language": zod.string().nullish(),
+  "publicationYear": zod.number().nullish(),
+  "genres": zod.array(zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isActive": zod.boolean()
+})),
+  "primaryGenre": zod.union([zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "isClaimed": zod.boolean(),
+  "isLandingFeatured": zod.boolean(),
+  "landingFeaturedSortOrder": zod.number(),
+  "status": zod.enum(['draft', 'published', 'hidden', 'withdrawn'])
+}).and(zod.object({
+  "sourceBookId": zod.number(),
+  "copiesCount": zod.number(),
+  "autoGrantOnSignup": zod.boolean()
+}))
+export const ListAdminCatalogEditionsResponse = zod.array(ListAdminCatalogEditionsResponseItem)
+
+
+/**
+ * @summary Update canonical catalog metadata and lifecycle state (admin)
+ */
+export const UpdateCatalogEditionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateCatalogEditionBodyTitleMax = 500;
+
+export const updateCatalogEditionBodyAuthorMax = 500;
+
+export const updateCatalogEditionBodyDescriptionMax = 10000;
+
+export const updateCatalogEditionBodyLanguageMax = 100;
+
+export const updateCatalogEditionBodyPublicationYearMin = 0;
+export const updateCatalogEditionBodyPublicationYearMax = 9999;
+
+export const updateCatalogEditionBodyLandingFeaturedSortOrderMin = 0;
+export const updateCatalogEditionBodyLandingFeaturedSortOrderMax = 10000;
+
+
+
+export const UpdateCatalogEditionBody = zod.object({
+  "title": zod.string().max(updateCatalogEditionBodyTitleMax).optional(),
+  "author": zod.string().max(updateCatalogEditionBodyAuthorMax).nullish(),
+  "description": zod.string().max(updateCatalogEditionBodyDescriptionMax).nullish(),
+  "language": zod.string().max(updateCatalogEditionBodyLanguageMax).nullish(),
+  "publicationYear": zod.number().min(updateCatalogEditionBodyPublicationYearMin).max(updateCatalogEditionBodyPublicationYearMax).nullish(),
+  "genreIds": zod.array(zod.number()).optional(),
+  "primaryGenreId": zod.number().nullish(),
+  "status": zod.enum(['draft', 'published', 'hidden', 'withdrawn']).optional(),
+  "isLandingFeatured": zod.boolean().optional(),
+  "autoGrantOnSignup": zod.boolean().optional(),
+  "landingFeaturedSortOrder": zod.number().min(updateCatalogEditionBodyLandingFeaturedSortOrderMin).max(updateCatalogEditionBodyLandingFeaturedSortOrderMax).optional()
+})
+
+export const UpdateCatalogEditionResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "publicCoverUrl": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "language": zod.string().nullish(),
+  "publicationYear": zod.number().nullish(),
+  "genres": zod.array(zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isActive": zod.boolean()
+})),
+  "primaryGenre": zod.union([zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "isClaimed": zod.boolean(),
+  "isLandingFeatured": zod.boolean(),
+  "landingFeaturedSortOrder": zod.number(),
+  "status": zod.enum(['draft', 'published', 'hidden', 'withdrawn'])
+}).and(zod.object({
+  "sourceBookId": zod.number(),
+  "copiesCount": zod.number(),
+  "autoGrantOnSignup": zod.boolean()
+}))
+
+
+/**
+ * @summary Soft-withdraw a catalog edition without revoking issued copies (admin)
+ */
+export const WithdrawCatalogEditionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Replace a canonical catalog edition cover (admin)
+ */
+export const ReplaceCatalogEditionCoverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReplaceCatalogEditionCoverBody = zod.object({
+  "cover": zod.instanceof(File)
+})
+
+export const ReplaceCatalogEditionCoverResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "publicCoverUrl": zod.string().nullish(),
+  "format": zod.enum(['fb2', 'epub']),
+  "language": zod.string().nullish(),
+  "publicationYear": zod.number().nullish(),
+  "genres": zod.array(zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isActive": zod.boolean()
+})),
+  "primaryGenre": zod.union([zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "isClaimed": zod.boolean(),
+  "isLandingFeatured": zod.boolean(),
+  "landingFeaturedSortOrder": zod.number(),
+  "status": zod.enum(['draft', 'published', 'hidden', 'withdrawn'])
+}).and(zod.object({
+  "sourceBookId": zod.number(),
+  "copiesCount": zod.number(),
+  "autoGrantOnSignup": zod.boolean()
+}))
 
 
 /**
@@ -1268,18 +1576,21 @@ export const ClaimGiftEditionsResponse = zod.object({
 
 
 /**
- * @summary List gift editions (admin)
+ * @summary List gift offers for catalog editions (admin)
  */
 export const ListGiftEditionsResponseItem = zod.object({
   "id": zod.number(),
+  "catalogEditionId": zod.number(),
   "bookId": zod.number(),
   "title": zod.string(),
   "author": zod.string().nullish(),
   "format": zod.enum(['fb2', 'epub']),
   "coverUrl": zod.string().nullish(),
-  "ownerUserId": zod.number(),
   "sortOrder": zod.number(),
   "isPublished": zod.boolean(),
+  "availableFrom": zod.coerce.date().nullish(),
+  "availableUntil": zod.coerce.date().nullish(),
+  "autoGrantOnSignup": zod.boolean(),
   "copiesCount": zod.number(),
   "createdAt": zod.coerce.date()
 })
@@ -1287,7 +1598,7 @@ export const ListGiftEditionsResponse = zod.array(ListGiftEditionsResponseItem)
 
 
 /**
- * @summary Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
+ * @summary Add a catalog edition to gift rotation (admin)
  */
 export const createGiftEditionBodySortOrderMin = 0;
 export const createGiftEditionBodySortOrderMax = 10000;
@@ -1295,9 +1606,13 @@ export const createGiftEditionBodySortOrderMax = 10000;
 
 
 export const CreateGiftEditionBody = zod.object({
-  "bookId": zod.number(),
+  "catalogEditionId": zod.number().optional().describe('Preferred identifier of the catalog edition'),
+  "bookId": zod.number().optional().describe('Compatibility identifier of the canonical source book'),
   "sortOrder": zod.number().min(createGiftEditionBodySortOrderMin).max(createGiftEditionBodySortOrderMax).optional(),
-  "isPublished": zod.boolean().optional()
+  "isPublished": zod.boolean().optional(),
+  "availableFrom": zod.coerce.date().nullish(),
+  "availableUntil": zod.coerce.date().nullish(),
+  "autoGrantOnSignup": zod.boolean().optional()
 })
 
 
@@ -1315,19 +1630,25 @@ export const updateGiftEditionBodySortOrderMax = 10000;
 
 export const UpdateGiftEditionBody = zod.object({
   "sortOrder": zod.number().min(updateGiftEditionBodySortOrderMin).max(updateGiftEditionBodySortOrderMax).optional(),
-  "isPublished": zod.boolean().optional()
+  "isPublished": zod.boolean().optional(),
+  "availableFrom": zod.coerce.date().nullish(),
+  "availableUntil": zod.coerce.date().nullish(),
+  "autoGrantOnSignup": zod.boolean().optional()
 })
 
 export const UpdateGiftEditionResponse = zod.object({
   "id": zod.number(),
+  "catalogEditionId": zod.number(),
   "bookId": zod.number(),
   "title": zod.string(),
   "author": zod.string().nullish(),
   "format": zod.enum(['fb2', 'epub']),
   "coverUrl": zod.string().nullish(),
-  "ownerUserId": zod.number(),
   "sortOrder": zod.number(),
   "isPublished": zod.boolean(),
+  "availableFrom": zod.coerce.date().nullish(),
+  "availableUntil": zod.coerce.date().nullish(),
+  "autoGrantOnSignup": zod.boolean(),
   "copiesCount": zod.number(),
   "createdAt": zod.coerce.date()
 })

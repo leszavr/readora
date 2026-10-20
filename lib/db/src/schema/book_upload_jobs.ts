@@ -4,6 +4,7 @@ import { booksTable } from "./books";
 
 export const bookUploadJobStatusEnum = pgEnum("book_upload_job_status", ["queued", "processing", "completed", "failed"]);
 export const bookUploadJobStageEnum = pgEnum("book_upload_job_stage", ["queued", "validating", "parsing", "saving", "completed", "failed"]);
+export const bookUploadJobTargetEnum = pgEnum("book_upload_job_target", ["personal", "catalog_source"]);
 
 export const bookUploadJobsTable = pgTable("book_upload_jobs", {
   id: serial("id").primaryKey(),
@@ -20,6 +21,7 @@ export const bookUploadJobsTable = pgTable("book_upload_jobs", {
   cycleId: integer("cycle_id"),
   cycleName: text("cycle_name"),
   cycleNumber: real("cycle_number"),
+  target: bookUploadJobTargetEnum("target").notNull().default("personal"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   completedAt: timestamp("completed_at", { withTimezone: true }),

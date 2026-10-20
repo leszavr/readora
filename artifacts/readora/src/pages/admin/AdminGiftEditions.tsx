@@ -1,32 +1,50 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
-  getGetBookQueryKey,
-  getListAdminBooksQueryKey,
+  getListAdminCatalogEditionsQueryKey,
   getListGiftEditionsQueryKey,
   useCreateGiftEdition,
   useDeleteGiftEdition,
+  useListAdminCatalogEditions,
   useListGiftEditions,
   useUpdateGiftEdition,
   type GiftEdition,
+  type GiftEditionUpdate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Gift, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ru } from "date-fns/locale";
+import { BookOpen, CalendarDays, Gift, Loader2, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { UploadBookDialog } from "@/components/UploadBookDialog";
-import { useAuth } from "@/hooks/use-auth";
-import { EditGiftEditionDialog } from "./EditGiftEditionDialog";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
     return error.message;
   }
   return fallback;
+}
+
+function toLocalDate(value: string | null | undefined): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function formatDate(value: string | null | undefined): string {
+  const date = toLocalDate(value);
+  return date ? date.toLocaleDateString("ru-RU") : "Выберите дату";
+}
+
+function formatTime(value: string | null | undefined): string {
+  const date = toLocalDate(value);
+  return date ? date.toTimeString().slice(0, 5) : "";
 }
 
 function GiftCover({ edition }: Readonly<{ edition: GiftEdition }>) {
@@ -41,39 +59,106 @@ function GiftCover({ edition }: Readonly<{ edition: GiftEdition }>) {
   return <img src={edition.coverUrl} alt={`Обложка «${edition.title}»`} onError={() => setFailed(true)} className="h-24 w-16 shrink-0 rounded bg-muted object-cover" />;
 }
 
+function AvailabilityControl({
+  edition,
+  field,
+  label,
+  disabled,
+  onChange,
+}: Readonly<{
+  edition: GiftEdition;
+  field: "availableFrom" | "availableUntil";
+  label: string;
+  disabled: boolean;
+  onChange: (value: string | null) => void;
+}>) {
+  const [open, setOpen] = useState(false);
+  const value = edition[field];
+  const selectedDate = toLocalDate(value);
+
+  function selectDate(day: Date | undefined) {
+    if (!day) return;
+    const current = selectedDate ?? new Date();
+    const next = new Date(day.getFullYear(), day.getMonth(), day.getDate(), current.getHours(), current.getMinutes());
+    setOpen(false);
+    onChange(next.toISOString());
+  }
+
+  function saveTime(time: string) {
+    if (!selectedDate || !time) return;
+    const [hours, minutes] = time.split(":").map(Number);
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return;
+    const next = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hours, minutes);
+    onChange(next.toISOString());
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="space-y-2">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" className="w-full justify-start font-normal" disabled={disabled}>
+              <CalendarDays className="h-4 w-4" />
+              <span className="truncate">{formatDate(value)}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={selectedDate} onSelect={selectDate} locale={ru} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <div className="flex gap-2">
+          <Input
+            aria-label={`${label}: время`}
+            className="w-full"
+            key={`${edition.id}-${field}-${value}`}
+            type="time"
+            defaultValue={formatTime(value)}
+            disabled={disabled || !selectedDate}
+            onBlur={(event) => saveTime(event.target.value)}
+          />
+          {value && (
+            <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onChange(null)}>
+              Сбросить
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminGiftEditions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const handledBookIds = useRef(new Set<number>());
   const [deleteEdition, setDeleteEdition] = useState<GiftEdition | null>(null);
-  const [editEdition, setEditEdition] = useState<GiftEdition | null>(null);
-  const { user } = useAuth();
+  const [selectedCatalogEditionId, setSelectedCatalogEditionId] = useState("");
 
   const { data: editions = [], isLoading, isError } = useListGiftEditions();
+  const { data: catalogEditions = [] } = useListAdminCatalogEditions();
   const createMutation = useCreateGiftEdition();
   const updateMutation = useUpdateGiftEdition();
   const deleteMutation = useDeleteGiftEdition();
-
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: getListGiftEditionsQueryKey() });
-    void queryClient.invalidateQueries({ queryKey: getListAdminBooksQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: getListAdminCatalogEditionsQueryKey() });
   };
 
-  async function markUploadedBook(bookId: number) {
-    if (handledBookIds.current.has(bookId)) return;
-    handledBookIds.current.add(bookId);
+  async function addToRotation() {
+    const catalogEditionId = Number.parseInt(selectedCatalogEditionId, 10);
+    if (!Number.isSafeInteger(catalogEditionId) || catalogEditionId <= 0) return;
     try {
       const nextOrder = editions.reduce((max, edition) => Math.max(max, edition.sortOrder), -1) + 1;
-      const edition = await createMutation.mutateAsync({ data: { bookId, sortOrder: Math.min(nextOrder, 10000), isPublished: true } });
+      const edition = await createMutation.mutateAsync({ data: { catalogEditionId, sortOrder: Math.min(nextOrder, 10_000), isPublished: true } });
       invalidate();
+      setSelectedCatalogEditionId("");
       toast({ title: "Подарочное издание добавлено", description: `«${edition.title}» будет выдаваться новым пользователям.` });
     } catch (error) {
-      toast({ title: "Книга загружена, но не отмечена как подарочная", description: getErrorMessage(error, "Отметьте её в разделе «Книги»."), variant: "destructive" });
+      toast({ title: "Не удалось добавить в выдачу", description: getErrorMessage(error, "Повторите попытку."), variant: "destructive" });
     }
   }
 
-  async function updateEdition(edition: GiftEdition, data: { sortOrder?: number; isPublished?: boolean }) {
+  async function updateEdition(edition: GiftEdition, data: GiftEditionUpdate) {
     try {
       await updateMutation.mutateAsync({ id: edition.id, data });
       invalidate();
@@ -85,11 +170,20 @@ export default function AdminGiftEditions() {
   function saveSortOrder(edition: GiftEdition, value: string) {
     const sortOrder = Number(value);
     if (sortOrder === edition.sortOrder) return;
-    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10_000) {
       toast({ title: "Некорректный порядок", description: "Укажите целое число от 0 до 10000.", variant: "destructive" });
       return;
     }
     void updateEdition(edition, { sortOrder });
+  }
+
+  function saveAvailability(edition: GiftEdition, field: "availableFrom" | "availableUntil", value: string | null) {
+    if (value && Number.isNaN(new Date(value).getTime())) {
+      toast({ title: "Некорректная дата", description: "Укажите дату и время выдачи.", variant: "destructive" });
+      return;
+    }
+    if (value === edition[field]) return;
+    void updateEdition(edition, { [field]: value });
   }
 
   async function removeEdition() {
@@ -104,19 +198,33 @@ export default function AdminGiftEditions() {
     }
   }
 
+  const availableCatalogEditions = catalogEditions.filter(
+    (edition) => edition.status === "published" && !editions.some((offer) => offer.catalogEditionId === edition.id),
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Подарочные издания · Мировое достояние</h2>
           <p className="text-sm text-muted-foreground">
-            Опубликованные книги автоматически добавляются новым пользователям. Остальные могут добавить их из библиотеки.
-            Отметить уже загруженную книгу можно в разделе «Книги». Правки названия, описания и обложки увидят только те, кто получит книгу после этого.
+            Добавьте опубликованное каталожное издание в ротацию. Оно автоматически выдаётся новым пользователям;
+            уже выданные копии останутся у читателей после отключения или удаления предложения.
           </p>
         </div>
-        <Button className="shrink-0 gap-2" onClick={() => setUploadOpen(true)}>
-          <Plus className="h-4 w-4" /> Добавить книгу
-        </Button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <Select value={selectedCatalogEditionId} onValueChange={setSelectedCatalogEditionId}>
+            <SelectTrigger className="min-w-0 sm:w-64"><SelectValue placeholder="Издание каталога" /></SelectTrigger>
+            <SelectContent>
+              {availableCatalogEditions.map((edition) => (
+                <SelectItem key={edition.id} value={String(edition.id)}>{edition.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button className="shrink-0 gap-2" onClick={() => void addToRotation()} disabled={!selectedCatalogEditionId || createMutation.isPending}>
+            <Plus className="h-4 w-4" /> Добавить
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -127,12 +235,12 @@ export default function AdminGiftEditions() {
         <div className="rounded-xl border border-dashed bg-card px-4 py-12 text-center">
           <Gift className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="font-medium">Подарочных изданий пока нет</p>
-          <p className="mt-1 text-sm text-muted-foreground">Нажмите «Добавить книгу» и загрузите FB2 или EPUB из public domain — или отметьте уже загруженную книгу в разделе «Книги».</p>
+          <p className="mt-1 text-sm text-muted-foreground">Сначала создайте и опубликуйте издание в разделе «Каталог», затем добавьте его в ротацию.</p>
         </div>
       ) : (
-        <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
           {editions.map((edition) => (
-            <article key={edition.id} className="flex gap-3 rounded-xl border bg-card p-3 shadow-sm">
+            <article key={edition.id} className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm sm:flex-row">
               <GiftCover edition={edition} />
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -147,40 +255,23 @@ export default function AdminGiftEditions() {
                   <div className="flex items-center gap-2">
                     <Label htmlFor={`gift-order-${edition.id}`} className="text-xs text-muted-foreground">Порядок</Label>
                     <div className="w-16 shrink-0">
-                      <Input
-                        id={`gift-order-${edition.id}`}
-                        key={`${edition.id}-${edition.sortOrder}`}
-                        type="number"
-                        min={0}
-                        max={10000}
-                        defaultValue={edition.sortOrder}
-                        onBlur={(event) => saveSortOrder(edition, event.target.value)}
-                      />
-                    </div>
+                      <Input id={`gift-order-${edition.id}`} key={`${edition.id}-${edition.sortOrder}`} type="number" min={0} max={10000} defaultValue={edition.sortOrder} onBlur={(event) => saveSortOrder(edition, event.target.value)} />
+                      </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Switch
-                        id={`gift-published-${edition.id}`}
-                        checked={edition.isPublished}
-                        disabled={updateMutation.isPending}
-                        onCheckedChange={(isPublished) => void updateEdition(edition, { isPublished })}
-                        aria-label="Выдавать пользователям"
-                      />
-                      <Label htmlFor={`gift-published-${edition.id}`} className="truncate text-xs font-normal text-muted-foreground">Выдавать</Label>
+                  <div className="space-y-2">
+                    <AvailabilityControl edition={edition} field="availableFrom" label="Начало выдачи" disabled={updateMutation.isPending} onChange={(value) => saveAvailability(edition, "availableFrom", value)} />
+                    <AvailabilityControl edition={edition} field="availableUntil" label="Окончание выдачи" disabled={updateMutation.isPending} onChange={(value) => saveAvailability(edition, "availableUntil", value)} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                    <div className="flex items-center gap-2">
+                      <Switch id={`gift-published-${edition.id}`} checked={edition.isPublished} disabled={updateMutation.isPending} onCheckedChange={(isPublished) => void updateEdition(edition, { isPublished })} aria-label="Выдавать пользователям" />
+                      <Label htmlFor={`gift-published-${edition.id}`} className="text-xs font-normal text-muted-foreground">Выдавать</Label>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9"
-                        disabled={edition.ownerUserId !== user?.id}
-                        title={edition.ownerUserId === user?.id ? "Редактировать" : "Редактировать может только владелец эталона"}
-                        onClick={() => setEditEdition(edition)}
-                        aria-label={`Редактировать «${edition.title}»`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                    <div className="flex items-center gap-2">
+                      <Switch id={`gift-autogrant-${edition.id}`} checked={edition.autoGrantOnSignup} disabled={updateMutation.isPending} onCheckedChange={(autoGrantOnSignup) => void updateEdition(edition, { autoGrantOnSignup })} aria-label="Выдавать при регистрации" />
+                      <Label htmlFor={`gift-autogrant-${edition.id}`} className="text-xs font-normal text-muted-foreground">При регистрации</Label>
+                    </div>
+                    <div className="ml-auto">
                       <Button variant="outline" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" onClick={() => setDeleteEdition(edition)} aria-label={`Убрать «${edition.title}»`}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -193,32 +284,13 @@ export default function AdminGiftEditions() {
         </div>
       )}
 
-      <UploadBookDialog
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        title="Загрузить подарочное издание"
-        onBookUploaded={(bookId) => void markUploadedBook(bookId)}
-      />
-
-      <EditGiftEditionDialog
-        edition={editEdition}
-        onClose={() => setEditEdition(null)}
-        onSaved={() => {
-          invalidate();
-          if (editEdition) void queryClient.invalidateQueries({ queryKey: getGetBookQueryKey(editEdition.bookId) });
-          setEditEdition(null);
-          toast({ title: "Подарочное издание обновлено" });
-        }}
-        onError={(message) => toast({ title: "Не удалось сохранить изменения", description: message, variant: "destructive" })}
-      />
-
       <Dialog open={Boolean(deleteEdition)} onOpenChange={(open) => !open && setDeleteEdition(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Убрать из подарочных изданий?</DialogTitle>
             <DialogDescription>
               «{deleteEdition?.title}» перестанет выдаваться. Уже выданные копии ({deleteEdition?.copiesCount ?? 0}) останутся у пользователей,
-              а книга — в вашей библиотеке. Чтобы временно прекратить выдачу, достаточно выключить переключатель.
+              а каноническое издание останется в каталоге. Чтобы временно прекратить выдачу, достаточно выключить переключатель.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

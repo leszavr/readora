@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart, Gift, MessageSquareText } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, LineChart, MessageSquareText, Landmark } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -12,8 +12,7 @@ const AdminGenres = lazy(() => import("@/pages/admin/AdminGenres"));
 const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
 const AdminSmtp = lazy(() => import("@/pages/admin/AdminSmtp").then(({ AdminSmtp }) => ({ default: AdminSmtp })));
 const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
-const AdminLandingBooks = lazy(() => import("@/pages/admin/AdminLandingBooks"));
-const AdminGiftEditions = lazy(() => import("@/pages/admin/AdminGiftEditions"));
+const AdminCatalogEditions = lazy(() => import("@/pages/admin/AdminCatalogEditions"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
 const AdminFeedback = lazy(() => import("@/pages/admin/AdminFeedback"));
 
@@ -23,8 +22,7 @@ const TABS = [
   { id: "feedback", label: "Отзывы", icon: MessageSquareText },
   { id: "users", label: "Пользователи", icon: Users },
   { id: "books", label: "Книги", icon: BookCopy },
-  { id: "landing-books", label: "Лендинг", icon: PanelsTopLeft },
-  { id: "gift-editions", label: "Подарочные издания", icon: Gift },
+  { id: "catalog", label: "Каталог", icon: Landmark },
   { id: "genres", label: "Жанры", icon: Tags },
   { id: "email", label: "Email", icon: Mail },
   { id: "saved-emails", label: "Письма", icon: Inbox },
@@ -36,7 +34,9 @@ type TabId = typeof TABS[number]["id"];
 export default function AdminPage() {
   const { isAdmin } = useAuth();
   const [tab, setTab] = useState<TabId>("stats");
-  const visibleTabs = isAdmin ? TABS : TABS.filter(({ id }) => id !== "analytics" && id !== "feedback");
+  const visibleTabs = isAdmin
+    ? TABS
+    : TABS.filter(({ id }) => id !== "analytics" && id !== "feedback" && id !== "catalog");
 
   return (
     <ProtectedRoute adminOnly>
@@ -84,8 +84,7 @@ export default function AdminPage() {
                 {tab === "feedback" && isAdmin && <AdminFeedback />}
                 {tab === "users" && <AdminUsers />}
                 {tab === "books" && <AdminBooks />}
-                {tab === "landing-books" && <AdminLandingBooks />}
-                {tab === "gift-editions" && <AdminGiftEditions />}
+                {tab === "catalog" && isAdmin && <AdminCatalogEditions />}
                 {tab === "genres" && <AdminGenres />}
                 {tab === "email" && <AdminSmtp />}
                 {tab === "saved-emails" && <AdminEmails />}

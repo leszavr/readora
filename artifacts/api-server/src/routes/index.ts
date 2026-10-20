@@ -11,6 +11,7 @@ import feedbackRouter from "./feedback";
 import landingBooksRouter from "./landing-books";
 import analyticsRouter from "./analytics";
 import giftEditionsRouter from "./gift-editions";
+import catalogRouter from "./catalog";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(feedbackRouter);
 router.use(landingBooksRouter);
 router.use(analyticsRouter);
 router.use(giftEditionsRouter);
+router.use(catalogRouter);
 
 export default router;

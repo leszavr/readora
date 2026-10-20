@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookMarked, BookOpen, Library, Settings, Shield, Smartphone, Sparkles, Star, Upload } from "lucide-react";
+import { BookMarked, BookOpen, Landmark, Library, Settings, Shield, Smartphone, Sparkles, Star, Upload } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { PwaInstallDialog } from "@/components/PwaInstallDialog";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -12,7 +12,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { MaintenanceOverlay } from "@/components/MaintenanceOverlay";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
-import type { LandingData, PopularBook } from "@/landing-data";
+import { getGetCatalogShowcaseQueryKey, useGetCatalogShowcase } from "@workspace/api-client-react";
+import type { CatalogShowcase, LandingData, PublicCatalogEdition } from "@/landing-data";
 
 const features = [
   {
@@ -48,11 +49,11 @@ const features = [
 ];
 
 export function LandingPage({
-  popularBooks,
+  catalogShowcase: initialCatalogShowcase,
   maintenanceStatus,
   registrationStatus,
 }: Readonly<{
-  popularBooks: PopularBook[];
+  catalogShowcase?: CatalogShowcase;
   maintenanceStatus?: LandingData["maintenanceStatus"];
   registrationStatus?: LandingData["registrationStatus"];
 }>) {
@@ -63,6 +64,11 @@ export function LandingPage({
   const { isAuthenticated } = useAuth();
   const { data: currentMaintenanceStatus } = useMaintenanceStatus(maintenanceStatus);
   const { data: currentRegistrationStatus } = useRegistrationStatus(registrationStatus);
+  const { data: catalogShowcase } = useGetCatalogShowcase({
+    query: { initialData: initialCatalogShowcase, queryKey: getGetCatalogShowcaseQueryKey() },
+  });
+  const featured = catalogShowcase?.featured ?? [];
+  const recent = catalogShowcase?.recent ?? [];
 
   useEffect(() => {
     if (shouldShowFeedbackBlob()) {
@@ -133,28 +139,20 @@ export function LandingPage({
           </div>
         </section>
 
-        {popularBooks.length > 0 && (
+        {(featured.length > 0 || recent.length > 0) && (
           <section className="bg-muted/30 border-y border-border py-16 md:py-20">
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-12">
-                <h2 className="text-2xl md:text-3xl font-bold mb-3">Популярные книги</h2>
-                <p className="text-muted-foreground">Книги, которые чаще всего открывают пользователи Readora</p>
+                <div className="mb-3 flex items-center justify-center gap-2 text-primary"><Landmark className="h-5 w-5" /><span className="text-sm font-medium">Мировое достояние</span></div>
+                <h2 className="text-2xl md:text-3xl font-bold mb-3">Наша коллекция</h2>
+                <p className="text-muted-foreground">Свободные для чтения издания, которые можно добавить в личную библиотеку</p>
               </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {popularBooks.map((book) => (
-                  <Card key={book.coverUrl} className="overflow-hidden hover:shadow-lg transition-shadow">
-                    <CardContent className="p-0">
-                      <div className="aspect-[3/4] bg-muted relative overflow-hidden">
-                        <img src={book.coverUrl} alt={`Сгенерированная обложка: ${book.title}`} className="h-full w-full object-cover" loading="lazy" decoding="async" />
-                      </div>
-                      <div className="p-4">
-                        <h3 className="font-semibold line-clamp-2 mb-1">{book.title}</h3>
-                        {book.author && <p className="text-sm text-muted-foreground mb-2">{book.author}</p>}
-                        {book.description && <p className="text-xs text-muted-foreground line-clamp-2">{book.description}</p>}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              {featured.length > 0 && <CatalogShowcaseSection title="Рекомендуем" editions={featured} />}
+              {recent.length > 0 && <CatalogShowcaseSection title="Недавно добавлено" editions={recent} className={featured.length > 0 ? "mt-12" : undefined} />}
+              <div className="mt-10 text-center">
+                <Button variant="outline" className="gap-2" asChild>
+                  <a href="/catalog"><Landmark className="h-4 w-4" /> Открыть каталог</a>
+                </Button>
               </div>
             </div>
           </section>
@@ -212,5 +210,33 @@ export function LandingPage({
       )}
       <PwaInstallDialog open={pwaDialogOpen} onOpenChange={setPwaDialogOpen} onInstall={promptInstall} isIos={isIos} />
     </div>
+  );
+}
+
+function CatalogShowcaseSection({ title, editions, className }: Readonly<{ title: string; editions: PublicCatalogEdition[]; className?: string }>) {
+  return (
+    <section className={className}>
+      <h3 className="mb-5 text-xl font-semibold">{title}</h3>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {editions.map((edition, index) => (
+          <Card key={`${edition.title}-${edition.author ?? ""}-${index}`} className="overflow-hidden hover:shadow-lg transition-shadow">
+            <CardContent className="p-0">
+              <div className="aspect-[3/4] bg-muted relative overflow-hidden">
+                {edition.coverUrl ? (
+                  <img src={edition.coverUrl} alt={`Обложка «${edition.title}»`} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                ) : (
+                  <BookOpen className="absolute inset-0 m-auto h-9 w-9 text-muted-foreground" />
+                )}
+              </div>
+              <div className="p-4">
+                <h4 className="font-semibold line-clamp-2 mb-1">{edition.title}</h4>
+                <p className="line-clamp-1 text-sm text-muted-foreground">{edition.author || "Автор не указан"}</p>
+                {edition.description && <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{edition.description}</p>}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
   );
 }

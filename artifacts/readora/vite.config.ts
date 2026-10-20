@@ -21,6 +21,7 @@ const spaRoutes = [
   /^\/reset-password\/[^/]+$/,
   /^\/confirm-password-change\/[^/]+$/,
   /^\/library$/,
+  /^\/catalog$/,
   /^\/book\/\d+$/,
   /^\/reader\/\d+$/,
   /^\/profile$/,
@@ -70,16 +71,16 @@ function landingSsrPlugin(): Plugin {
             return;
           }
 
-          const popularBooks = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/popular-books?limit=6`)
-            .then(async (response) => response.ok ? response.json() : [])
-            .catch(() => []);
+          const catalogShowcase = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/catalog-showcase`)
+            .then(async (response) => response.ok ? response.json() : { featured: [], recent: [] })
+            .catch(() => ({ featured: [], recent: [] }));
           const maintenanceStatus = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/maintenance-status`)
             .then(async (response) => response.ok ? response.json() : { enabled: false, reason: null, eta: null, message: null })
             .catch(() => ({ enabled: false, reason: null, eta: null, message: null }));
           const registrationStatus = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/public/registration-status`)
             .then(async (response) => response.ok ? response.json() : { enabled: true })
             .catch(() => ({ enabled: true }));
-          res.end(renderHomeDocument({ template: transformedTemplate, publicBaseUrl, popularBooks, maintenanceStatus, registrationStatus }));
+          res.end(renderHomeDocument({ template: transformedTemplate, publicBaseUrl, catalogShowcase, maintenanceStatus, registrationStatus }));
         } catch (error) {
           next(error);
         }

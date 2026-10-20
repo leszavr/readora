@@ -28,11 +28,12 @@ export function useUploadBook() {
   const [progress, setProgress] = useState(0);
 
   const mutation = useMutation({
-    mutationFn: async ({ file, cycleId, cycleName, cycleNumber }: {
+    mutationFn: async ({ file, cycleId, cycleName, cycleNumber, target }: {
       file: File;
       cycleId?: number;
       cycleName?: string;
       cycleNumber?: number;
+      target?: "catalog_source";
     }) => {
       setProgress(0);
       const formData = new FormData();
@@ -40,6 +41,7 @@ export function useUploadBook() {
       if (cycleId) formData.append("cycleId", String(cycleId));
       if (cycleName) formData.append("cycleName", cycleName);
       if (cycleNumber) formData.append("cycleNumber", String(cycleNumber));
+      if (target) formData.append("target", target);
 
       return new Promise<UploadJob>((resolve, reject) => {
         const xhr = new XMLHttpRequest();

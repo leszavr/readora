@@ -39,6 +39,13 @@ import type {
   BookUploadJob,
   BulkDeleteInput,
   BulkDeleteResult,
+  CatalogAdminEdition,
+  CatalogEdition,
+  CatalogEditionClaimResult,
+  CatalogEditionCoverUploadInput,
+  CatalogEditionPage,
+  CatalogEditionUpdate,
+  CatalogShowcase,
   Chapter,
   ChapterContent,
   ClearSavedEmails200,
@@ -72,6 +79,7 @@ import type {
   ListAdminBooksParams,
   ListAdminUsersParams,
   ListBooksParams,
+  ListCatalogEditionsParams,
   LoginInput,
   MaintenanceStatus,
   ProfileUpdate,
@@ -1506,6 +1514,9 @@ export const getUploadBookUrl = () => {
  */
 export const uploadBook = async (bookUploadInput: BookUploadInput, options?: RequestInit): Promise<BookUploadJob> => {
     const formData = new FormData();
+if(bookUploadInput.target !== undefined) {
+ formData.append(`target`, bookUploadInput.target);
+ }
 if(bookUploadInput.cycleId !== undefined) {
  formData.append(`cycleId`, bookUploadInput.cycleId.toString())
  }
@@ -2553,6 +2564,761 @@ export function useGetPopularBooks<TData = Awaited<ReturnType<typeof getPopularB
 
 
 
+
+export const getGetCatalogShowcaseUrl = () => {
+
+
+
+
+  return `/api/public/catalog-showcase`
+}
+
+/**
+ * @summary Get featured and recent published catalog editions for the landing page
+ */
+export const getCatalogShowcase = async ( options?: RequestInit): Promise<CatalogShowcase> => {
+
+  return customFetch<CatalogShowcase>(getGetCatalogShowcaseUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCatalogShowcaseQueryKey = () => {
+    return [
+    `/api/public/catalog-showcase`
+    ] as const;
+    }
+
+
+export const getGetCatalogShowcaseQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogShowcase>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatalogShowcase>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogShowcaseQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogShowcase>>> = ({ signal }) => getCatalogShowcase({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogShowcase>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCatalogShowcaseQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogShowcase>>>
+export type GetCatalogShowcaseQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get featured and recent published catalog editions for the landing page
+ */
+
+export function useGetCatalogShowcase<TData = Awaited<ReturnType<typeof getCatalogShowcase>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatalogShowcase>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCatalogShowcaseQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetPublicCatalogEditionCoverUrl = (id: number,) => {
+
+
+
+
+  return `/api/public/catalog-editions/${id}/cover`
+}
+
+/**
+ * @summary Get a published catalog edition cover
+ */
+export const getPublicCatalogEditionCover = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetPublicCatalogEditionCoverUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicCatalogEditionCoverQueryKey = (id: number,) => {
+    return [
+    `/api/public/catalog-editions/${id}/cover`
+    ] as const;
+    }
+
+
+export const getGetPublicCatalogEditionCoverQueryOptions = <TData = Awaited<ReturnType<typeof getPublicCatalogEditionCover>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicCatalogEditionCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicCatalogEditionCoverQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicCatalogEditionCover>>> = ({ signal }) => getPublicCatalogEditionCover(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicCatalogEditionCover>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicCatalogEditionCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicCatalogEditionCover>>>
+export type GetPublicCatalogEditionCoverQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a published catalog edition cover
+ */
+
+export function useGetPublicCatalogEditionCover<TData = Awaited<ReturnType<typeof getPublicCatalogEditionCover>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicCatalogEditionCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicCatalogEditionCoverQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListCatalogEditionsUrl = (params?: ListCatalogEditionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/catalog/editions?${stringifiedParams}` : `/api/catalog/editions`
+}
+
+/**
+ * @summary List published catalog editions for the current user
+ */
+export const listCatalogEditions = async (params?: ListCatalogEditionsParams, options?: RequestInit): Promise<CatalogEditionPage> => {
+
+  return customFetch<CatalogEditionPage>(getListCatalogEditionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCatalogEditionsQueryKey = (params?: ListCatalogEditionsParams,) => {
+    return [
+    `/api/catalog/editions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCatalogEditionsQueryOptions = <TData = Awaited<ReturnType<typeof listCatalogEditions>>, TError = ErrorType<ErrorResponse>>(params?: ListCatalogEditionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCatalogEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCatalogEditionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCatalogEditions>>> = ({ signal }) => listCatalogEditions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCatalogEditions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCatalogEditionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCatalogEditions>>>
+export type ListCatalogEditionsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List published catalog editions for the current user
+ */
+
+export function useListCatalogEditions<TData = Awaited<ReturnType<typeof listCatalogEditions>>, TError = ErrorType<ErrorResponse>>(
+ params?: ListCatalogEditionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCatalogEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCatalogEditionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetCatalogEditionUrl = (id: number,) => {
+
+
+
+
+  return `/api/catalog/editions/${id}`
+}
+
+/**
+ * @summary Get one published catalog edition for the current user
+ */
+export const getCatalogEdition = async (id: number, options?: RequestInit): Promise<CatalogEdition> => {
+
+  return customFetch<CatalogEdition>(getGetCatalogEditionUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCatalogEditionQueryKey = (id: number,) => {
+    return [
+    `/api/catalog/editions/${id}`
+    ] as const;
+    }
+
+
+export const getGetCatalogEditionQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogEdition>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatalogEdition>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogEditionQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogEdition>>> = ({ signal }) => getCatalogEdition(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogEdition>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCatalogEditionQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogEdition>>>
+export type GetCatalogEditionQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get one published catalog edition for the current user
+ */
+
+export function useGetCatalogEdition<TData = Awaited<ReturnType<typeof getCatalogEdition>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatalogEdition>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCatalogEditionQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getClaimCatalogEditionUrl = (id: number,) => {
+
+
+
+
+  return `/api/catalog/editions/${id}/claim`
+}
+
+/**
+ * @summary Add a published catalog edition to the current user's library
+ */
+export const claimCatalogEdition = async (id: number, options?: RequestInit): Promise<CatalogEditionClaimResult> => {
+
+  return customFetch<CatalogEditionClaimResult>(getClaimCatalogEditionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getClaimCatalogEditionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimCatalogEdition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof claimCatalogEdition>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['claimCatalogEdition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof claimCatalogEdition>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  claimCatalogEdition(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClaimCatalogEditionMutationResult = NonNullable<Awaited<ReturnType<typeof claimCatalogEdition>>>
+
+    export type ClaimCatalogEditionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Add a published catalog edition to the current user's library
+ */
+export const useClaimCatalogEdition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimCatalogEdition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof claimCatalogEdition>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getClaimCatalogEditionMutationOptions(options));
+    }
+
+export const getGetCatalogEditionCoverUrl = (id: number,) => {
+
+
+
+
+  return `/api/catalog/editions/${id}/cover`
+}
+
+/**
+ * @summary Get a catalog edition cover for the current user
+ */
+export const getCatalogEditionCover = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetCatalogEditionCoverUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCatalogEditionCoverQueryKey = (id: number,) => {
+    return [
+    `/api/catalog/editions/${id}/cover`
+    ] as const;
+    }
+
+
+export const getGetCatalogEditionCoverQueryOptions = <TData = Awaited<ReturnType<typeof getCatalogEditionCover>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatalogEditionCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCatalogEditionCoverQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCatalogEditionCover>>> = ({ signal }) => getCatalogEditionCover(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCatalogEditionCover>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCatalogEditionCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getCatalogEditionCover>>>
+export type GetCatalogEditionCoverQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a catalog edition cover for the current user
+ */
+
+export function useGetCatalogEditionCover<TData = Awaited<ReturnType<typeof getCatalogEditionCover>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCatalogEditionCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCatalogEditionCoverQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListAdminCatalogEditionsUrl = () => {
+
+
+
+
+  return `/api/admin/catalog-editions`
+}
+
+/**
+ * @summary List catalog editions in every lifecycle state (admin)
+ */
+export const listAdminCatalogEditions = async ( options?: RequestInit): Promise<CatalogAdminEdition[]> => {
+
+  return customFetch<CatalogAdminEdition[]>(getListAdminCatalogEditionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminCatalogEditionsQueryKey = () => {
+    return [
+    `/api/admin/catalog-editions`
+    ] as const;
+    }
+
+
+export const getListAdminCatalogEditionsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminCatalogEditions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminCatalogEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminCatalogEditionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminCatalogEditions>>> = ({ signal }) => listAdminCatalogEditions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminCatalogEditions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminCatalogEditionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminCatalogEditions>>>
+export type ListAdminCatalogEditionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List catalog editions in every lifecycle state (admin)
+ */
+
+export function useListAdminCatalogEditions<TData = Awaited<ReturnType<typeof listAdminCatalogEditions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminCatalogEditions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminCatalogEditionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateCatalogEditionUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/catalog-editions/${id}`
+}
+
+/**
+ * @summary Update canonical catalog metadata and lifecycle state (admin)
+ */
+export const updateCatalogEdition = async (id: number,
+    catalogEditionUpdate: CatalogEditionUpdate, options?: RequestInit): Promise<CatalogAdminEdition> => {
+
+  return customFetch<CatalogAdminEdition>(getUpdateCatalogEditionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      catalogEditionUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateCatalogEditionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCatalogEdition>>, TError,{id: number;data: BodyType<CatalogEditionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCatalogEdition>>, TError,{id: number;data: BodyType<CatalogEditionUpdate>}, TContext> => {
+
+const mutationKey = ['updateCatalogEdition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCatalogEdition>>, {id: number;data: BodyType<CatalogEditionUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCatalogEdition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCatalogEditionMutationResult = NonNullable<Awaited<ReturnType<typeof updateCatalogEdition>>>
+    export type UpdateCatalogEditionMutationBody = BodyType<CatalogEditionUpdate>
+    export type UpdateCatalogEditionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update canonical catalog metadata and lifecycle state (admin)
+ */
+export const useUpdateCatalogEdition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCatalogEdition>>, TError,{id: number;data: BodyType<CatalogEditionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCatalogEdition>>,
+        TError,
+        {id: number;data: BodyType<CatalogEditionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCatalogEditionMutationOptions(options));
+    }
+
+export const getWithdrawCatalogEditionUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/catalog-editions/${id}`
+}
+
+/**
+ * @summary Soft-withdraw a catalog edition without revoking issued copies (admin)
+ */
+export const withdrawCatalogEdition = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getWithdrawCatalogEditionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getWithdrawCatalogEditionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawCatalogEdition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawCatalogEdition>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['withdrawCatalogEdition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawCatalogEdition>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  withdrawCatalogEdition(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawCatalogEditionMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawCatalogEdition>>>
+
+    export type WithdrawCatalogEditionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Soft-withdraw a catalog edition without revoking issued copies (admin)
+ */
+export const useWithdrawCatalogEdition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawCatalogEdition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawCatalogEdition>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getWithdrawCatalogEditionMutationOptions(options));
+    }
+
+export const getReplaceCatalogEditionCoverUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/catalog-editions/${id}/cover`
+}
+
+/**
+ * @summary Replace a canonical catalog edition cover (admin)
+ */
+export const replaceCatalogEditionCover = async (id: number,
+    catalogEditionCoverUploadInput: CatalogEditionCoverUploadInput, options?: RequestInit): Promise<CatalogAdminEdition> => {
+    const formData = new FormData();
+formData.append(`cover`, catalogEditionCoverUploadInput.cover);
+
+  return customFetch<CatalogAdminEdition>(getReplaceCatalogEditionCoverUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getReplaceCatalogEditionCoverMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceCatalogEditionCover>>, TError,{id: number;data: BodyType<CatalogEditionCoverUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceCatalogEditionCover>>, TError,{id: number;data: BodyType<CatalogEditionCoverUploadInput>}, TContext> => {
+
+const mutationKey = ['replaceCatalogEditionCover'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceCatalogEditionCover>>, {id: number;data: BodyType<CatalogEditionCoverUploadInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  replaceCatalogEditionCover(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceCatalogEditionCoverMutationResult = NonNullable<Awaited<ReturnType<typeof replaceCatalogEditionCover>>>
+    export type ReplaceCatalogEditionCoverMutationBody = BodyType<CatalogEditionCoverUploadInput>
+    export type ReplaceCatalogEditionCoverMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Replace a canonical catalog edition cover (admin)
+ */
+export const useReplaceCatalogEditionCover = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceCatalogEditionCover>>, TError,{id: number;data: BodyType<CatalogEditionCoverUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceCatalogEditionCover>>,
+        TError,
+        {id: number;data: BodyType<CatalogEditionCoverUploadInput>},
+        TContext
+      > => {
+      return useMutation(getReplaceCatalogEditionCoverMutationOptions(options));
+    }
 
 export const getGetLandingBookCoverUrl = (id: number,) => {
 
@@ -4895,7 +5661,7 @@ export const getListGiftEditionsUrl = () => {
 }
 
 /**
- * @summary List gift editions (admin)
+ * @summary List gift offers for catalog editions (admin)
  */
 export const listGiftEditions = async ( options?: RequestInit): Promise<GiftEdition[]> => {
 
@@ -4942,7 +5708,7 @@ export type ListGiftEditionsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List gift editions (admin)
+ * @summary List gift offers for catalog editions (admin)
  */
 
 export function useListGiftEditions<TData = Awaited<ReturnType<typeof listGiftEditions>>, TError = ErrorType<unknown>>(
@@ -4972,7 +5738,7 @@ export const getCreateGiftEditionUrl = () => {
 }
 
 /**
- * @summary Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
+ * @summary Add a catalog edition to gift rotation (admin)
  */
 export const createGiftEdition = async (giftEditionCreate: GiftEditionCreate, options?: RequestInit): Promise<GiftEdition> => {
 
@@ -5021,7 +5787,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateGiftEditionMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
+ * @summary Add a catalog edition to gift rotation (admin)
  */
 export const useCreateGiftEdition = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGiftEdition>>, TError,{data: BodyType<GiftEditionCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}

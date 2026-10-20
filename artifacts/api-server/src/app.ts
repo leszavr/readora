@@ -12,8 +12,8 @@ import { pool } from "@workspace/db";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { emailService } from "./lib/email-service";
+import { getCatalogShowcase } from "./lib/catalog-showcase-service";
 import { getMaintenanceStatus } from "./lib/maintenance-status";
-import { getPopularBooks } from "./lib/popular-books-service";
 import { getPublicBaseUrl } from "./lib/public-url";
 import { isRegistrationEnabled } from "./lib/registration-status";
 import seoRouter from "./routes/seo";
@@ -44,7 +44,7 @@ type HomeRenderer = {
   renderHomeDocument(input: {
     template: string;
     publicBaseUrl: string;
-    popularBooks: Awaited<ReturnType<typeof getPopularBooks>>;
+    catalogShowcase: Awaited<ReturnType<typeof getCatalogShowcase>>;
     maintenanceStatus: Awaited<ReturnType<typeof getMaintenanceStatus>>;
     registrationStatus: { enabled: boolean };
   }): string;
@@ -73,6 +73,7 @@ const spaRoutes = [
   /^\/reset-password\/[^/]+$/,
   /^\/confirm-password-change\/[^/]+$/,
   /^\/library$/,
+  /^\/catalog$/,
   /^\/book\/\d+$/,
   /^\/reader\/\d+$/,
   /^\/profile$/,
@@ -174,7 +175,7 @@ if (hasClientDist && homeRenderer) {
       res.type("html").send(homeRenderer.renderHomeDocument({
         template: indexHtml,
         publicBaseUrl: getPublicBaseUrl(),
-        popularBooks: await getPopularBooks(6),
+        catalogShowcase: await getCatalogShowcase(),
         maintenanceStatus: await getMaintenanceStatus(),
         registrationStatus: { enabled: await isRegistrationEnabled() },
       }));

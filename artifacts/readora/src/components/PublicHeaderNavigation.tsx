@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
-import { Library, LogOut, ShieldCheck, User as UserIcon } from "lucide-react";
+import { Landmark, Library, LogOut, ShieldCheck, User as UserIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +50,12 @@ export function PublicHeaderNavigation({
             Библиотека
           </a>
         </Button>
+        <Button variant="ghost" size="sm" className="gap-2" asChild>
+          <a href="/catalog">
+            <Landmark className="h-4 w-4" />
+            Каталог
+          </a>
+        </Button>
         {isModerator && (
           <Button variant="ghost" size="sm" className="gap-2" asChild>
             <a href="/admin">
@@ -78,6 +84,11 @@ export function PublicHeaderNavigation({
             <a href="/library">
               <DropdownMenuItem className="cursor-pointer gap-2">
                 <Library className="h-4 w-4" /> Моя библиотека
+              </DropdownMenuItem>
+            </a>
+            <a href="/catalog">
+              <DropdownMenuItem className="cursor-pointer gap-2">
+                <Landmark className="h-4 w-4" /> Каталог
               </DropdownMenuItem>
             </a>
             <a href="/profile">

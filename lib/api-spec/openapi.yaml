@@ -761,6 +761,282 @@ paths:
                 items:
                   $ref: "#/components/schemas/PublicBook"
 
+  /public/catalog-showcase:
+    get:
+      operationId: getCatalogShowcase
+      tags: [books]
+      summary: Get featured and recent published catalog editions for the landing page
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogShowcase"
+
+  /public/catalog-editions/{id}/cover:
+    get:
+      operationId: getPublicCatalogEditionCover
+      tags: [books]
+      summary: Get a published catalog edition cover
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: WebP cover
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Cover is not available
+
+  /catalog/editions:
+    get:
+      operationId: listCatalogEditions
+      tags: [books]
+      summary: List published catalog editions for the current user
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: author
+          in: query
+          schema:
+            type: string
+            maxLength: 320
+        - name: genreId
+          in: query
+          schema:
+            type: integer
+        - name: yearFrom
+          in: query
+          schema:
+            type: integer
+        - name: yearTo
+          in: query
+          schema:
+            type: integer
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [publishedAt, title, author, publicationYear]
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 48
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogEditionPage"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /catalog/editions/{id}:
+    get:
+      operationId: getCatalogEdition
+      tags: [books]
+      summary: Get one published catalog edition for the current user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogEdition"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /catalog/editions/{id}/claim:
+    post:
+      operationId: claimCatalogEdition
+      tags: [books]
+      summary: Add a published catalog edition to the current user's library
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Claimed or already present
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogEditionClaimResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /catalog/editions/{id}/cover:
+    get:
+      operationId: getCatalogEditionCover
+      tags: [books]
+      summary: Get a catalog edition cover for the current user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: WebP cover
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Cover is not available
+
+  /admin/catalog-editions:
+    get:
+      operationId: listAdminCatalogEditions
+      tags: [admin]
+      summary: List catalog editions in every lifecycle state (admin)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CatalogAdminEdition"
+  /admin/catalog-editions/{id}:
+    patch:
+      operationId: updateCatalogEdition
+      tags: [admin]
+      summary: Update canonical catalog metadata and lifecycle state (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatalogEditionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogAdminEdition"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: withdrawCatalogEdition
+      tags: [admin]
+      summary: Soft-withdraw a catalog edition without revoking issued copies (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Withdrawn
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/catalog-editions/{id}/cover:
+    post:
+      operationId: replaceCatalogEditionCover
+      tags: [admin]
+      summary: Replace a canonical catalog edition cover (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CatalogEditionCoverUploadInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogAdminEdition"
+        "400":
+          description: Invalid upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /public/landing-book-covers/{id}:
     get:
       operationId: getLandingBookCover
@@ -1468,7 +1744,7 @@ paths:
     get:
       operationId: listGiftEditions
       tags: [admin]
-      summary: List gift editions (admin)
+      summary: List gift offers for catalog editions (admin)
       responses:
         "200":
           description: OK
@@ -1481,7 +1757,7 @@ paths:
     post:
       operationId: createGiftEdition
       tags: [admin]
-      summary: Mark a book as a gift edition; another user's book is cloned into the admin's library (admin)
+      summary: Add a catalog edition to gift rotation (admin)
       requestBody:
         required: true
         content:
@@ -2129,6 +2405,10 @@ components:
     BookUploadInput:
       type: object
       properties:
+        target:
+          type: string
+          enum: [personal, catalog_source]
+          description: Catalog sources can be uploaded only by administrators
         cycleId:
           type: integer
         cycleName:
@@ -2200,6 +2480,171 @@ components:
           type: ["string", "null"]
         coverUrl:
           type: string
+
+    CatalogGenre:
+      type: object
+      required: [id, code, name]
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+
+    CatalogEdition:
+      type: object
+      required: [id, title, format, genres, isClaimed, isLandingFeatured, landingFeaturedSortOrder, status]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+        publicCoverUrl:
+          type: ["string", "null"]
+        format:
+          type: string
+          enum: [fb2, epub]
+        language:
+          type: ["string", "null"]
+        publicationYear:
+          type: ["integer", "null"]
+        genres:
+          type: array
+          items:
+            $ref: "#/components/schemas/Genre"
+        primaryGenre:
+          anyOf:
+            - $ref: "#/components/schemas/CatalogGenre"
+            - type: "null"
+        publishedAt:
+          type: ["string", "null"]
+          format: date-time
+        isClaimed:
+          type: boolean
+        isLandingFeatured:
+          type: boolean
+        landingFeaturedSortOrder:
+          type: integer
+        status:
+          type: string
+          enum: [draft, published, hidden, withdrawn]
+
+    CatalogEditionPage:
+      type: object
+      required: [items, hasNextPage, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogEdition"
+        hasNextPage:
+          type: boolean
+        nextCursor:
+          type: ["string", "null"]
+
+    CatalogEditionClaimResult:
+      type: object
+      required: [added]
+      properties:
+        added:
+          type: integer
+
+    PublicCatalogEdition:
+      type: object
+      required: [title, genres]
+      properties:
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+        genres:
+          type: array
+          items:
+            type: string
+        publicationYear:
+          type: ["integer", "null"]
+
+    CatalogShowcase:
+      type: object
+      required: [featured, recent]
+      properties:
+        featured:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicCatalogEdition"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicCatalogEdition"
+
+    CatalogAdminEdition:
+      allOf:
+        - $ref: "#/components/schemas/CatalogEdition"
+        - type: object
+          required: [sourceBookId, copiesCount, autoGrantOnSignup]
+          properties:
+            sourceBookId:
+              type: integer
+            copiesCount:
+              type: integer
+            autoGrantOnSignup:
+              type: boolean
+
+    CatalogEditionUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        author:
+          type: ["string", "null"]
+          maxLength: 500
+        description:
+          type: ["string", "null"]
+          maxLength: 10000
+        language:
+          type: ["string", "null"]
+          maxLength: 100
+        publicationYear:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 9999
+        genreIds:
+          type: array
+          items:
+            type: integer
+        primaryGenreId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [draft, published, hidden, withdrawn]
+        isLandingFeatured:
+          type: boolean
+        autoGrantOnSignup:
+          type: boolean
+        landingFeaturedSortOrder:
+          type: integer
+          minimum: 0
+          maximum: 10000
+
+    CatalogEditionCoverUploadInput:
+      type: object
+      required: [cover]
+      properties:
+        cover:
+          type: string
+          format: binary
 
     LandingBook:
       type: object
@@ -2838,9 +3283,11 @@ components:
 
     GiftEdition:
       type: object
-      required: [id, bookId, title, format, sortOrder, isPublished, copiesCount, ownerUserId, createdAt]
+      required: [id, catalogEditionId, bookId, title, format, sortOrder, isPublished, autoGrantOnSignup, copiesCount, createdAt]
       properties:
         id:
+          type: integer
+        catalogEditionId:
           type: integer
         bookId:
           type: integer
@@ -2853,11 +3300,17 @@ components:
           enum: [fb2, epub]
         coverUrl:
           type: ["string", "null"]
-        ownerUserId:
-          type: integer
         sortOrder:
           type: integer
         isPublished:
+          type: boolean
+        availableFrom:
+          type: ["string", "null"]
+          format: date-time
+        availableUntil:
+          type: ["string", "null"]
+          format: date-time
+        autoGrantOnSignup:
           type: boolean
         copiesCount:
           type: integer
@@ -2867,15 +3320,26 @@ components:
 
     GiftEditionCreate:
       type: object
-      required: [bookId]
       properties:
+        catalogEditionId:
+          type: integer
+          description: Preferred identifier of the catalog edition
         bookId:
           type: integer
+          description: Compatibility identifier of the canonical source book
         sortOrder:
           type: integer
           minimum: 0
           maximum: 10000
         isPublished:
+          type: boolean
+        availableFrom:
+          type: ["string", "null"]
+          format: date-time
+        availableUntil:
+          type: ["string", "null"]
+          format: date-time
+        autoGrantOnSignup:
           type: boolean
 
     GiftEditionUpdate:
@@ -2886,6 +3350,14 @@ components:
           minimum: 0
           maximum: 10000
         isPublished:
+          type: boolean
+        availableFrom:
+          type: ["string", "null"]
+          format: date-time
+        availableUntil:
+          type: ["string", "null"]
+          format: date-time
+        autoGrantOnSignup:
           type: boolean
 
     AppSettings:

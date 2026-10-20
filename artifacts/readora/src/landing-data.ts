@@ -1,9 +1,7 @@
-export type PopularBook = {
-  title: string;
-  author: string | null;
-  description: string | null;
-  coverUrl: string;
-};
+import type { CatalogShowcase as ApiCatalogShowcase, PublicCatalogEdition as ApiPublicCatalogEdition } from "@workspace/api-client-react";
+
+export type PublicCatalogEdition = ApiPublicCatalogEdition;
+export type CatalogShowcase = ApiCatalogShowcase;
 
 export type LandingMaintenanceStatus = {
   enabled: boolean;
@@ -17,7 +15,7 @@ export type LandingRegistrationStatus = {
 };
 
 export type LandingData = {
-  popularBooks: PopularBook[];
+  catalogShowcase: CatalogShowcase;
   maintenanceStatus: LandingMaintenanceStatus;
   registrationStatus: LandingRegistrationStatus;
 };

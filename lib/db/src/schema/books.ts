@@ -6,12 +6,13 @@ import { cyclesTable } from "./cycles";
 
 export const bookFormatEnum = pgEnum("book_format", ["fb2", "epub"]);
 export const bookStatusEnum = pgEnum("book_status", ["active", "blocked"]);
+export const bookScopeEnum = pgEnum("book_scope", ["personal", "catalog_source"]);
 
 export const booksTable = pgTable(
   "books",
   {
     id: serial("id").primaryKey(),
-    ownerUserId: integer("owner_user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    ownerUserId: integer("owner_user_id").references(() => usersTable.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     author: text("author"),
     description: text("description"),
@@ -29,6 +30,7 @@ export const booksTable = pgTable(
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
     hideFromPopular: boolean("hide_from_popular").notNull().default(false),
+    scope: bookScopeEnum("scope").notNull().default("personal"),
     // Подарочная копия: главы и файл берутся из канонической книги, метаданные — свои.
     contentBookId: integer("content_book_id").references((): AnyPgColumn => booksTable.id, { onDelete: "restrict" }),
   },
