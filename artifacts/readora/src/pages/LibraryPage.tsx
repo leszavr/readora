@@ -10,6 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { 
   Upload, Search, BookOpen, SlidersHorizontal, LayoutGrid, 
   List, Trash2, X, Layers
@@ -555,20 +564,38 @@ function LibraryFiltersBar({
   clearSelection: () => void;
   selectAll: () => void;
 }>) {
-  return (
-    <div className="flex flex-wrap gap-3 mb-6">
-      <div className="relative w-full sm:flex-1 sm:min-w-48">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Поиск по названию или автору..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => {
+    const desktopMedia = window.matchMedia("(min-width: 640px)");
+    const closeOnDesktop = () => {
+      if (desktopMedia.matches) setFiltersOpen(false);
+    };
 
+    closeOnDesktop();
+    desktopMedia.addEventListener("change", closeOnDesktop);
+    return () => desktopMedia.removeEventListener("change", closeOnDesktop);
+  }, []);
+
+  const activeFilterCount = [
+    librarySection !== "shelf" && statusFilter !== "all",
+    genreFilter !== "all",
+    sortBy !== "uploadedAt",
+    sortDir !== "desc",
+    groupBy !== "none",
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    if (librarySection !== "shelf") setStatusFilter("all");
+    setGenreFilter("all");
+    setSortBy("uploadedAt");
+    setSortDir("desc");
+    setGroupBy("none");
+  };
+
+  const renderFilterControls = (mobile = false) => (
+    <>
       <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as ListBooksStatus | "all")}>
-        <SelectTrigger className="w-full sm:w-40">
+        <SelectTrigger className={mobile ? "w-full" : "w-40"} aria-label="Статус чтения">
           <SelectValue placeholder="Статус" />
         </SelectTrigger>
         <SelectContent>
@@ -586,7 +613,7 @@ function LibraryFiltersBar({
 
       {genreItems.length > 0 && (
         <Select value={genreFilter} onValueChange={setGenreFilter}>
-          <SelectTrigger className="w-full sm:w-44">
+          <SelectTrigger className={mobile ? "w-full" : "w-44"} aria-label="Жанр">
             <SelectValue placeholder="Жанр" />
           </SelectTrigger>
           <SelectContent>
@@ -599,7 +626,7 @@ function LibraryFiltersBar({
       )}
 
       <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-        <SelectTrigger className="w-full sm:w-44">
+        <SelectTrigger className={mobile ? "w-full" : "w-44"} aria-label="Сортировка">
           <SlidersHorizontal className="w-3 h-3 mr-1" />
           <SelectValue placeholder="Сортировка" />
         </SelectTrigger>
@@ -614,7 +641,7 @@ function LibraryFiltersBar({
       </Select>
 
       <Select value={sortDir} onValueChange={(value) => setSortDir(value as "asc" | "desc")}>
-        <SelectTrigger className="w-full sm:w-44">
+        <SelectTrigger className={mobile ? "w-full" : "w-44"} aria-label="Направление сортировки">
           <SelectValue placeholder="Направление" />
         </SelectTrigger>
         <SelectContent>
@@ -624,7 +651,7 @@ function LibraryFiltersBar({
       </Select>
 
       <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupOption)}>
-        <SelectTrigger className="w-full sm:w-36">
+        <SelectTrigger className={mobile ? "w-full" : "w-36"} aria-label="Группировка">
           <Layers className="w-3 h-3 mr-1" />
           <SelectValue placeholder="Группировка" />
         </SelectTrigger>
@@ -635,35 +662,78 @@ function LibraryFiltersBar({
           <SelectItem value="cycle">По циклам</SelectItem>
         </SelectContent>
       </Select>
+    </>
+  );
 
-      <div className="flex gap-1 border rounded-md p-1">
-        <Button
-          variant={viewMode === "grid" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setViewMode("grid")}
-          className="h-8 w-8 p-0"
-        >
-          <LayoutGrid className="w-4 h-4" />
+  return (
+    <div className="mb-6">
+      <div className="relative w-full sm:flex-1 sm:min-w-48">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          className="pl-9"
+          placeholder="Поиск по названию или автору..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 sm:hidden">
+        <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setFiltersOpen(true)}>
+          <SlidersHorizontal className="w-4 h-4" />
+          Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
         </Button>
-        <Button
-          variant={viewMode === "list" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setViewMode("list")}
-          className="h-8 w-8 p-0"
-        >
-          <List className="w-4 h-4" />
-        </Button>
+        <div className="flex gap-1 border rounded-md p-1">
+          <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="sm" onClick={() => setViewMode("grid")} className="h-8 w-8 p-0" aria-label="Сетка">
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
+          <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="sm" onClick={() => setViewMode("list")} className="h-8 w-8 p-0" aria-label="Список">
+            <List className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 hidden flex-wrap gap-3 sm:flex">
+        {renderFilterControls()}
+        <div className="flex gap-1 border rounded-md p-1">
+          <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="sm" onClick={() => setViewMode("grid")} className="h-8 w-8 p-0" aria-label="Сетка">
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
+          <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="sm" onClick={() => setViewMode("list")} className="h-8 w-8 p-0" aria-label="Список">
+            <List className="w-4 h-4" />
+          </Button>
+        </div>
+        {isSelectionMode && visibleBookItems.length > 0 && (
+          <Button variant="outline" size="sm" onClick={selectedBooks.size === visibleBookItems.length ? clearSelection : selectAll}>
+            {selectedBooks.size === visibleBookItems.length ? "Снять выделение" : "Выбрать все"}
+          </Button>
+        )}
       </div>
 
       {isSelectionMode && visibleBookItems.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={selectedBooks.size === visibleBookItems.length ? clearSelection : selectAll}
-        >
+        <Button className="mt-3 w-full sm:hidden" variant="outline" size="sm" onClick={selectedBooks.size === visibleBookItems.length ? clearSelection : selectAll}>
           {selectedBooks.size === visibleBookItems.length ? "Снять выделение" : "Выбрать все"}
         </Button>
       )}
+
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent side="bottom" className="rounded-t-xl p-4">
+          <SheetHeader className="pr-8 text-left">
+            <SheetTitle>Фильтры</SheetTitle>
+            <SheetDescription>Настройте отображение книг в библиотеке.</SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-3 py-4">
+            {renderFilterControls(true)}
+          </div>
+          <SheetFooter className="gap-2 sm:flex-row">
+            <Button type="button" variant="ghost" onClick={resetFilters} disabled={activeFilterCount === 0}>
+              Сбросить
+            </Button>
+            <SheetClose asChild>
+              <Button type="button">Готово</Button>
+            </SheetClose>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

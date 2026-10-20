@@ -37,6 +37,7 @@ interface UseDebouncedReaderProgressSaveOptions {
   onSave: (payload: ReaderProgressPayload) => void;
   debounceMs?: number;
   enabled?: boolean;
+  isProgrammaticScroll?: () => boolean;
   /** 
    * Использовать семантическое позиционирование (v2) вместо legacy (v1).
    * По умолчанию true.
@@ -349,6 +350,7 @@ export function useDebouncedReaderProgressSave({
   onSave,
   debounceMs = 1000,
   enabled = true,
+  isProgrammaticScroll,
   useSemanticPosition = true,
 }: UseDebouncedReaderProgressSaveOptions) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -452,7 +454,7 @@ export function useDebouncedReaderProgressSave({
   }, [enabled, scrollContainerRef, contentAreaRef, currentChapterId, currentChapterIdx, totalChapters, onSave, useSemanticPosition]);
 
   const scheduleSave = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || isProgrammaticScroll?.()) return;
 
     const container = scrollContainerRef.current;
     if (!container) {
@@ -463,10 +465,11 @@ export function useDebouncedReaderProgressSave({
     console.log('[DebouncedSave] Scroll detected, scheduling save. Current scrollTop:', container.scrollTop);
     cancelPendingSave();
     timeoutRef.current = setTimeout(() => {
+      if (isProgrammaticScroll?.()) return;
       console.log('[DebouncedSave] Debounce timeout reached, saving now');
       saveNow();
     }, debounceMs);
-  }, [enabled, debounceMs, cancelPendingSave, saveNow, scrollContainerRef]);
+  }, [enabled, debounceMs, cancelPendingSave, isProgrammaticScroll, saveNow, scrollContainerRef]);
 
   useEffect(() => {
     return () => {
