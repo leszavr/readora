@@ -1,7 +1,16 @@
-import { Router, type IRouter } from "express";
-import { db, appSettingsTable, feedbackResponsesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { Router, type IRouter, type Request } from "express";
+import {
+  booksTable,
+  db,
+  appSettingsTable,
+  feedbackPromptStatesTable,
+  feedbackResponsesTable,
+  readingProgressTable,
+  usersTable,
+} from "@workspace/db";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { emailService } from "../lib/email-service";
+import { requireAuth } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -22,6 +31,11 @@ export const FEEDBACK_PAIN_POINTS = [
 ] as const;
 const MISSING_FEATURE_PAIN_POINT = "Не нашел нужную функцию";
 const MAX_PAIN_POINTS = 2;
+const REQUIRED_VISITS = 3;
+const VISIT_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const PROMPT_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+type AuthReq = Request & { user: typeof usersTable.$inferSelect };
 
 const contactFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$|^@[A-Za-z0-9_]{4,32}$|^(?:https?:\/\/)?(?:t\.me|telegram\.me)\/[A-Za-z0-9_]{4,32}$/i;
 
@@ -164,7 +178,84 @@ router.get("/feedback/survey", (_req, res): void => {
   });
 });
 
-// POST /api/feedback/survey - публичный endpoint exit-intent опроса оценки сайта
+// GET /api/feedback/survey/eligibility - проверка серверных условий автопоказа опроса.
+router.get("/feedback/survey/eligibility", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  if (user.role !== "user") {
+    res.json({ shouldShow: false });
+    return;
+  }
+
+  const now = new Date();
+  const [createdState] = await db
+    .insert(feedbackPromptStatesTable)
+    .values({ userId: user.id, visitCount: 1, lastVisitAt: now })
+    .onConflictDoNothing()
+    .returning();
+
+  let state = createdState;
+  if (!state) {
+    [state] = await db
+      .select()
+      .from(feedbackPromptStatesTable)
+      .where(eq(feedbackPromptStatesTable.userId, user.id));
+  }
+
+  if (!state) {
+    res.status(500).json({ error: "Не удалось проверить условия опроса" });
+    return;
+  }
+
+  let visitCount = state.visitCount;
+  if (now.getTime() - state.lastVisitAt.getTime() >= VISIT_INTERVAL_MS) {
+    visitCount += 1;
+    const [updatedState] = await db
+      .update(feedbackPromptStatesTable)
+      .set({ visitCount, lastVisitAt: now })
+      .where(eq(feedbackPromptStatesTable.userId, user.id))
+      .returning();
+    state = updatedState ?? state;
+  }
+
+  if (state.submittedAt) {
+    res.json({ shouldShow: false });
+    return;
+  }
+
+  const [uploadedBooks, readingProgress] = await Promise.all([
+    db
+      .select({ id: booksTable.id })
+      .from(booksTable)
+      .where(and(eq(booksTable.ownerUserId, user.id), isNull(booksTable.contentBookId)))
+      .limit(1),
+    db
+      .select({ bookId: readingProgressTable.bookId })
+      .from(readingProgressTable)
+      .where(and(
+        eq(readingProgressTable.userId, user.id),
+        or(
+          eq(readingProgressTable.readingStatus, "reading"),
+          eq(readingProgressTable.readingStatus, "finished"),
+        ),
+      ))
+      .limit(1),
+  ]);
+  const hasExperience = uploadedBooks.length > 0 || readingProgress.length > 0;
+  const isCoolingDown = state.lastShownAt !== null
+    && now.getTime() - state.lastShownAt.getTime() < PROMPT_COOLDOWN_MS;
+  const shouldShow = visitCount >= REQUIRED_VISITS && hasExperience && !isCoolingDown;
+
+  if (shouldShow) {
+    await db
+      .update(feedbackPromptStatesTable)
+      .set({ lastShownAt: now })
+      .where(eq(feedbackPromptStatesTable.userId, user.id));
+  }
+
+  res.json({ shouldShow });
+});
+
+// POST /api/feedback/survey - публичный endpoint опроса оценки сайта.
 router.post("/feedback/survey", async (req, res): Promise<void> => {
   const userId = req.session.userId ?? null;
 
@@ -176,15 +267,26 @@ router.post("/feedback/survey", async (req, res): Promise<void> => {
       ? (validated.missingFeature ?? null)
       : null;
 
-    await db.insert(feedbackResponsesTable).values({
-      userId,
-      sessionId: userId === null && req.sessionID ? req.sessionID.slice(0, 64) : null,
-      rating: validated.rating,
-      painPoints,
-      missingFeature,
-      wantsContact: validated.wantsContact,
-      contactInfo: validated.wantsContact ? (validated.contactInfo ?? null) : null,
-      pageUrl: validated.pageUrl ?? null,
+    await db.transaction(async (tx) => {
+      await tx.insert(feedbackResponsesTable).values({
+        userId,
+        sessionId: userId === null && req.sessionID ? req.sessionID.slice(0, 64) : null,
+        rating: validated.rating,
+        painPoints,
+        missingFeature,
+        wantsContact: validated.wantsContact,
+        contactInfo: validated.wantsContact ? (validated.contactInfo ?? null) : null,
+        pageUrl: validated.pageUrl ?? null,
+      });
+      if (userId !== null) {
+        await tx
+          .insert(feedbackPromptStatesTable)
+          .values({ userId, submittedAt: new Date() })
+          .onConflictDoUpdate({
+            target: feedbackPromptStatesTable.userId,
+            set: { submittedAt: new Date() },
+          });
+      }
     });
 
     res.json({ success: true });

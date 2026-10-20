@@ -1,7 +1,9 @@
 import { createRoot, hydrateRoot } from "react-dom/client";
+import { Router as WouterRouter } from "wouter";
 import App from "./App";
 import { AboutPage } from "@/components/AboutPage";
 import { AppProviders } from "@/components/AppProviders";
+import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { LandingPage } from "@/components/LandingPage";
 import type { LandingData } from "@/landing-data";
 import "./index.css";
@@ -41,18 +43,24 @@ if (landingData) {
   hydrateRoot(
     root,
     <AppProviders>
-      <LandingPage
-        popularBooks={landingData.popularBooks}
-        maintenanceStatus={landingData.maintenanceStatus}
-        registrationStatus={landingData.registrationStatus}
-      />
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <FeedbackPrompt />
+        <LandingPage
+          popularBooks={landingData.popularBooks}
+          maintenanceStatus={landingData.maintenanceStatus}
+          registrationStatus={landingData.registrationStatus}
+        />
+      </WouterRouter>
     </AppProviders>,
   );
 } else if (location.pathname === "/about") {
   hydrateRoot(
     root,
     <AppProviders>
-      <AboutPage />
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <FeedbackPrompt />
+        <AboutPage />
+      </WouterRouter>
     </AppProviders>,
   );
 } else {

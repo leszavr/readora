@@ -163,7 +163,7 @@ export default function AdminFeedback() {
         <div>
           <h2 className="text-lg font-semibold">Отзывы пользователей</h2>
           <p className="text-sm text-muted-foreground">
-            Ответы на exit-intent опрос оценки сайта. Контакты видны только администратору.
+            Ответы на опрос оценки сайта. Контакты видны только администратору.
           </p>
         </div>
         <div className="flex items-center gap-2">

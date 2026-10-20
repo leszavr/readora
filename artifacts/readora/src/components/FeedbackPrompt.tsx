@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { useGetFeedbackSurveyOptions, useSubmitFeedbackSurvey } from "@workspace/api-client-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getGetFeedbackSurveyEligibilityQueryKey,
+  useGetFeedbackSurveyEligibility,
+  useGetFeedbackSurveyOptions,
+  useSubmitFeedbackSurvey,
+} from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,12 +16,6 @@ import { cn } from "@/lib/utils";
 import { FEEDBACK_PROMPT_OPEN_EVENT } from "@/lib/feedback-prompt";
 import { CheckCircle2, Loader2, MessageSquareText, Star, X } from "lucide-react";
 
-const SHOWN_AT_KEY = "readora_feedback_shown_at";
-const SUBMITTED_KEY = "readora_feedback_submitted";
-const MOBILE_TIMER_MS = 45 * 1000;
-const MOBILE_BREAKPOINT = 768;
-const CLOSE_DELAY_MS = 3000;
-
 function isHiddenPath(pathname: string): boolean {
   return (
     pathname === "/admin" ||
@@ -25,25 +25,10 @@ function isHiddenPath(pathname: string): boolean {
   );
 }
 
-function readSubmitted(): boolean {
-  try {
-    return localStorage.getItem(SUBMITTED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function wasAutoShown(): boolean {
-  try {
-    const shownAt = Number(localStorage.getItem(SHOWN_AT_KEY));
-    return Number.isFinite(shownAt) && shownAt > 0;
-  } catch {
-    return true;
-  }
-}
-
 export function FeedbackPrompt() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const [location] = useLocation();
+  const automaticallyOpenedForUserId = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [rating, setRating] = useState(0);
@@ -53,10 +38,15 @@ export function FeedbackPrompt() {
   const [contactInfo, setContactInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [canClose, setCanClose] = useState(false);
-  const [forced, setForced] = useState(false);
 
   const { data: options } = useGetFeedbackSurveyOptions();
+  const { data: eligibility } = useGetFeedbackSurveyEligibility({
+    query: {
+      enabled: isAuthenticated && !isHiddenPath(location),
+      queryKey: [...getGetFeedbackSurveyEligibilityQueryKey(), user?.id ?? null],
+      retry: false,
+    },
+  });
   const submitMutation = useSubmitFeedbackSurvey();
 
   const resetForm = useCallback(() => {
@@ -71,49 +61,16 @@ export function FeedbackPrompt() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isHiddenPath(window.location.pathname)) return;
-    if (readSubmitted() || wasAutoShown()) return;
-
-    let revealed = false;
-    const reveal = () => {
-      if (revealed || isHiddenPath(window.location.pathname)) return;
-      revealed = true;
-      try {
-        localStorage.setItem(SHOWN_AT_KEY, String(Date.now()));
-      } catch {
-        // Игнорируем ошибки приватного режима/квоты.
-      }
-      setOpen(true);
-    };
-
-    const onMouseOut = (event: MouseEvent) => {
-      if (event.clientY <= 0 && !event.relatedTarget) reveal();
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") reveal();
-    };
-
-    const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
-    let timer: number | undefined;
-
-    if (isMobile) {
-      timer = window.setTimeout(reveal, MOBILE_TIMER_MS);
-      document.addEventListener("visibilitychange", onVisibilityChange);
-    } else {
-      document.addEventListener("mouseout", onMouseOut);
-    }
-
-    return () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      document.removeEventListener("mouseout", onMouseOut);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, []);
+    if (!eligibility?.shouldShow || !user || isHiddenPath(location)) return;
+    if (automaticallyOpenedForUserId.current === user.id) return;
+    automaticallyOpenedForUserId.current = user.id;
+    resetForm();
+    setOpen(true);
+  }, [eligibility?.shouldShow, location, resetForm, user]);
 
   useEffect(() => {
     const onRequestOpen = () => {
       resetForm();
-      setForced(true);
       setOpen(true);
     };
     window.addEventListener(FEEDBACK_PROMPT_OPEN_EVENT, onRequestOpen);
@@ -121,28 +78,16 @@ export function FeedbackPrompt() {
   }, [resetForm]);
 
   useEffect(() => {
-    if (!open) return;
-    if (forced) {
-      setCanClose(true);
+    if (!open || isHiddenPath(location)) {
+      if (open) setOpen(false);
       return;
     }
-    setCanClose(false);
-    const timer = window.setTimeout(() => setCanClose(true), CLOSE_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [open, forced]);
-
-  useEffect(() => {
-    if (!open) setForced(false);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !canClose) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, canClose]);
+  }, [location, open]);
 
   const submitSurvey = useCallback(
     async (nextRating: number, points: string[], feature: string, wants: boolean, contact: string) => {
@@ -159,11 +104,6 @@ export function FeedbackPrompt() {
             pageUrl: window.location.pathname,
           },
         });
-        try {
-          localStorage.setItem(SUBMITTED_KEY, "1");
-        } catch {
-          // Игнорируем ошибки приватного режима/квоты.
-        }
         setSubmitted(true);
         window.setTimeout(() => setOpen(false), 4000);
       } catch (submitError) {
@@ -213,10 +153,7 @@ export function FeedbackPrompt() {
   const needsContactField = wantsContact && !isAuthenticated;
 
   const handleClose = () => {
-    if (canClose) {
-      setOpen(false);
-      setForced(false);
-    }
+    setOpen(false);
   };
 
   return (
@@ -254,12 +191,8 @@ export function FeedbackPrompt() {
               type="button"
               variant="ghost"
               size="icon"
-              className={cn(
-                "-mr-1 -mt-1 h-8 w-8 shrink-0 transition-opacity",
-                !canClose && "pointer-events-none opacity-0",
-              )}
+              className="-mr-1 -mt-1 h-8 w-8 shrink-0"
               onClick={handleClose}
-              disabled={!canClose}
               aria-label="Закрыть опрос"
             >
               <X className="h-4 w-4" />
@@ -382,7 +315,7 @@ export function FeedbackPrompt() {
                       variant="outline"
                       className="flex-1"
                       onClick={handleClose}
-                      disabled={submitting || !canClose}
+                      disabled={submitting}
                     >
                       Не сейчас
                     </Button>
@@ -400,11 +333,6 @@ export function FeedbackPrompt() {
 
               {!showForm && error && <p className="text-sm text-destructive">{error}</p>}
 
-              {!showForm && !canClose && (
-                <p className="text-xs text-foreground/60">
-                  Окно можно будет закрыть через пару секунд.
-                </p>
-              )}
             </div>
           )}
         </div>

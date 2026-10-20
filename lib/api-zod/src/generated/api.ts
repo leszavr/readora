@@ -616,7 +616,7 @@ export const GetRegistrationStatusResponse = zod.object({
 
 
 /**
- * @summary Public answer options for the exit-intent feedback survey
+ * @summary Public answer options for the feedback survey
  */
 export const GetFeedbackSurveyOptionsResponse = zod.object({
   "painPoints": zod.array(zod.string()),
@@ -626,7 +626,7 @@ export const GetFeedbackSurveyOptionsResponse = zod.object({
 
 
 /**
- * @summary Submit an exit-intent feedback survey response
+ * @summary Submit a feedback survey response
  */
 export const submitFeedbackSurveyBodyRatingMax = 5;
 
@@ -651,6 +651,14 @@ export const SubmitFeedbackSurveyBody = zod.object({
 
 export const SubmitFeedbackSurveyResponse = zod.object({
   "success": zod.boolean()
+})
+
+
+/**
+ * @summary Check whether the authenticated user should see the feedback survey
+ */
+export const GetFeedbackSurveyEligibilityResponse = zod.object({
+  "shouldShow": zod.boolean()
 })
 
 

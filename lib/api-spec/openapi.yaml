@@ -814,7 +814,7 @@ paths:
     get:
       operationId: getFeedbackSurveyOptions
       tags: [feedback]
-      summary: Public answer options for the exit-intent feedback survey
+      summary: Public answer options for the feedback survey
       responses:
         "200":
           description: OK
@@ -825,7 +825,7 @@ paths:
     post:
       operationId: submitFeedbackSurvey
       tags: [feedback]
-      summary: Submit an exit-intent feedback survey response
+      summary: Submit a feedback survey response
       requestBody:
         required: true
         content:
@@ -841,6 +841,25 @@ paths:
                 $ref: "#/components/schemas/FeedbackSubmitResult"
         "400":
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /feedback/survey/eligibility:
+    get:
+      operationId: getFeedbackSurveyEligibility
+      tags: [feedback]
+      summary: Check whether the authenticated user should see the feedback survey
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackSurveyEligibility"
+        "401":
+          description: Authentication required
           content:
             application/json:
               schema:
@@ -1706,6 +1725,13 @@ components:
       required: [success]
       properties:
         success:
+          type: boolean
+
+    FeedbackSurveyEligibility:
+      type: object
+      required: [shouldShow]
+      properties:
+        shouldShow:
           type: boolean
 
     FeedbackPainPointCount:

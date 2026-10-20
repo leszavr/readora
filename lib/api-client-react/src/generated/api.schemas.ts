@@ -36,6 +36,10 @@ export interface FeedbackSubmitResult {
   success: boolean;
 }
 
+export interface FeedbackSurveyEligibility {
+  shouldShow: boolean;
+}
+
 export interface FeedbackPainPointCount {
   label: string;
   count: number;
