@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Library, Settings, MessageSquare } from "lucide-react";
+import { BookOpen, Library, Settings, MessageSquare, Send } from "lucide-react";
 import { LegalOverlay } from "@/components/LegalOverlay";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
@@ -68,11 +68,22 @@ export function SiteFooter() {
                   </a>
                 </li>
                 <li>
-                  <button onClick={() => setIsFeedbackOpen(true)} className="hover:text-foreground transition-colors flex items-center gap-2 text-left">
-                    <MessageSquare className="w-3 h-3" />
-                    Обратная связь
-                  </button>
-                </li>
+              <button onClick={() => setIsFeedbackOpen(true)} className="hover:text-foreground transition-colors flex items-center gap-2 text-left">
+                <MessageSquare className="w-3 h-3" />
+                Обратная связь
+              </button>
+            </li>
+            <li>
+              <a
+                href="https://t.me/readora_club"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors flex items-center gap-2"
+              >
+                <Send className="w-3 h-3" />
+                Telegram-канал
+              </a>
+            </li>
               </ul>
             </div>
 

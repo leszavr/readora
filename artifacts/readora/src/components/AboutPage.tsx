@@ -1,4 +1,4 @@
-import { BookOpen, CheckCircle2, Library, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { BookOpen, CheckCircle2, Library, LockKeyhole, Mail, Send, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -26,6 +26,23 @@ export const aboutFaqItems = [
   {
     question: "Как удалить учётную запись и книги?",
     answer: "Учётную запись можно удалить в настройках профиля. Вместе с ней удаляются связанные данные, включая адрес электронной почты и загруженные файлы книг.",
+  },
+  {
+    question: "Где следить за новостями и обновлениями сервиса?",
+    answer: (
+      <>
+        Мы публикуем новости, обновления и планы по развитию в Telegram-канале{" "}
+        <a
+          href="https://t.me/readora_club"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          @readora_club
+        </a>
+        .
+      </>
+    ),
   },
   {
     question: "Можно ли запустить Readora на своем сервере?",
@@ -142,6 +159,8 @@ export function AboutPage() {
             <Button size="lg" asChild><a href={isAuthenticated ? "/library" : "/register"}>{isAuthenticated ? "Открыть библиотеку" : "Создать аккаунт"}</a></Button>
             <p className="text-sm text-muted-foreground mt-5">
               Вопросы о сервисе: <a className="text-primary hover:underline" href="mailto:svv@8ls.ru"><Mail className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />svv@8ls.ru</a>
+              {" · "}
+              <a className="text-primary hover:underline" href="https://t.me/readora_club" target="_blank" rel="noopener noreferrer"><Send className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />@readora_club</a>
             </p>
           </section>
         </section>
