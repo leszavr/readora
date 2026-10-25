@@ -286,6 +286,23 @@ class EmailService {
     });
   }
 
+  async sendEmailVerificationReminder(email: string, username: string, token: string, baseUrl: string): Promise<boolean> {
+    const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
+    const verifyUrl = `${normalizedBaseUrl}/verify/${token}`;
+    const html = await this.loadTemplate("email-verification-reminder", {
+      username,
+      verifyUrl,
+      logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
+    });
+
+    return this.sendEmail({
+      to: email,
+      subject: "Напоминание: подтвердите email — Readora",
+      html,
+      text: `Здравствуйте, ${username}!\n\nВы зарегистрировались в Readora, но ещё не подтвердили email. Перейдите по ссылке: ${verifyUrl}\n\nСсылка действительна 10 дней. Если активация не произойдёт, аккаунт будет удалён.\n\nЕсли вы не планируете пользоваться Readora, просто проигнорируйте это письмо.`,
+    });
+  }
+
   async sendPasswordReset(email: string, username: string, token: string, baseUrl: string): Promise<boolean> {
     const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
     const resetUrl = `${normalizedBaseUrl}/reset-password/${token}`;

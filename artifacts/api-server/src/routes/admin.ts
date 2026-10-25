@@ -18,6 +18,7 @@ import {
   analyticsDailyBookActivityTable,
   analyticsDailyUserActivityTable,
   analyticsEventsTable,
+  unverifiedAccountCleanupLogTable,
   readingProgressTable,
   giftEditionsTable,
   feedbackResponsesTable,
@@ -172,7 +173,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
   const inRange = sql`${analyticsDailyUserActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyUserActivityTable.activityDate} <= ${rangeEnd}::date`;
   const bookInRange = sql`${analyticsDailyBookActivityTable.activityDate} >= ${rangeStart}::date and ${analyticsDailyBookActivityTable.activityDate} <= ${rangeEnd}::date`;
 
-  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows, sessionRows, engagementRows, deviceRows, currentDayRows] = await Promise.all([
+  const [summaryRows, trend, bookSummaryRows, totalUserRows, totalBookRows, readingRows, pwaRows, marketingRows, registrationTrend, referralSources, retentionRows, completionRows, sessionRows, engagementRows, deviceRows, currentDayRows, unverifiedCleanupRows] = await Promise.all([
     db
       .select({
         activeUsers: sql<number>`count(distinct ${analyticsDailyUserActivityTable.userId})::int`,
@@ -368,6 +369,14 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
       from ${analyticsEventsTable}
       where ${analyticsEventsTable.eventDay} = ${currentDay}::date
     `),
+    db
+      .select({
+        action: unverifiedAccountCleanupLogTable.action,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(unverifiedAccountCleanupLogTable)
+      .where(sql`${unverifiedAccountCleanupLogTable.createdAt} >= ${rangeStart}::date and ${unverifiedAccountCleanupLogTable.createdAt} < (${rangeEnd}::date + interval '1 day')`)
+      .groupBy(unverifiedAccountCleanupLogTable.action),
   ]);
 
   const summary = summaryRows[0];
@@ -453,6 +462,10 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     syncAttempts: 0,
     syncSuccesses: 0,
   }) as Record<string, number | string>;
+  const unverifiedAccounts = {
+    remindersSent: unverifiedCleanupRows.find((row) => row.action === "reminder_sent")?.count ?? 0,
+    accountsDeleted: unverifiedCleanupRows.find((row) => row.action === "account_deleted")?.count ?? 0,
+  };
   const provisionalCurrentDay = {
     activityDate: currentDay,
     activeUsers: Number(currentDayRaw.activeUsers),
@@ -489,6 +502,7 @@ router.get("/admin/analytics", requireSystemAdmin, async (req, res): Promise<voi
     sessions,
     engagement,
     devices,
+    unverifiedAccounts,
     marketing: {
       registrations: marketing.registrations,
       verifiedUsers: marketing.verifiedUsers,

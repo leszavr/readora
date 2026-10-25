@@ -754,6 +754,11 @@ export interface AdminAnalyticsDevice {
   activeReadingMs: number;
 }
 
+export interface AdminAnalyticsUnverifiedAccounts {
+  remindersSent: number;
+  accountsDeleted: number;
+}
+
 export type AdminAnalyticsFunnelStepStep = typeof AdminAnalyticsFunnelStepStep[keyof typeof AdminAnalyticsFunnelStepStep];
 
 
@@ -838,6 +843,7 @@ export interface AdminAnalytics {
   sessions: AdminAnalyticsSessions;
   engagement: AdminAnalyticsEngagement;
   devices: AdminAnalyticsDevice[];
+  unverifiedAccounts: AdminAnalyticsUnverifiedAccounts;
   marketing: AdminAnalyticsMarketing;
   trend: AdminAnalyticsDailyTrend[];
   provisionalCurrentDay: AdminAnalyticsDailyTrend;

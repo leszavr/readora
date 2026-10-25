@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { getGetAdminAnalyticsQueryKey, getGetAdminAnalyticsUsersQueryKey, useGetAdminAnalytics, useGetAdminAnalyticsUsers } from "@workspace/api-client-react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { Activity, BookCheck, BookCopy, BookOpenCheck, Clock3, Download, MailCheck, RefreshCw, UserCheck, Users } from "lucide-react";
+import { Activity, BookCheck, BookCopy, BookOpenCheck, Clock3, Download, MailCheck, MailWarning, RefreshCw, UserCheck, UserX, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -154,7 +154,7 @@ export default function AdminAnalytics() {
     );
   }
 
-  const { summary, marketing, systemSummary, sessions, engagement, devices } = data;
+  const { summary, marketing, systemSummary, sessions, engagement, devices, unverifiedAccounts } = data;
   const systemCards = [
     { label: "Всего пользователей", value: formatNumber(systemSummary.totalUsers), icon: Users },
     { label: "Всего книг", value: formatNumber(systemSummary.totalBooks), icon: BookCopy },
@@ -263,6 +263,8 @@ export default function AdminAnalytics() {
             { label: "Подтвердили email", value: formatPercent(marketing.emailVerificationRate), description: `${formatNumber(marketing.verifiedUsers)} пользователей`, icon: MailCheck },
             { label: "Первая успешная загрузка", value: formatPercent(marketing.firstSuccessfulUploadRate), description: `${formatNumber(marketing.firstSuccessfulUploads)} пользователей`, icon: UserCheck },
             { label: "Дочитанные книги", value: formatPercent(systemSummary.completedBooksRate), description: `${formatNumber(systemSummary.completedBooks)} из ${formatNumber(systemSummary.totalBooks)}`, icon: BookCheck },
+            { label: "Напоминания об активации", value: formatNumber(unverifiedAccounts.remindersSent), description: `отправлено за ${data.days} дней`, icon: MailWarning },
+            { label: "Удалённые неактивированные", value: formatNumber(unverifiedAccounts.accountsDeleted), description: `аккаунтов за ${data.days} дней`, icon: UserX },
           ].map(({ label, value, description, icon: Icon }) => (
             <Card key={label}>
               <CardContent className="flex items-center gap-3 pb-4 pt-5">
