@@ -2461,7 +2461,7 @@ components:
 
     AdminAnalytics:
       type: object
-      required: [days, rangeStart, rangeEnd, systemSummary, summary, sessions, engagement, devices, marketing, trend, provisionalCurrentDay]
+      required: [days, rangeStart, rangeEnd, systemSummary, summary, sessions, engagement, devices, unverifiedAccounts, marketing, trend, provisionalCurrentDay]
       properties:
         days:
           type: integer
@@ -2484,6 +2484,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminAnalyticsDevice"
+        unverifiedAccounts:
+          $ref: "#/components/schemas/AdminAnalyticsUnverifiedAccounts"
         marketing:
           $ref: "#/components/schemas/AdminAnalyticsMarketing"
         trend:
@@ -2492,6 +2494,15 @@ components:
             $ref: "#/components/schemas/AdminAnalyticsDailyTrend"
         provisionalCurrentDay:
           $ref: "#/components/schemas/AdminAnalyticsDailyTrend"
+
+    AdminAnalyticsUnverifiedAccounts:
+      type: object
+      required: [remindersSent, accountsDeleted]
+      properties:
+        remindersSent:
+          type: integer
+        accountsDeleted:
+          type: integer
 
     AdminAnalyticsEngagement:
       type: object

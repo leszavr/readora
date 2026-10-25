@@ -759,6 +759,10 @@ export const GetAdminAnalyticsResponse = zod.object({
   "readerSessions": zod.number(),
   "activeReadingMs": zod.number()
 })),
+  "unverifiedAccounts": zod.object({
+  "remindersSent": zod.number(),
+  "accountsDeleted": zod.number()
+}),
   "marketing": zod.object({
   "registrations": zod.number(),
   "verifiedUsers": zod.number(),
