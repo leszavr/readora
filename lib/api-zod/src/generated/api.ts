@@ -526,6 +526,44 @@ export const SaveProgressResponse = zod.object({
 
 
 /**
+ * @summary Mark book as read
+ */
+export const CompleteBookParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CompleteBookResponse = zod.object({
+  "bookId": zod.number(),
+  "userId": zod.number(),
+  "currentChapterId": zod.number().nullish(),
+  "currentPosition": zod.string().nullish(),
+  "progressPercent": zod.number().nullish(),
+  "readingStatus": zod.enum(['not_started', 'reading', 'finished']).optional(),
+  "lastReadAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Restart reading a book
+ */
+export const ReopenBookParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReopenBookResponse = zod.object({
+  "bookId": zod.number(),
+  "userId": zod.number(),
+  "currentChapterId": zod.number().nullish(),
+  "currentPosition": zod.string().nullish(),
+  "progressPercent": zod.number().nullish(),
+  "readingStatus": zod.enum(['not_started', 'reading', 'finished']).optional(),
+  "lastReadAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
  * @summary Get reader settings
  */
 export const GetReaderSettingsResponse = zod.object({

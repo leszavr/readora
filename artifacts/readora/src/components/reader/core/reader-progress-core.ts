@@ -10,6 +10,7 @@ import {
   type LegacyReadingPosition,
   serializeSemanticPosition,
   parseReadingPosition,
+  isReaderScrollAtEnd,
 } from "./reader-text-anchor";
 
 // Re-export типы для обратной совместимости
@@ -164,19 +165,18 @@ export function calculateReadingProgress(
 ): number {
   const safeTotalChapters = Math.max(1, totalChapters);
   const maxScrollable = Math.max(1, scrollHeight - clientHeight);
-  const scrollProgress = Math.min(100, Math.round((scrollTop / maxScrollable) * 100));
+  const atChapterEnd = isReaderScrollAtEnd(scrollTop, scrollHeight, clientHeight);
+  const scrollProgress = atChapterEnd
+    ? 100
+    : Math.min(100, Math.round((scrollTop / maxScrollable) * 100));
 
   let totalProgress = Math.round(
     (chapterIndex / safeTotalChapters + scrollProgress / 100 / safeTotalChapters) * 100
   );
 
-  if (chapterIndex === safeTotalChapters - 1) {
-    // scrollHeight=0 означает что DOM ещё не отрисован — в этом случае нельзя считать прогресс 100%
-    const fitsWithoutScroll = scrollHeight > 0 && scrollHeight <= clientHeight + 1;
-    if (fitsWithoutScroll || scrollProgress >= 98) {
-      totalProgress = 100;
-    }
-  }
+  // Не позволяем округлению выдать 100% до конца последней главы.
+  totalProgress =
+    chapterIndex === safeTotalChapters - 1 && atChapterEnd ? 100 : Math.min(99, totalProgress);
 
   return Math.max(0, Math.min(100, totalProgress));
 }
@@ -225,11 +225,19 @@ export function createSemanticProgressPayload(
 ): ReaderProgressPayload {
   const { chapterId, chapterIndex, totalChapters, semanticPosition, progressOverride } = input;
 
-  // Используем процент из семантической позиции или вычисляем
+  // chapterPercent — прогресс внутри главы, а прогресс книги считается по
+  // номеру главы. Раньше сюда попадал процент главы, из-за чего шкала книги
+  // прыгала на десятки процентов внутри одной главы.
+  const safeTotalChapters = Math.max(1, totalChapters);
+  const chapterPercent = Math.max(0, Math.min(100, semanticPosition.chapterPercent));
+  const isLastChapter = chapterIndex === safeTotalChapters - 1;
+  const rawProgress = Math.round(((chapterIndex + chapterPercent / 100) / safeTotalChapters) * 100);
+  const computedPercent = isLastChapter && chapterPercent >= 100 ? 100 : Math.min(99, rawProgress);
+
   const progressPercent =
     typeof progressOverride === "number"
       ? Math.max(0, Math.min(100, progressOverride))
-      : Math.max(0, Math.min(100, semanticPosition.chapterPercent));
+      : Math.max(0, Math.min(100, computedPercent));
 
   return {
     currentChapterId: chapterId,

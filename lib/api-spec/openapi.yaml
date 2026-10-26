@@ -699,6 +699,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReadingProgress"
 
+  /books/{id}/complete:
+    post:
+      operationId: completeBook
+      tags: [reader]
+      summary: Mark book as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingProgress"
+
+  /books/{id}/reopen:
+    post:
+      operationId: reopenBook
+      tags: [reader]
+      summary: Restart reading a book
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingProgress"
+
   /reader/settings:
     get:
       operationId: getReaderSettings

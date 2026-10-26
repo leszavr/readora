@@ -2253,6 +2253,146 @@ export const useSaveProgress = <TError = ErrorType<unknown>,
       return useMutation(getSaveProgressMutationOptions(options));
     }
 
+export const getCompleteBookUrl = (id: number,) => {
+
+
+
+
+  return `/api/books/${id}/complete`
+}
+
+/**
+ * @summary Mark book as read
+ */
+export const completeBook = async (id: number, options?: RequestInit): Promise<ReadingProgress> => {
+
+  return customFetch<ReadingProgress>(getCompleteBookUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCompleteBookMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeBook>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeBook>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['completeBook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeBook>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  completeBook(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteBookMutationResult = NonNullable<Awaited<ReturnType<typeof completeBook>>>
+
+    export type CompleteBookMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark book as read
+ */
+export const useCompleteBook = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeBook>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeBook>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCompleteBookMutationOptions(options));
+    }
+
+export const getReopenBookUrl = (id: number,) => {
+
+
+
+
+  return `/api/books/${id}/reopen`
+}
+
+/**
+ * @summary Restart reading a book
+ */
+export const reopenBook = async (id: number, options?: RequestInit): Promise<ReadingProgress> => {
+
+  return customFetch<ReadingProgress>(getReopenBookUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getReopenBookMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenBook>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reopenBook>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['reopenBook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reopenBook>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  reopenBook(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReopenBookMutationResult = NonNullable<Awaited<ReturnType<typeof reopenBook>>>
+
+    export type ReopenBookMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Restart reading a book
+ */
+export const useReopenBook = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenBook>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reopenBook>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getReopenBookMutationOptions(options));
+    }
+
 export const getGetReaderSettingsUrl = () => {
 
 

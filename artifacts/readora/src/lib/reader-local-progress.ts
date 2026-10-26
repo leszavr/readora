@@ -112,6 +112,17 @@ export function saveReaderProgressToStorage(
   }
 }
 
+export function clearReaderProgressFromStorage(scope: ReaderProgressScope): void {
+  const storage = getProgressStorage();
+  if (!storage) return;
+
+  try {
+    storage.removeItem(getReaderProgressStorageKey(scope));
+  } catch {
+    // Ignore privacy mode failures.
+  }
+}
+
 export function getFreshestReaderProgress(
   remoteProgress: ReaderProgressSnapshot | null | undefined,
   localProgress: ReaderProgressSnapshot | null | undefined

@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, chaptersTable, readingProgressTable, readerSettingsTable, booksTable, readEventsTable, bookmarksTable, notesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import type { Request } from "express";
 import type { usersTable } from "@workspace/db";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { getContentBookId } from "../lib/gift-editions-service";
+import { resolveProgressUpdate } from "../lib/reading-progress";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
@@ -164,46 +165,87 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
   };
 
   const [previous] = await db
-    .select({ readingStatus: readingProgressTable.readingStatus })
+    .select({
+      readingStatus: readingProgressTable.readingStatus,
+      progressPercent: readingProgressTable.progressPercent,
+      completedAt: readingProgressTable.completedAt,
+    })
     .from(readingProgressTable)
     .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
 
+  // Прочитанная книга не должна снова становиться «читаемой» при повторном
+  // открытии: иначе она пропадает с книжной полки, а completedAt обнуляется.
+  const resolved = resolveProgressUpdate(
+    previous
+      ? {
+          readingStatus: previous.readingStatus,
+          progressPercent: previous.progressPercent,
+          completedAt: previous.completedAt,
+        }
+      : null,
+    { progressPercent: normalizedProgressPercent, readingStatus: normalizedReadingStatus },
+  );
+  const finalReadingStatus = resolved.readingStatus;
+  const finalProgressPercent = resolved.progressPercent;
+  const finalCompletedAt = resolved.completedAt;
+
   await db
     .insert(readingProgressTable)
-    .values(values)
+    .values({
+      ...values,
+      progressPercent: finalProgressPercent,
+      readingStatus: finalReadingStatus,
+      completedAt: finalCompletedAt,
+    })
     .onConflictDoUpdate({
       target: [readingProgressTable.userId, readingProgressTable.bookId],
       set: {
         currentChapterId: values.currentChapterId,
         currentPosition: values.currentPosition,
-        progressPercent: values.progressPercent,
-        readingStatus: values.readingStatus,
+        progressPercent: sql`CASE
+          WHEN ${readingProgressTable.readingStatus} = 'finished'::reading_status
+            AND ${finalReadingStatus} <> 'finished'
+          THEN GREATEST(COALESCE(${readingProgressTable.progressPercent}, 0), COALESCE(${finalProgressPercent}, 0))
+          ELSE ${finalProgressPercent}
+        END`,
+        readingStatus: sql`CASE
+          WHEN ${readingProgressTable.readingStatus} = 'finished'::reading_status
+            AND ${finalReadingStatus} <> 'finished'
+          THEN 'finished'::reading_status
+          ELSE ${finalReadingStatus}::reading_status
+        END`,
         lastReadAt: values.lastReadAt,
-        completedAt: values.completedAt,
+        completedAt: sql`CASE
+          WHEN ${readingProgressTable.readingStatus} = 'finished'::reading_status
+            AND ${finalReadingStatus} <> 'finished'
+          THEN COALESCE(${readingProgressTable.completedAt}, ${finalCompletedAt})
+          ELSE ${finalCompletedAt}
+        END`,
       },
     });
   await db.insert(readEventsTable).values({ bookId, userId: user.id, eventType: "progress_saved" }).catch(() => {});
-
-  const previousStatus = previous?.readingStatus ?? "not_started";
-  if (previousStatus !== normalizedReadingStatus) {
-    await recordServerAnalyticsEvent(user, {
-      bookId,
-      eventName: "book_status_changed",
-      properties: { from: previousStatus, to: normalizedReadingStatus },
-    });
-    if (normalizedReadingStatus === "finished") {
-      await recordServerAnalyticsEvent(user, {
-        bookId,
-        eventName: "book_completed",
-        properties: { completionMode: normalizedProgressPercent !== null && normalizedProgressPercent >= 99 ? "auto_progress" : "manual_status" },
-      });
-    }
-  }
 
   const [saved] = await db
     .select()
     .from(readingProgressTable)
     .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
+
+  const previousStatus = previous?.readingStatus ?? "not_started";
+  const savedStatus = saved?.readingStatus ?? "not_started";
+  if (previousStatus !== savedStatus) {
+    await recordServerAnalyticsEvent(user, {
+      bookId,
+      eventName: "book_status_changed",
+      properties: { from: previousStatus, to: savedStatus },
+    });
+    if (savedStatus === "finished") {
+      await recordServerAnalyticsEvent(user, {
+        bookId,
+        eventName: "book_completed",
+        properties: { completionMode: normalizedProgressPercent === 100 ? "auto_progress" : "manual_status" },
+      });
+    }
+  }
 
   req.log.info(
     {
@@ -215,6 +257,149 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
     },
     "[Reader] PUT progress - saved"
   );
+
+  res.json({
+    bookId,
+    userId: user.id,
+    currentChapterId: saved?.currentChapterId ?? null,
+    currentPosition: saved?.currentPosition ?? null,
+    progressPercent: saved?.progressPercent ?? null,
+    readingStatus: saved?.readingStatus ?? "not_started",
+    lastReadAt: saved?.lastReadAt ?? null,
+    completedAt: saved?.completedAt ?? null,
+  });
+});
+
+// POST /books/:id/complete — отметить книгу прочитанной вручную
+router.post("/books/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  const bookId = parseInt(String(req.params.id), 10);
+
+  const [book] = await db
+    .select({ id: booksTable.id })
+    .from(booksTable)
+    .where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  if (!book) {
+    res.status(404).json({ error: "Книга не найдена" });
+    return;
+  }
+
+  const [previous] = await db
+    .select()
+    .from(readingProgressTable)
+    .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
+
+  const now = new Date();
+  const completedAt = previous?.completedAt ?? now;
+
+  await db
+    .insert(readingProgressTable)
+    .values({
+      userId: user.id,
+      bookId,
+      currentChapterId: previous?.currentChapterId ?? null,
+      currentPosition: previous?.currentPosition ?? null,
+      progressPercent: 100,
+      readingStatus: "finished",
+      lastReadAt: now,
+      completedAt,
+    })
+    .onConflictDoUpdate({
+      target: [readingProgressTable.userId, readingProgressTable.bookId],
+      set: {
+        progressPercent: 100,
+        readingStatus: "finished",
+        lastReadAt: now,
+        completedAt,
+      },
+    });
+
+  if (previous?.readingStatus !== "finished") {
+    await recordServerAnalyticsEvent(user, {
+      bookId,
+      eventName: "book_status_changed",
+      properties: { from: previous?.readingStatus ?? "not_started", to: "finished" },
+    });
+    await recordServerAnalyticsEvent(user, {
+      bookId,
+      eventName: "book_completed",
+      properties: { completionMode: "manual_status" },
+    });
+  }
+
+  const [saved] = await db
+    .select()
+    .from(readingProgressTable)
+    .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
+
+  res.json({
+    bookId,
+    userId: user.id,
+    currentChapterId: saved?.currentChapterId ?? null,
+    currentPosition: saved?.currentPosition ?? null,
+    progressPercent: saved?.progressPercent ?? null,
+    readingStatus: saved?.readingStatus ?? "not_started",
+    lastReadAt: saved?.lastReadAt ?? null,
+    completedAt: saved?.completedAt ?? null,
+  });
+});
+
+// POST /books/:id/reopen — начать повторное чтение с начала
+router.post("/books/:id/reopen", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  const bookId = parseInt(String(req.params.id), 10);
+
+  const [book] = await db
+    .select({ id: booksTable.id })
+    .from(booksTable)
+    .where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
+  if (!book) {
+    res.status(404).json({ error: "Книга не найдена" });
+    return;
+  }
+
+  const [previous] = await db
+    .select({ readingStatus: readingProgressTable.readingStatus })
+    .from(readingProgressTable)
+    .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
+
+  const now = new Date();
+  await db
+    .insert(readingProgressTable)
+    .values({
+      userId: user.id,
+      bookId,
+      currentChapterId: null,
+      currentPosition: null,
+      progressPercent: 0,
+      readingStatus: "reading",
+      lastReadAt: now,
+      completedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: [readingProgressTable.userId, readingProgressTable.bookId],
+      set: {
+        currentChapterId: null,
+        currentPosition: null,
+        progressPercent: 0,
+        readingStatus: "reading",
+        lastReadAt: now,
+        completedAt: null,
+      },
+    });
+
+  if (previous?.readingStatus !== "reading") {
+    await recordServerAnalyticsEvent(user, {
+      bookId,
+      eventName: "book_status_changed",
+      properties: { from: previous?.readingStatus ?? "not_started", to: "reading" },
+    });
+  }
+
+  const [saved] = await db
+    .select()
+    .from(readingProgressTable)
+    .where(and(eq(readingProgressTable.userId, user.id), eq(readingProgressTable.bookId, bookId)));
 
   res.json({
     bookId,

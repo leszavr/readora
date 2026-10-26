@@ -11,6 +11,7 @@ const MAX_EPUB_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
 const MAX_EPUB_TEXT_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_FB2_XML_BYTES = 50 * 1024 * 1024;
 const MAX_FB2_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_EPUB_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_BOOK_CHAPTERS = 1500;
 const SAFE_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const STRUCTURAL_FB2_SECTION_TITLES = new Set(["пролог", "эпилог"]);
@@ -114,8 +115,17 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   parseStyleAttributes: false,
 };
 
+// cheerio в xmlMode не знает HTML-сущности (`&nbsp;`, `&laquo;` ...) и отдаёт их
+// как текст с экранированным амперсандом (`&amp;nbsp;`), из-за чего в читалке
+// виден сам код сущности. Возвращаем entity-вид, чтобы sanitize-html их декодировал.
+const XML_UNSAFE_NAMED_ENTITY = /&amp;(?!amp;|lt;|gt;|quot;|apos;)([a-zA-Z][a-zA-Z0-9]{1,31};)/g;
+
+function normalizeHtmlEntities(html: string): string {
+  return html.replace(XML_UNSAFE_NAMED_ENTITY, "&$1");
+}
+
 function sanitize(html: string): string {
-  const clean = sanitizeHtml(html, SANITIZE_OPTIONS);
+  const clean = sanitizeHtml(normalizeHtmlEntities(html), SANITIZE_OPTIONS);
   const $ = cheerio.load(clean);
 
   $("img").each((_, image) => {
@@ -910,94 +920,347 @@ function buildFb2BinaryMap($: CheerioAPI): Map<string, string> {
 
 // ─── EPUB Parser ──────────────────────────────────────────────────────────────
 
+type XmlTag = {
+  name?: string;
+  tagName?: string;
+  attribs?: Record<string, string | undefined>;
+};
+
+const EPUB_IMAGE_MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+function xmlLocalName(node: XmlTag): string {
+  return (node.name ?? node.tagName ?? "").split(":").pop()?.toLowerCase() ?? "";
+}
+
+// OPF/NCX часто используют пространства имён (`opf:item`, `opf:spine`), поэтому
+// ищем элементы по локальному имени, а не по CSS-селектору с префиксом.
+function elementsByLocalName(root: cheerio.Cheerio<any>, name: string) {
+  const target = name.toLowerCase();
+  return root.find("*").filter((_, el) => xmlLocalName(el as unknown as XmlTag) === target);
+}
+
+function attrsOf(node: unknown): Record<string, string | undefined> {
+  return (node as XmlTag | undefined)?.attribs ?? {};
+}
+
+function firstAttr(node: unknown, ...names: string[]): string | undefined {
+  const attrs = attrsOf(node);
+  for (const name of names) {
+    const value = attrs[name];
+    if (value != null) return value;
+  }
+  return undefined;
+}
+
+function firstTextByLocalName(root: cheerio.Cheerio<any>, name: string): string {
+  const el = elementsByLocalName(root, name).first();
+  return el.length ? el.text().trim() : "";
+}
+
+interface EpubManifestItem {
+  id: string;
+  href: string;
+  mediaType: string;
+  properties: string;
+}
+
+interface EpubTocEntry {
+  title: string;
+  anchor: string | null;
+}
+
+function hasReadableEpubContent(html: string): boolean {
+  if (/<img\b/i.test(html)) return true;
+  return cheerio.load(html).text().trim().length > 0;
+}
+
+function serializeEpubSlice($doc: CheerioAPI, nodes: unknown[]): string {
+  if (nodes.length === 0) return "";
+  const holder = $doc("<div></div>");
+  holder.append(nodes as never);
+  return holder.html() ?? "";
+}
+
+// Относительные ссылки на изображения (`images/1.jpg`) в ридере не работают:
+// HTML отдаётся как есть, без доступа к файлам EPUB. Встраиваем их как data URI.
+function inlineEpubImages(
+  html: string,
+  docDir: string,
+  zip: AdmZip,
+  entries: AdmZip.IZipEntry[],
+): string {
+  if (!/<img\b/i.test(html)) return html;
+
+  const $doc = cheerio.load(html, { xmlMode: false });
+  let changed = false;
+
+  $doc("img").each((_, el) => {
+    const src = ($doc(el).attr("src") ?? "").trim();
+    if (!src || /^data:/i.test(src)) return;
+
+    // Внешние картинки не встраиваем: CDN источников часто недоступны, а
+    // загрузка с чужого хоста раскрывает третьей стороне факт чтения книги.
+    if (/^(?:https?:)?\/\//i.test(src)) {
+      $doc(el).remove();
+      changed = true;
+      return;
+    }
+
+    const rawSrc = src.split("#")[0] ?? "";
+    let decodedSrc = rawSrc;
+    try {
+      decodedSrc = decodeURIComponent(rawSrc);
+    } catch {
+      decodedSrc = rawSrc;
+    }
+
+    const resolved = path.posix.normalize(path.posix.join(docDir, decodedSrc));
+    const mime = EPUB_IMAGE_MIME_BY_EXT[path.posix.extname(resolved).toLowerCase()];
+    const entry = isUnsafeZipPath(resolved) ? undefined : entries.find((e) => e.entryName === resolved);
+    const data = entry && mime && entry.header.size <= MAX_EPUB_EMBEDDED_IMAGE_BYTES ? zip.readFile(entry) : null;
+
+    if (!data || !mime) {
+      $doc(el).remove();
+      changed = true;
+      return;
+    }
+
+    $doc(el).attr("src", `data:${mime};base64,${data.toString("base64")}`);
+    changed = true;
+  });
+
+  if (!changed) return html;
+  return $doc("body").html() ?? $doc.root().html() ?? html;
+}
+
+// Некоторые EPUB (например, экспорт Google Docs) содержат всю книгу одним
+// XHTML-файлом, а главы размечены только якорями в TOC. Режем документ по
+// якорям на отдельные главы.
+function splitEpubHtmlByToc(
+  htmlText: string,
+  tocEntries: EpubTocEntry[],
+): Array<{ title: string; html: string }> | null {
+  if (tocEntries.filter((entry) => entry.anchor).length < 2) return null;
+
+  const $doc = cheerio.load(htmlText, { xmlMode: true });
+  $doc("script, style, header, footer, form, iframe, link, meta, button, input, textarea, select, [epub\\:type='pagebreak']").remove();
+
+  const body = $doc("body").first();
+  if (!body.length) return null;
+
+  const bodyEl = body.get(0);
+  const children = body.children().toArray();
+  if (children.length === 0) return null;
+
+  const cuts = new Map<number, string>();
+  for (const entry of tocEntries) {
+    if (!entry.anchor) continue;
+    const selector = `[id="${entry.anchor.replace(/["\\]/g, "\\$&")}"]`;
+    const target = $doc(selector).first();
+    if (!target.length) continue;
+
+    let node: any = target.get(0);
+    while (node && node.parent && node.parent !== bodyEl) node = node.parent;
+    if (!node || node.parent !== bodyEl) continue;
+
+    const index = children.indexOf(node);
+    if (index < 0 || cuts.has(index)) continue;
+    cuts.set(index, entry.title);
+  }
+
+  if (cuts.size < 2) return null;
+
+  const starts = [...cuts.keys()].sort((a, b) => a - b);
+  const result: Array<{ title: string; html: string }> = [];
+
+  for (let i = 0; i < starts.length; i += 1) {
+    // Контент до первого якоря (титульная страница, обложка) присоединяем к
+    // первой главе, чтобы не создавать дубль с тем же названием.
+    const start = i === 0 ? 0 : starts[i];
+    const end = starts[i + 1] ?? children.length;
+    const html = serializeEpubSlice($doc, children.slice(start, end));
+    if (!hasReadableEpubContent(html)) continue;
+    result.push({ title: cuts.get(starts[i]) ?? `Глава ${result.length + 1}`, html });
+  }
+
+  return result.length >= 2 ? result : null;
+}
+
 export function parseEPUB(buffer: Buffer): ParsedBook {
   validateBookFile(buffer, "epub");
   const zip = new AdmZip(buffer);
   const entries = zip.getEntries();
 
-  // Find container.xml -> content.opf path
+  const findEntry = (entryPath: string, href: string) => {
+    const exact = entries.find((e) => e.entryName === entryPath);
+    if (exact) return exact;
+    const basename = href.split("/").pop() ?? "";
+    return basename ? entries.find((e) => e.entryName.endsWith(basename)) : undefined;
+  };
+
+  // container.xml -> content.opf
   const containerXml = zip.readAsText("META-INF/container.xml");
   let opfPath = "content.opf";
   if (containerXml) {
     const m = containerXml.match(/full-path="([^"]+\.opf)"/);
     if (m) opfPath = m[1];
   }
-
-  const opfEntry = entries.find((e) => e.entryName === opfPath || e.entryName.endsWith(".opf"));
-  const opfText = opfEntry ? zip.readAsText(opfEntry.entryName) : "";
+  const opfEntry = entries.find((e) => e.entryName === opfPath) ?? entries.find((e) => e.entryName.endsWith(".opf"));
+  const opfText = opfEntry ? zip.readAsText(opfEntry) : "";
+  const opfDir =
+    opfEntry && opfEntry.entryName.includes("/")
+      ? opfEntry.entryName.substring(0, opfEntry.entryName.lastIndexOf("/") + 1)
+      : "";
   const $ = cheerio.load(opfText, { xmlMode: true });
 
-  const title = $("dc\\:title, title").first().text().trim() || "Без названия";
-  const authorFull = $("dc\\:creator, creator").first().text().trim() || null;
-  const description = $("dc\\:description, description").first().text().trim() || null;
-  const language = $("dc\\:language, language").first().text().trim() || null;
-  const genres = $("dc\\:subject, subject").map((_, el) => $(el).text().trim()).get().filter(Boolean);
-  const dateRaw = $("dc\\:date, date").first().text().trim();
-  const m = dateRaw.match(/\d{4}/);
-  const publicationYear = m ? parseInt(m[0], 10) : null;
+  const resolveEpubPath = (baseDir: string, href: string): string => {
+    const hrefWithoutAnchor = href.split("#")[0] ?? "";
+    let decodedHref = hrefWithoutAnchor;
+    try {
+      decodedHref = decodeURIComponent(hrefWithoutAnchor);
+    } catch {
+      decodedHref = hrefWithoutAnchor;
+    }
+    return path.posix.normalize(path.posix.join(baseDir, decodedHref));
+  };
 
-  // Cover image
+  const dirOf = (filePath: string): string => {
+    const dir = path.posix.dirname(filePath);
+    return dir === "." ? "" : `${dir}/`;
+  };
+
+  // Metadata
+  const title = firstTextByLocalName($.root(), "title") || "Без названия";
+  const authorFull = firstTextByLocalName($.root(), "creator") || null;
+  const description = firstTextByLocalName($.root(), "description") || null;
+  const language = firstTextByLocalName($.root(), "language") || null;
+  const genres = elementsByLocalName($.root(), "subject")
+    .toArray()
+    .map((el) => $(el).text().trim())
+    .filter(Boolean);
+  const dateRaw = firstTextByLocalName($.root(), "date");
+  const yearMatch = dateRaw.match(/\d{4}/);
+  const publicationYear = yearMatch ? parseInt(yearMatch[0], 10) : null;
+
+  // В некоторых EPUB заголовки в TOC содержат служебные префиксы вида
+  // "8 Название книги Глава 8. ...". Убираем их для читаемого оглавления.
+  const normalizeChapterTitle = (raw: string): string => {
+    let value = raw.trim();
+    if (!value) return value;
+    if (title && title !== "Без названия") {
+      const index = value.toLowerCase().indexOf(title.toLowerCase());
+      if (index >= 0 && index + title.length < value.length) {
+        const rest = value.slice(index + title.length).trim();
+        if (rest) value = rest;
+      }
+    }
+    value = value.replace(/^\d+[.)]?\s+(?=глава\b)/i, "").trim();
+    return value || raw.trim();
+  };
+
+  // Manifest
+  const manifest = new Map<string, EpubManifestItem>();
+  for (const el of elementsByLocalName($.root(), "item").toArray()) {
+    const id = firstAttr(el, "id");
+    const href = firstAttr(el, "href");
+    if (!id || !href) continue;
+    manifest.set(id, {
+      id,
+      href,
+      mediaType: (firstAttr(el, "media-type", "media_type") ?? "").toLowerCase(),
+      properties: firstAttr(el, "properties") ?? "",
+    });
+  }
+  const manifestItems = [...manifest.values()];
+
+  // Cover
   let coverBase64: string | null = null;
   let coverMime: string | null = null;
-  const coverId = $("meta[name='cover']").attr("content");
-  const coverItem = coverId
-    ? $(`item[id="${coverId}"]`)
-    : $("item[media-type^='image']").first();
-  if (coverItem.length) {
-    const coverHref = coverItem.attr("href");
-    if (coverHref) {
-      const opfDir = opfPath.includes("/") ? opfPath.substring(0, opfPath.lastIndexOf("/") + 1) : "";
-      const coverPath = opfDir + coverHref;
-      const coverEntry = entries.find((e) => e.entryName === coverPath || e.entryName.endsWith(coverHref));
-      if (coverEntry) {
-        coverBase64 = zip.readFile(coverEntry)?.toString("base64") ?? null;
-        coverMime = coverItem.attr("media-type") ?? "image/jpeg";
+  const coverMeta = elementsByLocalName($.root(), "meta")
+    .toArray()
+    .find((el) => firstAttr(el, "name") === "cover");
+  const coverId = coverMeta ? firstAttr(coverMeta, "content") : undefined;
+  const coverItem =
+    (coverId ? manifest.get(coverId) : undefined) ??
+    manifestItems.find((item) => /\bcover-image\b/.test(item.properties)) ??
+    manifestItems.find((item) => item.mediaType.startsWith("image/"));
+  if (coverItem) {
+    const coverPath = resolveEpubPath(opfDir, coverItem.href);
+    const coverEntry = findEntry(coverPath, coverItem.href);
+    if (coverEntry) {
+      coverBase64 = zip.readFile(coverEntry)?.toString("base64") ?? null;
+      coverMime =
+        coverItem.mediaType ||
+        EPUB_IMAGE_MIME_BY_EXT[path.posix.extname(coverPath).toLowerCase()] ||
+        "image/jpeg";
+    }
+  }
+
+  // Spine order
+  const spineIds = elementsByLocalName($.root(), "itemref")
+    .toArray()
+    .map((el) => firstAttr(el, "idref") ?? "")
+    .filter(Boolean);
+  const spineEl = elementsByLocalName($.root(), "spine").first();
+  const ncxId = spineEl.length ? firstAttr(spineEl.get(0), "toc") : undefined;
+
+  // TOC: NCX и EPUB3 nav, с привязкой якорей к файлам
+  const tocByFile = new Map<string, EpubTocEntry[]>();
+  const addTocEntry = (filePath: string, tocTitle: string, anchor: string | null) => {
+    if (!filePath) return;
+    const normalizedTitle = normalizeChapterTitle(tocTitle);
+    const list = tocByFile.get(filePath) ?? [];
+    if (!list.some((entry) => entry.anchor === anchor && entry.title === normalizedTitle)) {
+      list.push({ title: normalizedTitle, anchor });
+      tocByFile.set(filePath, list);
+    }
+  };
+
+  const ncxItem =
+    (ncxId ? manifest.get(ncxId) : undefined) ??
+    manifestItems.find((item) => item.mediaType === "application/x-dtbncx+xml");
+  if (ncxItem) {
+    const ncxPath = resolveEpubPath(opfDir, ncxItem.href);
+    const ncxEntry = findEntry(ncxPath, ncxItem.href);
+    if (ncxEntry) {
+      const $ncx = cheerio.load(zip.readAsText(ncxEntry), { xmlMode: true });
+      const ncxDir = dirOf(ncxPath);
+      for (const navPoint of elementsByLocalName($ncx.root(), "navPoint").toArray()) {
+        const scope = $ncx(navPoint);
+        const label =
+          elementsByLocalName(scope, "text").first().text().trim() ||
+          elementsByLocalName(scope, "navLabel").first().text().trim();
+        const src = firstAttr(elementsByLocalName(scope, "content").first().get(0), "src") ?? "";
+        if (!label || !src) continue;
+        const [rawPath, anchor] = src.split("#");
+        addTocEntry(resolveEpubPath(ncxDir, rawPath ?? ""), label, anchor || null);
       }
     }
   }
 
-  const opfDir = opfPath.includes("/") ? opfPath.substring(0, opfPath.lastIndexOf("/") + 1) : "";
-
-  const resolveEpubPath = (baseDir: string, href: string): string => {
-    const hrefWithoutAnchor = href.split("#")[0] ?? "";
-    const decodedHref = decodeURIComponent(hrefWithoutAnchor);
-    return path.posix.normalize(path.posix.join(baseDir, decodedHref));
-  };
-
-  const manifest = new Map<string, { href: string; mediaType: string; properties: string }>();
-  $("manifest item").each((_, el) => {
-    const id = $(el).attr("id");
-    const href = $(el).attr("href");
-    if (!id || !href) return;
-    manifest.set(id, {
-      href,
-      mediaType: $(el).attr("media-type") ?? "",
-      properties: $(el).attr("properties") ?? "",
-    });
-  });
-
-  // Spine order
-  const spineIds: string[] = [];
-  $("spine itemref").each((_, el) => {
-    spineIds.push($(el).attr("idref") ?? "");
-  });
-
-  // NCX / nav for ToC titles
-  const ncxId = $("spine").attr("toc");
-  const ncxItem = ncxId ? $(`item[id="${ncxId}"]`) : $("item[media-type='application/x-dtbncx+xml']").first();
-  const ncxHref = ncxItem.attr("href");
-  const ncxTitles: Map<string, string> = new Map();
-  if (ncxHref) {
-    const ncxPath = resolveEpubPath(opfDir, ncxHref);
-    const ncxEntry = entries.find((e) => e.entryName === ncxPath || e.entryName.endsWith(ncxHref));
-    if (ncxEntry) {
-      const ncxText = zip.readAsText(ncxEntry);
-      const $ncx = cheerio.load(ncxText, { xmlMode: true });
-      $ncx("navPoint").each((_, np) => {
-        const label = $ncx(np).find("navLabel text").first().text().trim();
-        const src = $ncx(np).find("content").attr("src") ?? "";
-        const filePath = resolveEpubPath(opfDir, src);
-        if (filePath && label) ncxTitles.set(filePath, label);
+  const navItem = manifestItems.find((item) => /\bnav\b/.test(item.properties));
+  if (navItem) {
+    const navPath = resolveEpubPath(opfDir, navItem.href);
+    const navEntry = findEntry(navPath, navItem.href);
+    if (navEntry) {
+      const $nav = cheerio.load(zip.readAsText(navEntry), { xmlMode: true });
+      const navDir = dirOf(navPath);
+      const navs = elementsByLocalName($nav.root(), "nav").toArray();
+      const tocNav =
+        navs.find((el) => (firstAttr(el, "epub:type", "type") ?? "").toLowerCase() === "toc") ?? navs[0];
+      const scope: cheerio.Cheerio<any> = tocNav ? $nav(tocNav) : $nav.root();
+      scope.find("a[href]").each((_, link) => {
+        const href = $nav(link).attr("href") ?? "";
+        const label = $nav(link).text().trim();
+        if (!href || !label) return;
+        const [rawPath, anchor] = href.split("#");
+        addTocEntry(resolveEpubPath(navDir, rawPath ?? ""), label, anchor || null);
       });
     }
   }
@@ -1015,19 +1278,40 @@ export function parseEPUB(buffer: Buffer): ParsedBook {
     if (/\b(nav|toc|cover|titlepage|frontmatter)\b/i.test(item.properties)) continue;
 
     const entryPath = resolveEpubPath(opfDir, href);
-    const entry = entries.find((e) => e.entryName === entryPath || e.entryName.endsWith(href.split("/").pop() ?? ""));
+    const entry = findEntry(entryPath, href);
     if (!entry) continue;
 
     const htmlText = zip.readAsText(entry);
+    const docDir = dirOf(entryPath);
+
+    const split = splitEpubHtmlByToc(htmlText, tocByFile.get(entryPath) ?? []);
+    if (split) {
+      for (const part of split) {
+        const clean = sanitize(inlineEpubImages(part.html, docDir, zip, entries));
+        const text = cheerio.load(clean).text();
+        if (!text.trim() && !/<img\b/i.test(clean)) continue;
+        chapters.push({
+          index: chapterIndex++,
+          title: part.title,
+          htmlContent: clean,
+          wordCount: countWords(text),
+        });
+        if (chapters.length > MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
+      }
+      continue;
+    }
+
     const readable = extractReadableEpubHtml(htmlText);
     const bodyHtml = readable.html || htmlText;
-    const clean = sanitize(bodyHtml);
+    const clean = sanitize(inlineEpubImages(bodyHtml, docDir, zip, entries));
 
     const plainText = readable.text || cheerio.load(clean).text();
-    const hasImages = /<img\b/i.test(bodyHtml);
-    if (plainText.trim().length < 20 && !hasImages) continue;
+    const hasImages = /<img\b/i.test(clean);
+    if (!plainText.trim() && !hasImages) continue;
 
-    const chTitle = ncxTitles.get(entryPath) ?? (readable.title || `Глава ${chapterIndex + 1}`);
+    const chTitle =
+      tocByFile.get(entryPath)?.find((tocEntry) => tocEntry.title)?.title ??
+      (readable.title ? normalizeChapterTitle(readable.title) : `Глава ${chapterIndex + 1}`);
 
     chapters.push({
       index: chapterIndex++,
