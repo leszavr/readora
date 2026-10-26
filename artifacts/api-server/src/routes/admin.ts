@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { and, asc, desc, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import fs from "node:fs";
 import os from "node:os";
 import { statfs } from "node:fs/promises";
 import {
@@ -33,6 +34,7 @@ import {
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
+import { resolveUploadPath } from "../lib/storage";
 import { GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
 import { isRegistrationEnabled } from "../lib/registration-status";
@@ -906,6 +908,39 @@ router.get(
       fileSize: result.book.fileSize,
       uploadedAt: result.book.uploadedAt,
     });
+  },
+);
+
+// GET /admin/books/:id/download — скачать исходный файл книги (для проверки парсинга)
+router.get(
+  "/admin/books/:id/download",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const [book] = await db.select().from(booksTable).where(eq(booksTable.id, id));
+    if (!book) {
+      res.status(404).json({ error: "Книга не найдена" });
+      return;
+    }
+    let filePath: string;
+    try {
+      filePath = resolveUploadPath(book.storageKey);
+    } catch {
+      res.status(500).json({ error: "Некорректный storage key" });
+      return;
+    }
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: "Файл книги не найден в хранилище" });
+      return;
+    }
+    const safeTitle = (book.title ?? "").replace(/[\\/:*?"<>|\r\n]+/g, " ").trim() || `book-${book.id}`;
+    const utf8Name = encodeURIComponent(`${safeTitle}.${book.format}`);
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="book-${book.id}.${book.format}"; filename*=UTF-8''${utf8Name}`,
+    );
+    fs.createReadStream(filePath).pipe(res);
   },
 );
 

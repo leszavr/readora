@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2 } from "lucide-react";
+import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -211,6 +211,11 @@ export default function AdminBooks() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <a className="gap-2" href={`/api/admin/books/${b.id}/download`} download>
+                              <Download className="w-4 h-4" /> Скачать файл
+                            </a>
+                          </DropdownMenuItem>
                           <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: b.id })}>
                             {b.status === "active"
                               ? <><Ban className="w-4 h-4" /> Заблокировать</>
