@@ -92,6 +92,23 @@ const CONTENT_HASH_LENGTH = 100;
 const TEXT_PREVIEW_LENGTH = 50;
 const MAX_ELEMENT_PATH_DEPTH = 5;
 
+/**
+ * Допуск в пикселях, при котором позиция считается концом главы.
+ * Короткая глава (или последняя страница) может не скроллиться вообще —
+ * без допуска такие главы никогда не дают 100% прочитанного.
+ */
+export const READER_END_SLACK_PX = 64;
+
+export function isReaderScrollAtEnd(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number
+): boolean {
+  // scrollHeight = 0 означает, что контент ещё не отрисован.
+  if (scrollHeight <= 0) return false;
+  return scrollHeight - scrollTop - clientHeight <= READER_END_SLACK_PX;
+}
+
 // Селекторы для поиска текстовых элементов (в порядке приоритета)
 const TEXT_ELEMENT_SELECTORS = [
   'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -507,9 +524,16 @@ export function captureSemanticPosition(options: CapturePositionOptions): Semant
   const textPreview = elementText.slice(0, TEXT_PREVIEW_LENGTH).replace(/\s+/g, ' ').trim();
   
   // Вычисляем процент прогресса в главе
+  const atChapterEnd = isReaderScrollAtEnd(
+    scrollContainer.scrollTop,
+    scrollContainer.scrollHeight,
+    scrollContainer.clientHeight
+  );
   const scrollProgress = scrollContainer.scrollTop / 
     Math.max(1, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-  const chapterPercent = Math.round(Math.max(0, Math.min(100, scrollProgress * 100)));
+  const chapterPercent = atChapterEnd
+    ? 100
+    : Math.round(Math.max(0, Math.min(100, scrollProgress * 100)));
   
   return {
     chapterId,

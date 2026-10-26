@@ -1,10 +1,20 @@
 import { Link, useLocation } from "wouter";
-import type { Book } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useCompleteBook,
+  useReopenBook,
+  getGetBookQueryKey,
+  getGetProgressQueryKey,
+  getListBooksQueryKey,
+  type Book,
+} from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, Check, Circle, Landmark } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { clearReaderProgressFromStorage } from "@/lib/reader-local-progress";
 
 interface Props {
   book: Book;
@@ -27,8 +37,66 @@ const STATUS_ICON: Record<string, typeof Check> = {
   abandoned: Circle,
 };
 
+/** Порог, после которого предлагаем отметить книгу прочитанной вручную. */
+const MANUAL_COMPLETE_THRESHOLD = 95;
+
+function useManualComplete(book: Book) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const completeMutation = useCompleteBook();
+  const reopenMutation = useReopenBook();
+  const canMarkFinished =
+    book.readingStatus !== "finished" && (book.progressPercent ?? 0) >= MANUAL_COMPLETE_THRESHOLD;
+
+  const markFinished = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    completeMutation.mutate(
+      { id: book.id },
+      {
+        onSuccess: () => {
+          void qc.invalidateQueries({ queryKey: getListBooksQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetProgressQueryKey(book.id) });
+          void qc.invalidateQueries({ queryKey: getGetBookQueryKey(book.id) });
+        },
+        onError: () => {
+          toast({ title: "Не удалось отметить книгу прочитанной", variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  const reopenBook = (event: React.MouseEvent<HTMLButtonElement>, onSuccess: () => void) => {
+    event.preventDefault();
+    event.stopPropagation();
+    reopenMutation.mutate(
+      { id: book.id },
+      {
+        onSuccess: (progress) => {
+          clearReaderProgressFromStorage({ bookId: book.id });
+          qc.setQueryData(getGetProgressQueryKey(book.id), progress);
+          void qc.invalidateQueries({ queryKey: getListBooksQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetBookQueryKey(book.id) });
+          onSuccess();
+        },
+        onError: () => {
+          toast({ title: "Не удалось начать чтение книги заново", variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  return {
+    canMarkFinished,
+    markFinished,
+    reopenBook,
+    isPending: completeMutation.isPending || reopenMutation.isPending,
+  };
+}
+
 export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
   const [, navigate] = useLocation();
+  const { canMarkFinished, markFinished, reopenBook, isPending } = useManualComplete(book);
 
   const status = book.readingStatus ? STATUS_LABELS[book.readingStatus] : STATUS_LABELS.not_started;
   const StatusIcon = STATUS_ICON[book.readingStatus ?? "not_started"] ?? Circle;
@@ -42,6 +110,10 @@ export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
   const handleRead = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (book.readingStatus === "finished") {
+      reopenBook(event, () => navigate(`/reader/${book.id}`));
+      return;
+    }
     navigate(`/reader/${book.id}`);
   };
 
@@ -124,16 +196,34 @@ export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
             <Progress value={book.progressPercent} className="h-1" />
           )}
 
-          <Button
-            type="button"
-            size="sm"
-            className="mt-1 w-full h-8 text-xs font-medium"
-            onClick={handleRead}
-            aria-label={`${shelf ? "Читать снова" : "Читать"}: ${book.title}`}
-          >
-            <BookOpen className="size-3.5" aria-hidden="true" />
-            {shelf ? "Читать снова" : "Читать"}
-          </Button>
+          <div className="mt-1 flex gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 flex-1 text-xs font-medium"
+              onClick={handleRead}
+              disabled={isPending}
+              aria-label={`${shelf ? "Читать снова" : "Читать"}: ${book.title}`}
+            >
+              <BookOpen className="size-3.5" aria-hidden="true" />
+              {shelf ? "Читать снова" : "Читать"}
+            </Button>
+            {canMarkFinished && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-8 gap-1 text-xs font-medium"
+                onClick={markFinished}
+                disabled={isPending}
+                aria-label={`Отметить прочитанной: ${book.title}`}
+                title="Отметить книгу прочитанной и перенести на книжную полку"
+              >
+                <Check className="size-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Прочитано</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </Link>
@@ -154,10 +244,15 @@ export function BookListItem({
   shelf?: boolean;
 }>) {
   const [, navigate] = useLocation();
+  const { canMarkFinished, markFinished, reopenBook, isPending } = useManualComplete(book);
 
   const handleRead = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (book.readingStatus === "finished") {
+      reopenBook(event, () => navigate(`/reader/${book.id}`));
+      return;
+    }
     navigate(`/reader/${book.id}`);
   };
 
@@ -203,7 +298,22 @@ export function BookListItem({
           </div>
         </div>
       </Link>
-      <Button type="button" size="sm" className="shrink-0 gap-2" onClick={handleRead}>
+      {canMarkFinished && (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="shrink-0 gap-2"
+          onClick={markFinished}
+          disabled={isPending}
+          aria-label={`Отметить прочитанной: ${book.title}`}
+          title="Отметить книгу прочитанной и перенести на книжную полку"
+        >
+          <Check className="size-3.5" aria-hidden="true" />
+          <span>Прочитано</span>
+        </Button>
+      )}
+      <Button type="button" size="sm" className="shrink-0 gap-2" onClick={handleRead} disabled={isPending}>
         <BookOpen className="size-3.5" aria-hidden="true" />
         <span>{shelf ? "Читать снова" : "Читать"}</span>
       </Button>

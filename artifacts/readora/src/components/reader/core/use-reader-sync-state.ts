@@ -74,7 +74,10 @@ export function useReaderSyncState({
     return true;
   }, [LOCAL_SIGNATURE_TTL_MS]);
 
-  const saveWithSync = useCallback((payload: ReaderProgressPayload) => {
+  const saveWithSync = useCallback((
+    payload: ReaderProgressPayload,
+    callbacks?: MutationCallbacks
+  ) => {
     console.log('[ReaderSyncState] Starting sync:', {
       chapterId: payload.currentChapterId,
       progressPercent: payload.progressPercent,
@@ -89,6 +92,7 @@ export function useReaderSyncState({
         console.log('[ReaderSyncState] Sync successful');
         setIsSyncing(false);
         setLastSyncTime(Date.now());
+        callbacks?.onSuccess?.();
       },
       onError: (error) => {
         console.error('[ReaderSyncState] Sync failed:', error);
@@ -98,6 +102,7 @@ export function useReaderSyncState({
           clearTimeout(errorTimeoutRef.current);
         }
         errorTimeoutRef.current = setTimeout(() => setSyncError(null), errorResetMs);
+        callbacks?.onError?.(error);
       },
     });
   }, [errorResetMs, rememberLocalProgress, saveProgress]);

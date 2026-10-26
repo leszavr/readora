@@ -26,6 +26,8 @@ interface SaveNowOptions {
   chapterId?: number;
   chapterIdx?: number;
   progressOverride?: number;
+  onSuccess?: () => void;
+  onError?: (error: unknown) => void;
 }
 
 interface UseDebouncedReaderProgressSaveOptions {
@@ -34,7 +36,10 @@ interface UseDebouncedReaderProgressSaveOptions {
   currentChapterId: number | null;
   currentChapterIdx: number | null;
   totalChapters: number;
-  onSave: (payload: ReaderProgressPayload) => void;
+  onSave: (
+    payload: ReaderProgressPayload,
+    callbacks?: { onSuccess?: () => void; onError?: (error: unknown) => void }
+  ) => void;
   debounceMs?: number;
   enabled?: boolean;
   isProgrammaticScroll?: () => boolean;
@@ -450,7 +455,10 @@ export function useDebouncedReaderProgressSave({
       positionVersion: useSemanticPosition ? 'v2 (semantic)' : 'v1 (legacy)',
     });
 
-    onSave(payload);
+    onSave(payload, {
+      onSuccess: options?.onSuccess,
+      onError: options?.onError,
+    });
   }, [enabled, scrollContainerRef, contentAreaRef, currentChapterId, currentChapterIdx, totalChapters, onSave, useSemanticPosition]);
 
   const scheduleSave = useCallback(() => {

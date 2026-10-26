@@ -400,6 +400,9 @@ export default function ReaderPage() {
   const remoteProgressRef = useRef(0);
   const progressAnalyticsRef = useRef({ progressPct: -1, sentAt: 0, activeAt: 0 });
   const chapterNavigationSourceRef = useRef<ChapterNavigationSource>("restore");
+  // Глава, для которой уже сохранили прогресс по факту дочитывания до конца.
+  const lastChapterAutoSaveRef = useRef<number | null>(null);
+  const lastChapterAutoSavePendingRef = useRef<number | null>(null);
   // Note: removed hasInitializedChapterRef - using currentChapterIdx !== null as initialization check (voxlibris pattern)
 
   const scrollElementRef = scrollContainerRef as RefObject<HTMLElement | null>;
@@ -538,7 +541,7 @@ export default function ReaderPage() {
         }
       );
       
-      const readingStatus = payload.progressPercent >= 99 ? "finished" : "reading";
+      const readingStatus = payload.progressPercent === 100 ? "finished" : "reading";
       const syncStartedAt = Date.now();
       saveProgressMutate(
         {
@@ -884,6 +887,42 @@ export default function ReaderPage() {
     if (!container) return;
 
     const SCROLL_THRESHOLD = 50; // pixels from top/bottom to consider at start/end
+    let retryTimer: number | null = null;
+    let retryAttempted = false;
+    let effectActive = true;
+
+    const saveLastChapterProgress = (chapterId: number) => {
+      if (
+        !effectActive ||
+        lastChapterAutoSaveRef.current === chapterId ||
+        lastChapterAutoSavePendingRef.current === chapterId
+      ) {
+        return;
+      }
+
+      lastChapterAutoSavePendingRef.current = chapterId;
+      saveProgressNow({
+        onSuccess: () => {
+          lastChapterAutoSaveRef.current = chapterId;
+          if (lastChapterAutoSavePendingRef.current === chapterId) {
+            lastChapterAutoSavePendingRef.current = null;
+          }
+        },
+        onError: () => {
+          if (retryAttempted || !effectActive) {
+            lastChapterAutoSavePendingRef.current = null;
+            return;
+          }
+
+          retryAttempted = true;
+          retryTimer = window.setTimeout(() => {
+            if (!effectActive) return;
+            lastChapterAutoSavePendingRef.current = null;
+            saveLastChapterProgress(chapterId);
+          }, 2_000);
+        },
+      });
+    };
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
@@ -917,6 +956,21 @@ export default function ReaderPage() {
 
       setIsAtChapterStart(isStart);
       setIsAtChapterEnd(isEnd);
+
+      // Последняя глава может не скроллиться вообще — события scroll не будет,
+      // и прогресс 100% никогда не сохранится. Сохраняем один раз, когда
+      // последняя глава дочитана до конца (или целиком помещается на экран).
+      const isLastChapter =
+        currentChapterIdx !== null && currentChapterIdx === chapters.length - 1;
+      if (
+        isEnd &&
+        !chapterLoading &&
+        isLastChapter &&
+        currentChapterId !== null &&
+        lastChapterAutoSaveRef.current !== currentChapterId
+      ) {
+        saveLastChapterProgress(currentChapterId);
+      }
     };
 
     // Initial check
@@ -941,11 +995,16 @@ export default function ReaderPage() {
     mutationObserver?.observe(container, { childList: true });
 
     return () => {
+      effectActive = false;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (lastChapterAutoSavePendingRef.current === currentChapterId) {
+        lastChapterAutoSavePendingRef.current = null;
+      }
       container.removeEventListener("scroll", handleScroll);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
     };
-  }, [currentChapterId, chapterLoading]); // Re-check when chapter changes or finishes loading
+  }, [currentChapterId, currentChapterIdx, chapters.length, chapterLoading, saveProgressNow]); // Re-check when chapter changes or finishes loading
 
   // ---------------------------------------------------------------------------
   // Keyboard navigation (← → chapter switch)
