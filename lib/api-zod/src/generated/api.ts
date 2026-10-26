@@ -1132,6 +1132,14 @@ export const DeleteAdminBookParams = zod.object({
 
 
 /**
+ * @summary Download original book file (admin)
+ */
+export const DownloadAdminBookParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Delete multiple books (admin)
  */
 export const DeleteBulkAdminBooksBody = zod.object({

@@ -1274,6 +1274,26 @@ paths:
         "204":
           description: Deleted
 
+  /admin/books/{id}/download:
+    get:
+      operationId: downloadAdminBook
+      tags: [admin]
+      summary: Download original book file (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Book file binary
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
   /admin/books/delete-bulk:
     post:
       operationId: deleteBulkAdminBooks

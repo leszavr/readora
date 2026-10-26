@@ -4232,6 +4232,83 @@ export const useDeleteAdminBook = <TError = ErrorType<unknown>,
       return useMutation(getDeleteAdminBookMutationOptions(options));
     }
 
+export const getDownloadAdminBookUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/books/${id}/download`
+}
+
+/**
+ * @summary Download original book file (admin)
+ */
+export const downloadAdminBook = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadAdminBookUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadAdminBookQueryKey = (id: number,) => {
+    return [
+    `/api/admin/books/${id}/download`
+    ] as const;
+    }
+
+
+export const getDownloadAdminBookQueryOptions = <TData = Awaited<ReturnType<typeof downloadAdminBook>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadAdminBook>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadAdminBookQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadAdminBook>>> = ({ signal }) => downloadAdminBook(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadAdminBook>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadAdminBookQueryResult = NonNullable<Awaited<ReturnType<typeof downloadAdminBook>>>
+export type DownloadAdminBookQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download original book file (admin)
+ */
+
+export function useDownloadAdminBook<TData = Awaited<ReturnType<typeof downloadAdminBook>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadAdminBook>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadAdminBookQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getDeleteBulkAdminBooksUrl = () => {
 
 
