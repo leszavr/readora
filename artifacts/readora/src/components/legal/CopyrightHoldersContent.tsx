@@ -57,10 +57,10 @@ export function CopyrightHoldersContent({ onOpenPrivacy }: Readonly<{ onOpenPriv
         <li>
           <strong>Электронная почта:</strong>{" "}
           <a
-            href="mailto:svv@8ls.ru"
+            href="mailto:support@readora.ru"
             className="text-primary hover:underline"
           >
-            svv@8ls.ru
+            support@readora.ru
           </a>
         </li>
         <li>

@@ -158,7 +158,7 @@ export function AboutPage() {
             <p className="text-muted-foreground max-w-xl mx-auto mb-6">Создайте аккаунт, чтобы хранить и читать свои книги в одном месте.</p>
             <Button size="lg" asChild><a href={isAuthenticated ? "/library" : "/register"}>{isAuthenticated ? "Открыть библиотеку" : "Создать аккаунт"}</a></Button>
             <p className="text-sm text-muted-foreground mt-5">
-              Вопросы о сервисе: <a className="text-primary hover:underline" href="mailto:svv@8ls.ru"><Mail className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />svv@8ls.ru</a>
+              Вопросы о сервисе: <a className="text-primary hover:underline" href="mailto:support@readora.ru"><Mail className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />support@readora.ru</a>
               {" · "}
               <a className="text-primary hover:underline" href="https://t.me/readora_club" target="_blank" rel="noopener noreferrer"><Send className="inline w-3.5 h-3.5 mr-1" aria-hidden="true" />@readora_club</a>
             </p>
