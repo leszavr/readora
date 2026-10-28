@@ -22,13 +22,13 @@ const features = [
   },
   {
     icon: <BookOpen className="w-6 h-6" />,
-    title: "Удобный ридер",
-    description: "Читайте с комфортом на любом устройстве. Настройте шрифт, размер, тему и отступы под себя.",
+    title: "Кроссплатформенный ридер",
+    description: "Читайте в браузере на компьютере, планшете и смартфоне или установите приложение. Настройте шрифт, размер, тему и отступы под себя.",
   },
   {
     icon: <BookMarked className="w-6 h-6" />,
-    title: "Прогресс чтения",
-    description: "Приложение запоминает, где вы остановились, и отображает процент прочитанного для каждой книги.",
+    title: "Прогресс и синхронизация",
+    description: "Readora запоминает, где вы остановились, показывает процент прочитанного и синхронизирует прогресс и закладки между устройствами.",
   },
   {
     icon: <Settings className="w-6 h-6" />,
@@ -103,7 +103,7 @@ export function LandingPage({
               Ваша личная библиотека
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-              Readora — удобное приложение для чтения книг в форматах FB2 и EPUB. Загружайте, читайте и отслеживайте прогресс без ограничений.
+              Readora — удобное приложение для чтения FB2 и EPUB. Загружайте свои книги и читайте на любом устройстве. Приложение само запомнит, где вы остановились, синхронизирует позицию между гаджетами и покажет прогресс для отложенных книг.
             </p>
             <div className="flex flex-wrap gap-3 justify-center mb-8">
               {isAuthenticated ? (
@@ -129,7 +129,7 @@ export function LandingPage({
                 </Button>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">Бесплатно • Без рекламы • Личные данные остаются вашими</p>
+            <p className="text-sm text-muted-foreground">Бесплатно • Без рекламы • Приватно</p>
           </div>
         </section>
 
@@ -137,8 +137,8 @@ export function LandingPage({
           <section className="bg-muted/30 border-y border-border py-16 md:py-20">
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-12">
-                <h2 className="text-2xl md:text-3xl font-bold mb-3">Популярные книги</h2>
-                <p className="text-muted-foreground">Книги, которые чаще всего открывают пользователи Readora</p>
+                <h2 className="text-2xl md:text-3xl font-bold mb-3">Readora рекомендует</h2>
+                <p className="text-muted-foreground">Книги, которые стоит прочитать</p>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {popularBooks.map((book) => (
