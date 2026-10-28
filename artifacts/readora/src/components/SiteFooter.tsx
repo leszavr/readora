@@ -40,7 +40,7 @@ export function SiteFooter() {
                 <BrandWordmark className="h-6 w-auto" />
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Личная библиотека для чтения книг в форматах FB2 и EPUB.
+                Личная библиотека и кроссплатформенный ридер FB2 и EPUB.
                 <br />
                 Удобно, безопасно, бесплатно.
               </p>
@@ -124,7 +124,7 @@ export function SiteFooter() {
           </div>
 
           <div className="pt-6 border-t border-border text-center text-xs text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Readora. Личная библиотека книг.</p>
+            <p>Readora &copy; {new Date().getFullYear()}</p>
           </div>
         </div>
       </footer>
