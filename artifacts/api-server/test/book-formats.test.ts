@@ -422,6 +422,28 @@ test("validateBookFile отклоняет не-MOBI буфер", () => {
   assert.throws(() => validateBookFile(Buffer.from("not a mobi file at all.............."), "mobi"), /BOOKMOBI/);
 });
 
+// Словари в MOBI регулярно содержат >1500 секций (кейс Merriam-Webster's
+// Vocabulary Builder — 2006 глав): лимит поднят до 3000 и не должен их отклонять.
+function mobiWithChapterCount(count: number): Buffer {
+  const parts: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    parts.push(`<h1>Глава ${i}</h1><p>Содержание главы ${i}</p>`);
+    if (i < count) parts.push("<mbp:pagebreak>");
+  }
+  return buildMobi6({ html: parts.join(""), compression: 1 });
+}
+
+test("MOBI со словарным числом глав (2000) парсится без ошибки", () => {
+  const parsed = parseBook(mobiWithChapterCount(2000), "mobi");
+  assert.equal(parsed.chapters.length, 2000);
+  assert.equal(parsed.chapters[1999].title, "Глава 2000");
+  assert.ok(parsed.chapters[1999].htmlContent.includes("Содержание главы 2000"));
+});
+
+test("MOBI с числом глав выше лимита отклоняется", () => {
+  assert.throws(() => parseBook(mobiWithChapterCount(3001), "mobi"), /слишком много глав/);
+});
+
 // ─── Тесты TXT ───────────────────────────────────────────────────────────────
 
 test("TXT: заголовок из первой строки, главы по маркерам «Глава N»", () => {

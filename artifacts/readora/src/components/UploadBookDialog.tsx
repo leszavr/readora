@@ -349,6 +349,9 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
   };
 
   const allCompleted = files.length > 0 && files.every((f) => f.status === "completed");
+  const batchFinished = files.length > 0 && files.every((f) => f.status === "completed" || f.status === "failed");
+  const failedFiles = files.filter((f) => f.status === "failed");
+  const completedCount = files.filter((f) => f.status === "completed").length;
   const hasPending = files.some((f) => f.status === "pending");
   const hasActive = files.some((f) => f.status === "uploading" || f.status === "processing");
   const isStorageFull = quota?.isExempt !== true && quota?.canUpload === false;
@@ -365,7 +368,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Поддерживаются форматы FB2 и EPUB{quota?.maxFileSizeBytes ? ` (до ${formatSize(quota.maxFileSizeBytes)})` : ""}. Можно загрузить несколько файлов сразу.
+            Поддерживаются форматы FB2, EPUB, MOBI, CBZ, TXT, MD и HTML{quota?.maxFileSizeBytes ? ` (до ${formatSize(quota.maxFileSizeBytes)})` : ""}. Можно загрузить несколько файлов сразу.
           </DialogDescription>
         </DialogHeader>
 
@@ -565,6 +568,25 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
             <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg text-green-700 text-sm">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               Все книги успешно добавлены в библиотеку
+            </div>
+          )}
+
+          {/* Частичные неудачи: итог загрузки и причина по каждой несозданной книге */}
+          {batchFinished && failedFiles.length > 0 && (
+            <div className="p-3 bg-amber-50 rounded-lg text-sm" data-testid="upload-failures-summary">
+              <div className="flex items-center gap-2 text-amber-700 font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Добавлено {completedCount} из {files.length} книг
+              </div>
+              <div className="mt-2 space-y-1">
+                {failedFiles.map((f) => (
+                  <div key={`${f.file.name}-${f.file.size}`} className="text-xs text-amber-800 flex items-start gap-1.5">
+                    <span className="font-medium truncate" title={f.file.name}>{f.file.name}</span>
+                    <span className="shrink-0">—</span>
+                    <span className="min-w-0 break-words">{f.error ?? "неизвестная ошибка"}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

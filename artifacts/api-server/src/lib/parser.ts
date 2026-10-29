@@ -14,7 +14,10 @@ const MAX_EPUB_TEXT_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_FB2_XML_BYTES = 50 * 1024 * 1024;
 const MAX_FB2_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_EPUB_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_BOOK_CHAPTERS = 1500;
+// Словари в MOBI/KF8 регулярно содержат >1500 секций (например, Merriam-Webster's
+// Vocabulary Builder — 2006), поэтому лимит поднят с запасом; список глав в UI
+// лёгкий (title + wordCount), вставка в БД — bulk.
+const MAX_BOOK_CHAPTERS = 3000;
 const MAX_TXT_BYTES = 20 * 1024 * 1024;
 const MAX_CBZ_ENTRIES = 3000;
 const MAX_CBZ_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
