@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { cyclesTable } from "./cycles";
 
-export const bookFormatEnum = pgEnum("book_format", ["fb2", "epub"]);
+export const bookFormatEnum = pgEnum("book_format", ["fb2", "epub", "mobi", "cbz", "txt", "md", "html"]);
 export const bookStatusEnum = pgEnum("book_status", ["active", "blocked"]);
 
 export const booksTable = pgTable(

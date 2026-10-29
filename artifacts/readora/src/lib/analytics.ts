@@ -2,7 +2,7 @@ type DeviceMode = "desktop" | "mobile" | "unknown";
 type EntryPoint = "library" | "reader" | "book" | "profile";
 type NavigationSource = "toc" | "next_chapter" | "prev_chapter" | "restore";
 type EndReason = "hidden" | "unmount" | "inactive";
-type UploadFormat = "fb2" | "epub";
+type UploadFormat = "fb2" | "epub" | "mobi" | "cbz" | "txt" | "md" | "html";
 
 type AnalyticsEvent = {
   eventId: string;

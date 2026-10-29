@@ -2169,7 +2169,7 @@ components:
           type: ["string", "null"]
         format:
           type: string
-          enum: [fb2, epub]
+          enum: [fb2, epub, mobi, cbz, txt, md, html]
         language:
           type: ["string", "null"]
         publicationYear:
@@ -2333,7 +2333,7 @@ components:
           type: integer
         format:
           type: string
-          enum: [fb2, epub]
+          enum: [fb2, epub, mobi, cbz, txt, md, html]
         status:
           type: string
           enum: [queued, processing, completed, failed]
@@ -2900,7 +2900,7 @@ components:
           type: ["string", "null"]
         format:
           type: string
-          enum: [fb2, epub]
+          enum: [fb2, epub, mobi, cbz, txt, md, html]
         status:
           type: string
           enum: [active, blocked]
@@ -2945,7 +2945,7 @@ components:
           type: ["string", "null"]
         format:
           type: string
-          enum: [fb2, epub]
+          enum: [fb2, epub, mobi, cbz, txt, md, html]
         coverUrl:
           type: ["string", "null"]
         ownerUserId:

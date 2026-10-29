@@ -298,6 +298,11 @@ export type BookFormat = typeof BookFormat[keyof typeof BookFormat];
 export const BookFormat = {
   fb2: 'fb2',
   epub: 'epub',
+  mobi: 'mobi',
+  cbz: 'cbz',
+  txt: 'txt',
+  md: 'md',
+  html: 'html',
 } as const;
 
 export type BookStatus = typeof BookStatus[keyof typeof BookStatus];
@@ -438,6 +443,11 @@ export type BookUploadJobFormat = typeof BookUploadJobFormat[keyof typeof BookUp
 export const BookUploadJobFormat = {
   fb2: 'fb2',
   epub: 'epub',
+  mobi: 'mobi',
+  cbz: 'cbz',
+  txt: 'txt',
+  md: 'md',
+  html: 'html',
 } as const;
 
 export type BookUploadJobStatus = typeof BookUploadJobStatus[keyof typeof BookUploadJobStatus];
@@ -609,6 +619,11 @@ export type AdminBookFormat = typeof AdminBookFormat[keyof typeof AdminBookForma
 export const AdminBookFormat = {
   fb2: 'fb2',
   epub: 'epub',
+  mobi: 'mobi',
+  cbz: 'cbz',
+  txt: 'txt',
+  md: 'md',
+  html: 'html',
 } as const;
 
 export type AdminBookStatus = typeof AdminBookStatus[keyof typeof AdminBookStatus];
@@ -938,6 +953,11 @@ export type GiftEditionFormat = typeof GiftEditionFormat[keyof typeof GiftEditio
 export const GiftEditionFormat = {
   fb2: 'fb2',
   epub: 'epub',
+  mobi: 'mobi',
+  cbz: 'cbz',
+  txt: 'txt',
+  md: 'md',
+  html: 'html',
 } as const;
 
 export interface GiftEdition {

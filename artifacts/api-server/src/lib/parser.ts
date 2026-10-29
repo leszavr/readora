@@ -3,7 +3,9 @@ import AdmZip from "adm-zip";
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import sanitizeHtml from "sanitize-html";
+import { marked } from "marked";
 import path from "path";
+import { isMobiBuffer, parseMobiRaw } from "./mobi-parser";
 
 const MAX_BOOK_PARSE_BYTES = 50 * 1024 * 1024;
 const MAX_EPUB_ENTRIES = 3000;
@@ -13,6 +15,30 @@ const MAX_FB2_XML_BYTES = 50 * 1024 * 1024;
 const MAX_FB2_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_EPUB_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_BOOK_CHAPTERS = 1500;
+const MAX_TXT_BYTES = 20 * 1024 * 1024;
+const MAX_CBZ_ENTRIES = 3000;
+const MAX_CBZ_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
+const CBZ_PAGES_PER_CHAPTER = 20;
+
+export type BookFormat = "fb2" | "epub" | "mobi" | "cbz" | "txt" | "md" | "html";
+
+export const BOOK_FORMAT_EXTENSIONS: Record<string, BookFormat> = {
+  ".fb2": "fb2",
+  ".epub": "epub",
+  ".mobi": "mobi",
+  ".azw3": "mobi",
+  ".prc": "mobi",
+  ".cbz": "cbz",
+  ".txt": "txt",
+  ".md": "md",
+  ".markdown": "md",
+  ".html": "html",
+  ".htm": "html",
+};
+
+export function bookFormatFromExtension(ext: string): BookFormat | null {
+  return BOOK_FORMAT_EXTENSIONS[ext.toLowerCase()] ?? null;
+}
 const SAFE_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const STRUCTURAL_FB2_SECTION_TITLES = new Set(["пролог", "эпилог"]);
 const STRUCTURAL_FB2_SECTION_PREFIXES = new Set(["часть", "глава", "книга", "том", "раздел", "акт"]);
@@ -342,7 +368,7 @@ function isUnsafeZipPath(entryName: string): boolean {
   return normalized.startsWith("../") || normalized === ".." || path.posix.isAbsolute(normalized);
 }
 
-export function validateBookFile(buffer: Buffer, ext: "fb2" | "epub"): void {
+export function validateBookFile(buffer: Buffer, ext: BookFormat): void {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new Error("Файл пустой");
   if (buffer.length > MAX_BOOK_PARSE_BYTES) throw new Error("Файл слишком большой");
 
@@ -351,6 +377,32 @@ export function validateBookFile(buffer: Buffer, ext: "fb2" | "epub"): void {
     const sample = detectAndConvertEncoding(buffer.subarray(0, Math.min(buffer.length, 4096)));
     if (!/<(?:\w+:)?FictionBook[\s>]/i.test(sample)) {
       throw new Error("Некорректный FB2: не найден корневой FictionBook");
+    }
+    return;
+  }
+
+  if (ext === "mobi") {
+    if (!isMobiBuffer(buffer)) throw new Error("Некорректный MOBI: отсутствует сигнатура BOOKMOBI");
+    return;
+  }
+
+  if (ext === "txt" || ext === "md") {
+    if (buffer.length > MAX_TXT_BYTES) throw new Error("Текстовый файл превышает допустимый размер");
+    return;
+  }
+
+  if (ext === "html") return;
+
+  if (ext === "cbz") {
+    if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) throw new Error("Некорректный CBZ: файл не является ZIP-архивом");
+    const zip = new AdmZip(buffer);
+    const entries = zip.getEntries();
+    if (entries.length > MAX_CBZ_ENTRIES) throw new Error("CBZ содержит слишком много файлов");
+    let totalUncompressed = 0;
+    for (const entry of entries) {
+      if (isUnsafeZipPath(entry.entryName)) throw new Error("CBZ содержит небезопасный путь файла");
+      totalUncompressed += entry.header.size;
+      if (totalUncompressed > MAX_CBZ_UNCOMPRESSED_BYTES) throw new Error("CBZ слишком большой после распаковки");
     }
     return;
   }
@@ -373,9 +425,24 @@ export function validateBookFile(buffer: Buffer, ext: "fb2" | "epub"): void {
   }
 }
 
-export function parseBook(buffer: Buffer, ext: "fb2" | "epub"): ParsedBook {
+export function parseBook(buffer: Buffer, ext: BookFormat): ParsedBook {
   validateBookFile(buffer, ext);
-  return ext === "fb2" ? parseFB2(buffer) : parseEPUB(buffer);
+  switch (ext) {
+    case "fb2":
+      return parseFB2(buffer);
+    case "epub":
+      return parseEPUB(buffer);
+    case "mobi":
+      return parseMOBI(buffer);
+    case "cbz":
+      return parseCBZ(buffer);
+    case "txt":
+      return parseTXT(buffer);
+    case "md":
+      return parseMD(buffer);
+    case "html":
+      return parseHTML(buffer);
+  }
 }
 
 // ─── FB2 Parser ───────────────────────────────────────────────────────────────
@@ -1332,4 +1399,276 @@ export function parseEPUB(buffer: Buffer): ParsedBook {
   }
 
   return { title, author: authorFull, description, language, publicationYear, coverBase64, coverMime, genres, chapters };
+}
+
+// ─── MOBI Parser ──────────────────────────────────────────────────────────────
+
+function parseMOBI(buffer: Buffer): ParsedBook {
+  const raw = parseMobiRaw(buffer);
+  const chapters: ParsedChapter[] = [];
+  for (const chapter of raw.chapters) {
+    if (chapters.length >= MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
+    const clean = sanitize(removeNonDataImages(chapter.html));
+    const text = cheerio.load(clean).text();
+    if (!text.trim() && !/<img\b/i.test(clean)) continue;
+    chapters.push({ index: chapters.length, title: chapter.title, htmlContent: clean, wordCount: countWords(text) });
+  }
+  if (chapters.length === 0) throw new Error("MOBI не содержит читаемого текста");
+  return {
+    title: raw.title,
+    author: raw.author,
+    description: raw.description,
+    language: raw.language,
+    publicationYear: raw.publicationYear,
+    coverBase64: raw.coverBase64,
+    coverMime: raw.coverMime,
+    genres: raw.genres,
+    chapters,
+  };
+}
+
+// ─── TXT Parser ───────────────────────────────────────────────────────────────
+
+const TXT_CHAPTER_HEADING = /^(?:Глава|ГЛАВА|Chapter|CHAPTER|Часть|ЧАСТЬ|Part|PART)\s+\S.*$/;
+
+function decodeTxtBuffer(buffer: Buffer): string {
+  const content = buffer.toString("utf-8");
+  if (hasEncodingIssues(content)) {
+    try {
+      return decodeWindows1251(buffer);
+    } catch {
+      return content;
+    }
+  }
+  return content;
+}
+
+function parseTXT(buffer: Buffer): ParsedBook {
+  const text = decodeTxtBuffer(buffer);
+  const lines = text.split(/\r?\n/);
+
+  let titleLineIndex = -1;
+  let title = "Без названия";
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (line.length <= 120) {
+      title = line;
+      titleLineIndex = i;
+    }
+    break;
+  }
+
+  const contentLines = titleLineIndex >= 0 ? lines.slice(titleLineIndex + 1) : lines;
+
+  const chapterStarts: Array<{ index: number; title: string }> = [];
+  for (let i = 0; i < contentLines.length; i++) {
+    const line = contentLines[i].trim();
+    if (TXT_CHAPTER_HEADING.test(line)) chapterStarts.push({ index: i, title: line });
+  }
+
+  const chapters: ParsedChapter[] = [];
+  const pushChapter = (chapterTitle: string, chapterLines: string[]) => {
+    if (chapters.length >= MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
+    const paragraphs = chapterLines
+      .join("\n")
+      .split(/\n\s*\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`);
+    if (paragraphs.length === 0) return;
+    const html = `<h2>${escapeHtml(chapterTitle)}</h2>\n${paragraphs.join("\n")}`;
+    chapters.push({ index: chapters.length, title: chapterTitle, htmlContent: html, wordCount: countWords(chapterLines.join(" ")) });
+  };
+
+  if (chapterStarts.length >= 2) {
+    for (let i = 0; i < chapterStarts.length; i++) {
+      const start = chapterStarts[i].index;
+      const end = i + 1 < chapterStarts.length ? chapterStarts[i + 1].index : contentLines.length;
+      pushChapter(chapterStarts[i].title, contentLines.slice(start + 1, end));
+    }
+  } else {
+    pushChapter("Текст", contentLines);
+  }
+
+  if (chapters.length === 0) throw new Error("TXT не содержит читаемого текста");
+  return { title, author: null, description: null, language: null, publicationYear: null, coverBase64: null, coverMime: null, genres: [], chapters };
+}
+
+// ─── Markdown Parser ──────────────────────────────────────────────────────────
+
+const MD_HEADING = /^(#{1,2})\s+(.+)$/;
+
+function parseMD(buffer: Buffer): ParsedBook {
+  const text = decodeTxtBuffer(buffer);
+  const lines = text.split(/\r?\n/);
+
+  const headings: Array<{ line: number; level: number; title: string }> = [];
+  lines.forEach((line, i) => {
+    const match = line.match(MD_HEADING);
+    if (match) headings.push({ line: i, level: match[1].length, title: match[2].trim() });
+  });
+
+  const firstNonEmpty = lines.findIndex((line) => line.trim() !== "");
+  // Единственный h1 в самом начале документа — название книги, а не глава.
+  const titleHeading =
+    headings.length > 0 &&
+    headings[0].level === 1 &&
+    headings[0].line === firstNonEmpty &&
+    headings.filter((heading) => heading.level === 1).length === 1
+      ? headings[0]
+      : null;
+
+  const title = titleHeading
+    ? titleHeading.title.slice(0, 120)
+    : firstNonEmpty >= 0
+      ? lines[firstNonEmpty].replace(/^#{1,6}\s+/, "").trim().slice(0, 120) || "Без названия"
+      : "Без названия";
+
+  const chapterHeadings = titleHeading ? headings.slice(1) : headings;
+  const renderChunk = (chunk: string): string => sanitize(marked.parse(chunk, { async: false }) as string);
+
+  const chapters: ParsedChapter[] = [];
+  if (chapterHeadings.length >= 2) {
+    for (let i = 0; i < chapterHeadings.length; i++) {
+      if (chapters.length >= MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
+      const start = chapterHeadings[i].line;
+      const end = i + 1 < chapterHeadings.length ? chapterHeadings[i + 1].line : lines.length;
+      const html = renderChunk(lines.slice(start, end).join("\n"));
+      const plain = cheerio.load(html).text();
+      if (!plain.trim()) continue;
+      chapters.push({ index: chapters.length, title: chapterHeadings[i].title, htmlContent: html, wordCount: countWords(plain) });
+    }
+  } else {
+    const html = renderChunk(text);
+    const plain = cheerio.load(html).text();
+    if (!plain.trim()) throw new Error("Markdown не содержит читаемого текста");
+    chapters.push({ index: 0, title: title === "Без названия" ? "Текст" : title, htmlContent: html, wordCount: countWords(plain) });
+  }
+
+  if (chapters.length === 0) throw new Error("Markdown не содержит читаемого текста");
+  return { title, author: null, description: null, language: null, publicationYear: null, coverBase64: null, coverMime: null, genres: [], chapters };
+}
+
+// ─── HTML Parser ──────────────────────────────────────────────────────────────
+
+function parseHTML(buffer: Buffer): ParsedBook {
+  const htmlText = decodeTxtBuffer(buffer);
+  const readable = extractReadableEpubHtml(htmlText);
+  const title = readable.title?.slice(0, 120) || "Без названия";
+
+  const $ = cheerio.load(readable.html || htmlText, { xmlMode: false });
+  $("script, style, header, footer, form, iframe, link, meta, button, input, textarea, select, nav").remove();
+  const children = $("body").children().toArray();
+
+  const chapters: ParsedChapter[] = [];
+  const pushChapter = (chapterTitle: string, nodes: unknown[]) => {
+    if (chapters.length >= MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
+    if (nodes.length === 0) return;
+    const html = removeNonDataImages(serializeEpubSlice($, nodes));
+    const clean = sanitize(html);
+    const plain = cheerio.load(clean).text();
+    if (!plain.trim() && !/<img\b/i.test(clean)) return;
+    chapters.push({ index: chapters.length, title: chapterTitle, htmlContent: clean, wordCount: countWords(plain) });
+  };
+
+  const headingIndexes = children
+    .map((node, index) => ({ index, el: node as { tagName?: string } }))
+    .filter(({ el }) => /^h[12]$/i.test(el.tagName ?? ""))
+    .map(({ index }) => index);
+
+  if (headingIndexes.length >= 2) {
+    if (headingIndexes[0] > 0) pushChapter(title, children.slice(0, headingIndexes[0]));
+    for (let i = 0; i < headingIndexes.length; i++) {
+      const start = headingIndexes[i];
+      const end = i + 1 < headingIndexes.length ? headingIndexes[i + 1] : children.length;
+      const headingText = $(children[start]).text().trim();
+      pushChapter(headingText || `Глава ${chapters.length + 1}`, children.slice(start, end));
+    }
+  } else {
+    pushChapter(title, children);
+  }
+
+  if (chapters.length === 0) throw new Error("HTML не содержит читаемого текста");
+  return { title, author: null, description: null, language: null, publicationYear: null, coverBase64: null, coverMime: null, genres: [], chapters };
+}
+
+// ─── CBZ Parser ───────────────────────────────────────────────────────────────
+
+const CBZ_IMAGE_MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+const naturalCompare = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare;
+
+function parseCBZ(buffer: Buffer): ParsedBook {
+  const zip = new AdmZip(buffer);
+  const pages = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory && CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(entry.entryName).toLowerCase()] != null)
+    .sort((a, b) => naturalCompare(a.entryName, b.entryName));
+
+  if (pages.length === 0) throw new Error("CBZ не содержит изображений");
+
+  const coverEntry = pages[0];
+  const coverMime = CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(coverEntry.entryName).toLowerCase()];
+  const coverData = coverEntry.header.size <= MAX_EPUB_EMBEDDED_IMAGE_BYTES ? zip.readFile(coverEntry) : null;
+
+  const chapters: ParsedChapter[] = [];
+  for (let start = 0; start < pages.length; start += CBZ_PAGES_PER_CHAPTER) {
+    if (chapters.length >= MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
+    const group = pages.slice(start, start + CBZ_PAGES_PER_CHAPTER);
+    const images: string[] = [];
+    for (const entry of group) {
+      if (entry.header.size > MAX_EPUB_EMBEDDED_IMAGE_BYTES) continue;
+      const mime = CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(entry.entryName).toLowerCase()];
+      const data = zip.readFile(entry);
+      if (!data || data.length === 0) continue;
+      images.push(`<img src="data:${mime};base64,${data.toString("base64")}" alt="Страница ${entry.entryName}" class="cbz-page">`);
+    }
+    if (images.length === 0) continue;
+    const pageNumber = start + 1;
+    const endPage = start + images.length;
+    const chapterTitle = images.length === 1 ? `Страница ${pageNumber}` : `Страницы ${pageNumber}–${endPage}`;
+    chapters.push({
+      index: chapters.length,
+      title: chapterTitle,
+      htmlContent: images.join("\n"),
+      wordCount: 0,
+    });
+  }
+
+  if (chapters.length === 0) throw new Error("CBZ не содержит читаемых изображений");
+  return {
+    title: "Без названия",
+    author: null,
+    description: null,
+    language: null,
+    publicationYear: null,
+    coverBase64: coverData?.toString("base64") ?? null,
+    coverMime: coverData ? coverMime : null,
+    genres: [],
+    chapters,
+  };
+}
+
+// Внешние и неразрешимые картинки (kindle:, относительные пути) не встраиваем:
+// загрузка с чужого хоста раскрывает третьей стороне факт чтения книги.
+function removeNonDataImages(html: string): string {
+  if (!/<img\b/i.test(html)) return html;
+  const $ = cheerio.load(html, { xmlMode: false });
+  let changed = false;
+  $("img").each((_, el) => {
+    const src = ($(el).attr("src") ?? "").trim();
+    if (!src || !/^data:/i.test(src)) {
+      $(el).remove();
+      changed = true;
+    }
+  });
+  if (!changed) return html;
+  return $("body").html() ?? $.root().html() ?? html;
 }
