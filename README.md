@@ -62,6 +62,18 @@ readora/
 
 ### Установка
 
+#### Вариант 1: одним скриптом (чистая машина Ubuntu/WSL)
+
+```bash
+sudo ./readora-manager.sh bootstrap   # система: apt update/upgrade, Node.js 24, pnpm, Docker
+./readora-manager.sh setup            # проект: зависимости, .env, PostgreSQL, миграции, суперадмин
+./readora-manager.sh start            # запуск разработки
+```
+
+`bootstrap` рассчитан на Ubuntu (включая WSL с systemd). В репозитории Ubuntu 24.04 доступен только Node.js 18, поэтому скрипт ставит Node.js 24 из официального репозитория NodeSource, а pnpm — через `npm install -g pnpm@10.19.0`.
+
+#### Вариант 2: вручную
+
 ```bash
 git clone https://github.com/leszavr/readora.git
 cd readora
@@ -131,6 +143,7 @@ pnpm run dev:client   # Frontend → http://localhost:3000
 
 | Команда | Описание |
 |---------|----------|
+| `bootstrap` | Подготовка чистой Ubuntu/WSL: `apt update && apt upgrade`, базовые пакеты, Node.js 24 (NodeSource), pnpm, Docker CE + Compose (запуск через `sudo`) |
 | `setup` | Полная установка на новом сервере: проверка зависимостей, создание `.env`, запуск PostgreSQL, миграции, создание супер-администратора |
 | `start` | Запуск в режиме разработки с hot-reload (frontend + backend) |
 | `stop` | Остановка всех Docker-сервисов и локальных процессов |
@@ -138,6 +151,7 @@ pnpm run dev:client   # Frontend → http://localhost:3000
 | `status` | Показать статус всех сервисов и портов |
 | `services` | Запустить только PostgreSQL |
 | `db` | Применить миграции базы данных |
+| `superadmin` | Создать/обновить супер-администратора: пароль генерируется по Enter, данные выводятся в консоль и в `logs/superadmin-credentials.html` (файл не попадает в git, права 600) |
 | `build` | Сборка production-версии |
 | `start:prod` | Информация о запуске production-режима (требует настройки process manager) |
 | `check` | Проверка типов TypeScript |
@@ -148,6 +162,9 @@ pnpm run dev:client   # Frontend → http://localhost:3000
 ### Примеры использования
 
 ```bash
+# Подготовка чистой машины (Ubuntu/WSL, требует sudo)
+sudo ./readora-manager.sh bootstrap
+
 # Полная установка на новом сервере (интерактивная)
 ./readora-manager.sh setup
 
