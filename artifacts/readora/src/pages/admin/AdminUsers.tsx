@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
 const STATUS_LABELS: Record<string, string> = { active: "Активен", blocked: "Заблокирован" };
@@ -47,6 +48,8 @@ export default function AdminUsers() {
     search: search || undefined,
     role: roleFilter === "all" ? undefined : roleFilter,
   });
+
+  const pagination = useAdminListPagination(users, "readora.admin.users.pageSize", `${search}|${roleFilter}`);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
 
@@ -136,8 +139,8 @@ export default function AdminUsers() {
         {isLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
         ) : (
-          <Table containerClassName="max-h-[70vh] overflow-y-auto">
-            <TableHeader className="sticky top-0 z-10 bg-card">
+          <Table>
+            <TableHeader>
               <TableRow>
                 <TableHead>Пользователь</TableHead>
                 <TableHead>Роль</TableHead>
@@ -154,7 +157,7 @@ export default function AdminUsers() {
                   <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Пользователи не найдены</TableCell>
                 </TableRow>
               ) : (
-                users.map((u: {
+                pagination.visibleItems.map((u: {
                   id: number; username: string; email: string; role: string;
                   status: string; emailVerified: boolean; bookCount?: number; createdAt: string;
                 }) => (
@@ -231,9 +234,11 @@ export default function AdminUsers() {
                 ))
               )}
             </TableBody>
-          </Table>
-        )}
-      </div>
+           </Table>
+         )}
+       </div>
+
+      <AdminPaginationControls pagination={pagination} />
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
