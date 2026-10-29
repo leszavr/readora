@@ -40,7 +40,7 @@ export function SiteFooter() {
                 <BrandWordmark className="h-6 w-auto" />
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Личная библиотека и кроссплатформенный ридер FB2 и EPUB.
+                Личная библиотека и кроссплатформенный ридер FB2, EPUB, MOBI, CBZ и других форматов.
                 <br />
                 Удобно, безопасно, бесплатно.
               </p>

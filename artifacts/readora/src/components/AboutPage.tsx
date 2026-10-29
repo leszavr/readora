@@ -84,7 +84,7 @@ export function AboutPage() {
             <p className="text-sm font-medium text-primary mb-4">О сервисе</p>
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">Readora.ru — самостоятельная личная веб-библиотека</h1>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Readora.ru помогает хранить, организовывать и читать собственные книги в форматах FB2 и EPUB прямо в браузере.
+              Readora.ru помогает хранить, организовывать и читать собственные книги в форматах FB2, EPUB, MOBI, CBZ, TXT, MD и HTML прямо в браузере.
             </p>
           </div>
         </section>
@@ -109,7 +109,7 @@ export function AboutPage() {
                 <CardContent className="p-6">
                   <Library className="w-6 h-6 text-primary mb-3" aria-hidden="true" />
                   <h3 className="font-semibold mb-2">Личная библиотека</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">Добавляйте собственные книги FB2 и EPUB, объединяйте их в циклы и находите нужное через поиск и фильтры.</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">Добавляйте собственные книги, объединяйте их в циклы и находите нужное через поиск и фильтры.</p>
                 </CardContent>
               </Card>
               <Card>

@@ -127,7 +127,7 @@ export default function AdminGiftEditions() {
         <div className="rounded-xl border border-dashed bg-card px-4 py-12 text-center">
           <Gift className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="font-medium">Подарочных изданий пока нет</p>
-          <p className="mt-1 text-sm text-muted-foreground">Нажмите «Добавить книгу» и загрузите FB2 или EPUB из public domain — или отметьте уже загруженную книгу в разделе «Книги».</p>
+          <p className="mt-1 text-sm text-muted-foreground">Нажмите «Добавить книгу» и загрузите книгу из public domain — или отметьте уже загруженную книгу в разделе «Книги».</p>
         </div>
       ) : (
         <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 2xl:grid-cols-3">

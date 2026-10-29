@@ -8,14 +8,14 @@ import { LegalDocumentPage, type LegalDocumentKind } from "@/components/LegalDoc
 import type { LandingData } from "@/landing-data";
 
 const homePageMetadata = {
-  title: "Readora — личная библиотека книг FB2 и EPUB в браузере",
-  description: "Readora — личная библиотека книг FB2 и EPUB в браузере. Настраиваемый ридер, автосохранение прогресса и синхронизация между устройствами. Бесплатно, без рекламы.",
+  title: "Readora — личная библиотека книг FB2, EPUB, MOBI, CBZ и других форматов в браузере",
+  description: "Readora — личная библиотека книг FB2, EPUB, MOBI, CBZ, TXT, MD и HTML в браузере. Настраиваемый ридер, автосохранение прогресса и синхронизация между устройствами. Бесплатно, без рекламы.",
   path: "/",
 };
 
 const aboutPageMetadata = {
-  title: "О Readora.ru — независимая личная веб-библиотека FB2 и EPUB",
-  description: "Readora.ru — самостоятельный веб-сервис для личной библиотеки и чтения FB2 и EPUB. Без платных подписок, рекламы и платёжных данных.",
+  title: "О Readora.ru — независимая личная веб-библиотека FB2, EPUB, MOBI, CBZ и других форматов",
+  description: "Readora.ru — самостоятельный веб-сервис для личной библиотеки и чтения FB2, EPUB, MOBI, CBZ, TXT, MD и HTML. Без платных подписок, рекламы и платёжных данных.",
   path: "/about",
 };
 

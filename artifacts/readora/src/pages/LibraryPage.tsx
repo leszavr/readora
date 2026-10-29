@@ -887,9 +887,9 @@ function EmptyState({ section, hasFilters, onUploadClick }: Readonly<{ section: 
         {hasFilters ? "Книги не найдены" : "Библиотека пуста"}
       </h3>
       <p className="text-muted-foreground text-sm mb-6">
-        {hasFilters 
-          ? "Попробуйте изменить фильтры поиска" 
-          : "Добавьте первую книгу в формате FB2 или EPUB"}
+        {hasFilters
+          ? "Попробуйте изменить фильтры поиска"
+          : "Добавьте первую книгу. Поддерживаются форматы FB2, EPUB, MOBI, CBZ, TXT, MD или HTML"}
       </p>
       {!hasFilters && (
         <Button onClick={onUploadClick} className="gap-2">
