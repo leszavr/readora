@@ -140,6 +140,13 @@ const MOBI_LANG: Record<number, string[]> = {
 
 const MAX_MOBI_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_MOBI_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
+
+export interface MobiParseOptions {
+  /** Лимит суммарного размера распакованного текста; по умолчанию 200 МБ. */
+  maxUncompressedBytes?: number;
+  /** Лимит размера одной встроенной картинки; по умолчанию 10 МБ. */
+  maxImageBytes?: number;
+}
 const MAX_MOBI_RECORDS = 100_000;
 
 export interface MobiRawChapter {
@@ -234,7 +241,7 @@ function concatBytes(chunks: Buffer[]): Buffer {
   return result;
 }
 
-function decompressPalmDOC(input: Buffer): Buffer {
+function decompressPalmDOC(input: Buffer, uncompressedLimit: number): Buffer {
   const output: number[] = [];
   for (let i = 0; i < input.length; i++) {
     const byte = input[i];
@@ -251,7 +258,7 @@ function decompressPalmDOC(input: Buffer): Buffer {
     } else {
       output.push(32, byte ^ 0b1000_0000);
     }
-    if (output.length > MAX_MOBI_UNCOMPRESSED_BYTES) throw new Error("MOBI слишком большой после распаковки");
+    if (output.length > uncompressedLimit) throw new Error("MOBI слишком большой после распаковки");
   }
   return Buffer.from(output);
 }
@@ -265,7 +272,11 @@ function read32Bits(buf: Buffer, from: number): bigint {
   return (bits >> BigInt(8 - (end & 7))) & 0xffffffffn;
 }
 
-function makeHuffcdicDecompressor(huffRecord: Buffer, cdicRecords: Buffer[]): (input: Buffer) => Buffer {
+function makeHuffcdicDecompressor(
+  huffRecord: Buffer,
+  cdicRecords: Buffer[],
+  uncompressedLimit: number,
+): (input: Buffer) => Buffer {
   const { magic, offset1, offset2 } = getStruct(HUFF_HEADER, huffRecord);
   if (magic !== "HUFF") throw new Error("Некорректная HUFF-запись");
 
@@ -326,7 +337,7 @@ function makeHuffcdicDecompressor(huffRecord: Buffer, cdicRecords: Buffer[]): (i
         dictionary[code] = [result, true];
       }
       chunks.push(result);
-      if (chunks.reduce((sum, chunk) => sum + chunk.length, 0) > MAX_MOBI_UNCOMPRESSED_BYTES) {
+      if (chunks.reduce((sum, chunk) => sum + chunk.length, 0) > uncompressedLimit) {
         throw new Error("MOBI слишком большой после распаковки");
       }
     }
@@ -490,6 +501,8 @@ interface MobiHeaders {
 }
 
 class MobiFile {
+  readonly uncompressedLimit: number;
+  readonly imageLimit: number;
   private buffer: Buffer;
   private recordOffsets: Array<[number, number | undefined]> = [];
   private start = 0;
@@ -498,8 +511,10 @@ class MobiFile {
   private decompress!: (input: Buffer) => Buffer;
   private removeTrailingEntries!: (input: Buffer) => Buffer;
 
-  constructor(buffer: Buffer) {
+  constructor(buffer: Buffer, options: MobiParseOptions = {}) {
     this.buffer = buffer;
+    this.uncompressedLimit = options.maxUncompressedBytes ?? MAX_MOBI_UNCOMPRESSED_BYTES;
+    this.imageLimit = options.maxImageBytes ?? MAX_MOBI_IMAGE_BYTES;
   }
 
   open(): void {
@@ -576,14 +591,14 @@ class MobiFile {
     if (palmdoc.encryption !== 0) throw new Error("MOBI защищён DRM и не может быть прочитан");
 
     if (palmdoc.compression === 1) this.decompress = (input) => input;
-    else if (palmdoc.compression === 2) this.decompress = decompressPalmDOC;
+    else if (palmdoc.compression === 2) this.decompress = (input) => decompressPalmDOC(input, this.uncompressedLimit);
     else if (palmdoc.compression === 17480) {
       const huffIndex = mobi.huffcdic as number;
       const numHuffcdic = mobi.numHuffcdic as number;
       const huffRecord = this.loadRecord(huffIndex);
       const cdicRecords: Buffer[] = [];
       for (let i = 1; i < numHuffcdic; i++) cdicRecords.push(this.loadRecord(huffIndex + i));
-      this.decompress = makeHuffcdicDecompressor(huffRecord, cdicRecords);
+      this.decompress = makeHuffcdicDecompressor(huffRecord, cdicRecords, this.uncompressedLimit);
     } else throw new Error("Неизвестный тип сжатия MOBI");
 
     const trailingFlags = mobi.trailingFlags as number;
@@ -620,7 +635,7 @@ class MobiFile {
     const chunks: Buffer[] = [];
     for (let i = 0; i < this.headers.palmdoc.numTextRecords; i++) chunks.push(this.loadText(i));
     const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    if (total > MAX_MOBI_UNCOMPRESSED_BYTES) throw new Error("MOBI слишком большой после распаковки");
+    if (total > this.uncompressedLimit) throw new Error("MOBI слишком большой после распаковки");
     return concatBytes(chunks);
   }
 
@@ -657,7 +672,7 @@ class MobiFile {
     try {
       const bytes = this.loadResource(offset);
       const mime = getImageMime(bytes);
-      if (!mime || bytes.length > MAX_MOBI_IMAGE_BYTES || bytes.length === 0) return null;
+      if (!mime || bytes.length > this.imageLimit || bytes.length === 0) return null;
       return { base64: bytes.toString("base64"), mime };
     } catch {
       return null;
@@ -671,14 +686,14 @@ const headingRegex = /<h[1-6][^>]*>([^<]*)<\/h[1-6]>/i;
 const recindexImgRegex = /<img\b[^>]*recindex=["']?(\d+)["']?[^>]*>/gi;
 const kindleEmbedRegex = /kindle:(?:embed|flow):(\w+)(?:\?mime=[\w/.+-]+)?/gi;
 
-function inlineMobiImages(html: string, loadResource: (index: number) => Buffer): string {
+function inlineMobiImages(html: string, loadResource: (index: number) => Buffer, imageLimit: number): string {
   return html.replace(recindexImgRegex, (match, recindex: string) => {
     const index = Number(recindex) - 1;
     if (!Number.isInteger(index) || index < 0) return "";
     try {
       const bytes = loadResource(index);
       const mime = getImageMime(bytes);
-      if (!mime || bytes.length === 0 || bytes.length > MAX_MOBI_IMAGE_BYTES) return "";
+      if (!mime || bytes.length === 0 || bytes.length > imageLimit) return "";
       const alt = /alt=["']([^"']*)["']/i.exec(match)?.[1] ?? "Иллюстрация";
       return `<img src="data:${mime};base64,${bytes.toString("base64")}" alt="${alt.replace(/"/g, "&quot;")}">`;
     } catch {
@@ -687,14 +702,14 @@ function inlineMobiImages(html: string, loadResource: (index: number) => Buffer)
   });
 }
 
-function inlineKf8Images(html: string, loadResource: (index: number) => Buffer): string {
+function inlineKf8Images(html: string, loadResource: (index: number) => Buffer, imageLimit: number): string {
   return html.replace(kindleEmbedRegex, (match, id: string) => {
     const index = parseInt(id, 32) - 1;
     if (!Number.isInteger(index) || index < 0) return "";
     try {
       const bytes = loadResource(index);
       const mime = getImageMime(bytes);
-      if (!mime || bytes.length === 0 || bytes.length > MAX_MOBI_IMAGE_BYTES) return match;
+      if (!mime || bytes.length === 0 || bytes.length > imageLimit) return match;
       return `data:${mime};base64,${bytes.toString("base64")}`;
     } catch {
       return match;
@@ -714,7 +729,7 @@ function buildMobi6Chapters(mobi: MobiFile): MobiRawChapter[] {
 
   const chapters: MobiRawChapter[] = [];
   for (const part of parts) {
-    const html = inlineMobiImages(part, (index) => mobi.loadResource(index));
+    const html = inlineMobiImages(part, (index) => mobi.loadResource(index), mobi.imageLimit);
     if (!html.trim()) continue;
     chapters.push({ title: chapterTitleFromHtml(html, chapters.length), html });
   }
@@ -788,7 +803,7 @@ function buildKf8Chapters(mobi: MobiFile): MobiRawChapter[] {
 
   const chapters: MobiRawChapter[] = [];
   for (const [i, html] of assembled.entries()) {
-    const withImages = inlineKf8Images(html, (index) => mobi.loadResource(index));
+    const withImages = inlineKf8Images(html, (index) => mobi.loadResource(index), mobi.imageLimit);
     if (!withImages.trim()) continue;
     chapters.push({
       title: titlesBySection.get(i) ?? chapterTitleFromHtml(withImages, i),
@@ -802,8 +817,8 @@ export function isMobiBuffer(buffer: Buffer): boolean {
   return buffer.length >= 68 && getString(buffer, 60, 8) === "BOOKMOBI";
 }
 
-export function parseMobiRaw(buffer: Buffer): MobiRawBook {
-  const mobi = new MobiFile(buffer);
+export function parseMobiRaw(buffer: Buffer, options: MobiParseOptions = {}): MobiRawBook {
+  const mobi = new MobiFile(buffer, options);
   mobi.open();
 
   const metadata = mobi.getMetadata();

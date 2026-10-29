@@ -120,7 +120,8 @@ router.post(
       return;
     }
 
-    const parsed = parseBook(bookFile.buffer, extension);
+    // Роут доступен только администраторам (requireAdmin) — лимиты парсера сняты.
+    const parsed = parseBook(bookFile.buffer, extension, { sizeLimits: { maxFileBytes: null } });
     const coverPath = await storeLandingCover(cover.buffer);
     const [book] = await db
       .insert(landingBooksTable)
