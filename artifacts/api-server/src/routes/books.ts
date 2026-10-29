@@ -6,7 +6,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, giftEditionsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
-import { parseBook } from "../lib/parser";
+import { parseBook, bookFormatFromExtension, type BookFormat } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
@@ -24,8 +24,8 @@ const storage = multer.memoryStorage();
 const bookUploadFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (file.fieldname === "file") {
-      if (ext === ".fb2" || ext === ".epub") cb(null, true);
-      else cb(new Error("Поддерживаются только FB2 и EPUB файлы"));
+      if (bookFormatFromExtension(ext)) cb(null, true);
+      else cb(new Error("Неподдерживаемый формат книги"));
       return;
     }
 
@@ -312,7 +312,7 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     await updateUploadJob(jobId, { status: "processing", stage: "validating", progress: 15, errorMessage: null });
 
     const buffer = fs.readFileSync(tempPath);
-    const ext = job.format as "fb2" | "epub";
+    const ext = job.format as BookFormat;
     const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
     const storageKey = `${fileHash}.${ext}`;
     const filePath = resolveUploadPath(storageKey);
@@ -600,7 +600,11 @@ router.post("/books/upload", requireAuth, uploadBookFile, async (req, res): Prom
     return;
   }
 
-  const ext = path.extname(req.file.originalname).toLowerCase().replace(".", "") as "fb2" | "epub";
+  const ext = bookFormatFromExtension(path.extname(req.file.originalname).toLowerCase());
+  if (!ext) {
+    res.status(400).json({ error: "Неподдерживаемый формат книги" });
+    return;
+  }
   const tempStorageKey = `${crypto.randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
   const tempPath = path.join(tempUploadsDir, tempStorageKey);
   fs.writeFileSync(tempPath, req.file.buffer);

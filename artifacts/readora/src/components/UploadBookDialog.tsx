@@ -31,10 +31,21 @@ interface FileUploadState {
   error: string | null;
 }
 
+const BOOK_FORMAT_EXTENSIONS = ["fb2", "epub", "mobi", "azw3", "prc", "cbz", "txt", "md", "markdown", "html", "htm"];
+type UploadBookFormat = "fb2" | "epub" | "mobi" | "cbz" | "txt" | "md" | "html";
+
+function bookFormatFromName(name: string): UploadBookFormat | null {
+  const ext = name.toLowerCase().split(".").pop();
+  if (!ext) return null;
+  if (ext === "azw3" || ext === "prc") return "mobi";
+  if (ext === "markdown") return "md";
+  if (ext === "htm") return "html";
+  return (BOOK_FORMAT_EXTENSIONS as string[]).includes(ext) ? (ext as UploadBookFormat) : null;
+}
+
 function validateFile(file: File, quota: { maxFileSizeBytes?: number | null; availableBytes?: number | null } | undefined): string | null {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext !== "fb2" && ext !== "epub") {
-    return "Поддерживаются только форматы FB2 и EPUB";
+  if (!bookFormatFromName(file.name)) {
+    return "Поддерживаются форматы FB2, EPUB, MOBI, CBZ, TXT, MD и HTML";
   }
   if (quota?.maxFileSizeBytes != null && file.size > quota.maxFileSizeBytes) {
     return `Файл слишком большой. Максимум ${formatSize(quota.maxFileSizeBytes)}`;
@@ -275,7 +286,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
     cycleIdToUse: number | undefined,
     cycleNumber: number | undefined,
   ): Promise<void> {
-    const format = fileState.file.name.toLowerCase().endsWith(".epub") ? "epub" : "fb2";
+    const format = bookFormatFromName(fileState.file.name) ?? "fb2";
     trackBookUploadStarted(format, fileState.file.size);
     return uploadSingleFile(fileState, cycleIdToUse, cycleNumber, setFiles, upload, invalidateQuota);
   }
@@ -392,12 +403,12 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
           >
             <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
             <p className="font-medium text-sm">Перетащите файлы или нажмите для выбора</p>
-            <p className="text-xs text-muted-foreground mt-1">FB2, EPUB • Множественный выбор</p>
+            <p className="text-xs text-muted-foreground mt-1">FB2, EPUB, MOBI, CBZ, TXT, MD, HTML • Множественный выбор</p>
           </button>
           <input
             ref={inputRef}
             type="file"
-            accept=".fb2,.epub"
+            accept=".fb2,.epub,.mobi,.azw3,.prc,.cbz,.txt,.md,.markdown,.html,.htm"
               multiple
               disabled={!canSelectFiles}
             className="hidden"
