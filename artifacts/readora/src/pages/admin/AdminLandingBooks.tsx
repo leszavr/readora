@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
@@ -91,6 +92,7 @@ export default function AdminLandingBooks() {
   const [deleteBook, setDeleteBook] = useState<LandingBook | null>(null);
 
   const { data: books = [], isLoading, isError } = useListLandingBooks();
+  const pagination = useAdminListPagination(books, "readora.admin.landingBooks.pageSize");
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListLandingBooksQueryKey() });
   const createMutation = useCreateLandingBook();
   const updateMutation = useUpdateLandingBook();
@@ -188,8 +190,8 @@ export default function AdminLandingBooks() {
           <p className="mt-1 text-sm text-muted-foreground">Добавьте книгу с готовой обложкой, чтобы подготовить её к публикации.</p>
         </div>
       ) : (
-        <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
-          {books.map((book) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {pagination.visibleItems.map((book) => (
             <article key={book.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
               <img src={book.coverUrl} alt={`Обложка «${book.title}»`} className="aspect-[2/3] w-full bg-muted object-cover" />
               <div className="space-y-3 p-4">
@@ -217,6 +219,8 @@ export default function AdminLandingBooks() {
           ))}
         </div>
       )}
+
+      <AdminPaginationControls pagination={pagination} />
 
       <Dialog open={createOpen} onOpenChange={(open) => {
         setCreateOpen(open);

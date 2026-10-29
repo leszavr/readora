@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Search, Plus, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
 type Genre = { id: number; code: string; name: string; description?: string | null; isActive: boolean };
 
@@ -70,11 +71,13 @@ export default function AdminGenres() {
     onSuccess: invalidate,
   });
 
-  const filtered = (genres as Genre[]).filter((g) => 
-    !search || 
+  const filtered = (genres as Genre[]).filter((g) =>
+    !search ||
     g.name.toLowerCase().includes(search.toLowerCase()) ||
     g.code.toLowerCase().includes(search.toLowerCase())
   );
+
+  const pagination = useAdminListPagination(filtered, "readora.admin.genres.pageSize", search);
 
   return (
     <div className="space-y-4">
@@ -96,8 +99,8 @@ export default function AdminGenres() {
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : (
-          <Table containerClassName="max-h-[70vh] overflow-y-auto">
-            <TableHeader className="sticky top-0 z-10 bg-card">
+          <Table>
+            <TableHeader>
               <TableRow>
                 <TableHead>Код</TableHead>
                 <TableHead>Название</TableHead>
@@ -114,7 +117,7 @@ export default function AdminGenres() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((g) => (
+                pagination.visibleItems.map((g) => (
                   <TableRow key={g.id}>
                     <TableCell className="font-mono text-sm text-muted-foreground">{g.code}</TableCell>
                     <TableCell className="font-medium">{g.name}</TableCell>
@@ -153,9 +156,11 @@ export default function AdminGenres() {
                 ))
               )}
             </TableBody>
-          </Table>
-        )}
-      </div>
+           </Table>
+         )}
+       </div>
+
+      <AdminPaginationControls pagination={pagination} />
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

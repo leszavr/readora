@@ -32,6 +32,7 @@ import {
 import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
 export default function AdminBooks() {
   const qc = useQueryClient();
@@ -41,6 +42,8 @@ export default function AdminBooks() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const { data: books = [], isLoading } = useListAdminBooks({ search: search || undefined });
+  const pagination = useAdminListPagination(books, "readora.admin.books.pageSize", search);
+  const visibleBooks = pagination.visibleItems;
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminBooksQueryKey() });
 
   const { mutate: deleteBook } = useDeleteAdminBook({ mutation: { onSuccess: invalidate } });
@@ -74,8 +77,8 @@ export default function AdminBooks() {
     setSelectedBookIds(new Set());
   }, [search]);
 
-  const allVisibleSelected = books.length > 0 && books.every((book) => selectedBookIds.has(book.id));
-  const someVisibleSelected = books.some((book) => selectedBookIds.has(book.id));
+  const allVisibleSelected = visibleBooks.length > 0 && visibleBooks.every((book) => selectedBookIds.has(book.id));
+  const someVisibleSelected = visibleBooks.some((book) => selectedBookIds.has(book.id));
 
   const toggleBookSelection = (bookId: number) => {
     setSelectedBookIds((current) => {
@@ -87,7 +90,7 @@ export default function AdminBooks() {
   };
 
   const toggleAllVisibleBooks = () => {
-    setSelectedBookIds(allVisibleSelected ? new Set() : new Set(books.map((book) => book.id)));
+    setSelectedBookIds(allVisibleSelected ? new Set() : new Set(visibleBooks.map((book) => book.id)));
   };
 
   const deleteSelectedBooks = async () => {
@@ -137,8 +140,8 @@ export default function AdminBooks() {
         {isLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
         ) : (
-          <Table containerClassName="max-h-[70vh] overflow-y-auto">
-            <TableHeader className="sticky top-0 z-10 bg-card">
+          <Table>
+            <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
                   <Checkbox
@@ -163,7 +166,7 @@ export default function AdminBooks() {
                   <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">Книги не найдены</TableCell>
                 </TableRow>
               ) : (
-                books.map((b: {
+                visibleBooks.map((b: {
                   id: number; title: string; author?: string | null;
                   format: string; status: string; ownerUsername?: string | null;
                   fileSize?: number | null; uploadedAt: string; giftEditionId?: number | null;
@@ -234,9 +237,11 @@ export default function AdminBooks() {
                 ))
               )}
             </TableBody>
-          </Table>
-        )}
-      </div>
+           </Table>
+         )}
+       </div>
+
+      <AdminPaginationControls pagination={pagination} />
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

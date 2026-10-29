@@ -364,7 +364,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl min-w-0">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl min-w-0 overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -525,7 +525,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
                 >
                   <FileText className="w-5 h-5 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium" title={f.file.name}>
+                    <p className="break-words text-sm font-medium" title={f.file.name}>
                       {f.file.name}
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -539,7 +539,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
                       <Progress value={f.progress} className="h-1 mt-2" />
                     )}
                     {f.error && (
-                      <p className="text-xs text-destructive mt-1">{f.error}</p>
+                      <p className="break-words text-xs text-destructive mt-1">{f.error}</p>
                     )}
                   </div>
                   <div className="shrink-0">
@@ -581,7 +581,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
               <div className="mt-2 space-y-1">
                 {failedFiles.map((f) => (
                   <div key={`${f.file.name}-${f.file.size}`} className="text-xs text-amber-800 flex items-start gap-1.5">
-                    <span className="font-medium truncate" title={f.file.name}>{f.file.name}</span>
+                    <span className="min-w-0 break-words font-medium" title={f.file.name}>{f.file.name}</span>
                     <span className="shrink-0">—</span>
                     <span className="min-w-0 break-words">{f.error ?? "неизвестная ошибка"}</span>
                   </div>
