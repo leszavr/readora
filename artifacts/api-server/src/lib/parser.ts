@@ -25,6 +25,44 @@ const CBZ_PAGES_PER_CHAPTER = 20;
 
 export type BookFormat = "fb2" | "epub" | "mobi" | "cbz" | "txt" | "md" | "html";
 
+export interface ParseBookSizeLimits {
+  /** Лимит размера файла из настроек квоты; null — без лимита (админ). */
+  maxFileBytes: number | null;
+}
+
+export interface ParseBookOptions {
+  /**
+   * Лимиты размеров, синхронизированные с квотой пользователя (storage-quota).
+   * Без sizeLimits применяются стандартные константы парсера.
+   * Структурные лимиты (число глав/записей) действуют для всех.
+   */
+  sizeLimits?: ParseBookSizeLimits;
+}
+
+// Файловые лимиты синхронизированы с настройками квоты, чтобы при их повышении
+// в админке парсер не отклонял файлы, прошедшие проверку загрузки.
+function resolveFileBytesLimit(options: ParseBookOptions): number {
+  if (options.sizeLimits?.maxFileBytes != null) return options.sizeLimits.maxFileBytes;
+  if (options.sizeLimits) return Number.POSITIVE_INFINITY;
+  return MAX_BOOK_PARSE_BYTES;
+}
+
+// Допуск на распаковку масштабируется вместе с файловым лимитом (×2),
+// оставаясь не меньше базовых 200 МБ.
+function resolveUncompressedBytesLimit(options: ParseBookOptions): number {
+  if (!options.sizeLimits) return MAX_EPUB_UNCOMPRESSED_BYTES;
+  if (options.sizeLimits.maxFileBytes == null) return Number.POSITIVE_INFINITY;
+  return Math.max(MAX_EPUB_UNCOMPRESSED_BYTES, options.sizeLimits.maxFileBytes * 2);
+}
+
+function resolveImageBytesLimit(options: ParseBookOptions): number {
+  return options.sizeLimits?.maxFileBytes === null ? Number.POSITIVE_INFINITY : MAX_EPUB_EMBEDDED_IMAGE_BYTES;
+}
+
+function resolveTextEntryBytesLimit(options: ParseBookOptions): number {
+  return options.sizeLimits?.maxFileBytes === null ? Number.POSITIVE_INFINITY : MAX_EPUB_TEXT_ENTRY_BYTES;
+}
+
 export const BOOK_FORMAT_EXTENSIONS: Record<string, BookFormat> = {
   ".fb2": "fb2",
   ".epub": "epub",
@@ -371,12 +409,12 @@ function isUnsafeZipPath(entryName: string): boolean {
   return normalized.startsWith("../") || normalized === ".." || path.posix.isAbsolute(normalized);
 }
 
-export function validateBookFile(buffer: Buffer, ext: BookFormat): void {
+export function validateBookFile(buffer: Buffer, ext: BookFormat, options: ParseBookOptions = {}): void {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new Error("Файл пустой");
-  if (buffer.length > MAX_BOOK_PARSE_BYTES) throw new Error("Файл слишком большой");
+  if (buffer.length > resolveFileBytesLimit(options)) throw new Error("Файл слишком большой");
 
   if (ext === "fb2") {
-    if (buffer.length > MAX_FB2_XML_BYTES) throw new Error("FB2 превышает допустимый размер XML");
+    if (buffer.length > resolveFileBytesLimit(options)) throw new Error("FB2 превышает допустимый размер XML");
     const sample = detectAndConvertEncoding(buffer.subarray(0, Math.min(buffer.length, 4096)));
     if (!/<(?:\w+:)?FictionBook[\s>]/i.test(sample)) {
       throw new Error("Некорректный FB2: не найден корневой FictionBook");
@@ -390,7 +428,7 @@ export function validateBookFile(buffer: Buffer, ext: BookFormat): void {
   }
 
   if (ext === "txt" || ext === "md") {
-    if (buffer.length > MAX_TXT_BYTES) throw new Error("Текстовый файл превышает допустимый размер");
+    if (buffer.length > resolveFileBytesLimit(options)) throw new Error("Текстовый файл превышает допустимый размер");
     return;
   }
 
@@ -401,11 +439,12 @@ export function validateBookFile(buffer: Buffer, ext: BookFormat): void {
     const zip = new AdmZip(buffer);
     const entries = zip.getEntries();
     if (entries.length > MAX_CBZ_ENTRIES) throw new Error("CBZ содержит слишком много файлов");
+    const uncompressedLimit = resolveUncompressedBytesLimit(options);
     let totalUncompressed = 0;
     for (const entry of entries) {
       if (isUnsafeZipPath(entry.entryName)) throw new Error("CBZ содержит небезопасный путь файла");
       totalUncompressed += entry.header.size;
-      if (totalUncompressed > MAX_CBZ_UNCOMPRESSED_BYTES) throw new Error("CBZ слишком большой после распаковки");
+      if (totalUncompressed > uncompressedLimit) throw new Error("CBZ слишком большой после распаковки");
     }
     return;
   }
@@ -417,28 +456,30 @@ export function validateBookFile(buffer: Buffer, ext: BookFormat): void {
   if (!entries.some((e) => e.entryName === "META-INF/container.xml")) {
     throw new Error("Некорректный EPUB: отсутствует META-INF/container.xml");
   }
+  const uncompressedLimit = resolveUncompressedBytesLimit(options);
+  const textEntryLimit = resolveTextEntryBytesLimit(options);
   let totalUncompressed = 0;
   for (const entry of entries) {
     if (isUnsafeZipPath(entry.entryName)) throw new Error("EPUB содержит небезопасный путь файла");
     totalUncompressed += entry.header.size;
-    if (totalUncompressed > MAX_EPUB_UNCOMPRESSED_BYTES) throw new Error("EPUB слишком большой после распаковки");
-    if (/\.(x?html?|opf|ncx|xml)$/i.test(entry.entryName) && entry.header.size > MAX_EPUB_TEXT_ENTRY_BYTES) {
+    if (totalUncompressed > uncompressedLimit) throw new Error("EPUB слишком большой после распаковки");
+    if (/\.(x?html?|opf|ncx|xml)$/i.test(entry.entryName) && entry.header.size > textEntryLimit) {
       throw new Error("EPUB содержит слишком большой текстовый файл");
     }
   }
 }
 
-export function parseBook(buffer: Buffer, ext: BookFormat): ParsedBook {
-  validateBookFile(buffer, ext);
+export function parseBook(buffer: Buffer, ext: BookFormat, options: ParseBookOptions = {}): ParsedBook {
+  validateBookFile(buffer, ext, options);
   switch (ext) {
     case "fb2":
-      return parseFB2(buffer);
+      return parseFB2(buffer, options);
     case "epub":
-      return parseEPUB(buffer);
+      return parseEPUB(buffer, options);
     case "mobi":
-      return parseMOBI(buffer);
+      return parseMOBI(buffer, options);
     case "cbz":
-      return parseCBZ(buffer);
+      return parseCBZ(buffer, options);
     case "txt":
       return parseTXT(buffer);
     case "md":
@@ -450,7 +491,7 @@ export function parseBook(buffer: Buffer, ext: BookFormat): ParsedBook {
 
 // ─── FB2 Parser ───────────────────────────────────────────────────────────────
 
-export function parseFB2(buffer: Buffer): ParsedBook {
+export function parseFB2(buffer: Buffer, options: ParseBookOptions = {}): ParsedBook {
   const xmlText = detectAndConvertEncoding(buffer);
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -463,7 +504,7 @@ export function parseFB2(buffer: Buffer): ParsedBook {
       ["section", "body", "binary", "genre", "author", "book-title", "p", "image", "title-info"].includes(name),
   });
 
-  validateBookFile(buffer, "fb2");
+  validateBookFile(buffer, "fb2", options);
   const doc = parser.parse(xmlText);
   const fb2 = doc?.FictionBook ?? doc?.fictionbook ?? {};
 
@@ -530,11 +571,12 @@ export function parseFB2(buffer: Buffer): ParsedBook {
     }
   }
 
-  const chapters = extractFB2Chapters(xmlText);
+  const imageLimit = resolveImageBytesLimit(options);
+  const chapters = extractFB2Chapters(xmlText, imageLimit);
 
   if (chapters.length === 0) {
     // fallback: whole book as one chapter
-    const fallbackHtml = extractFB2FallbackBodyHtml(xmlText);
+    const fallbackHtml = extractFB2FallbackBodyHtml(xmlText, imageLimit);
     const clean = sanitize(fallbackHtml);
     chapters.push({ index: 0, title: "Содержание", htmlContent: clean, wordCount: countHtmlWords(clean) });
   }
@@ -725,9 +767,9 @@ function appendFb2SectionChapters(
   return chapterIndex;
 }
 
-function extractFB2Chapters(xmlText: string): ParsedChapter[] {
+function extractFB2Chapters(xmlText: string, imageLimit: number): ParsedChapter[] {
   const $ = cheerio.load(xmlText, { xmlMode: true });
-  const binaryMap = buildFb2BinaryMap($);
+  const binaryMap = buildFb2BinaryMap($, imageLimit);
   const chapters: ParsedChapter[] = [];
   let chapterIndex = 0;
 
@@ -744,9 +786,9 @@ function extractFB2Chapters(xmlText: string): ParsedChapter[] {
   return chapters;
 }
 
-function extractFB2FallbackBodyHtml(xmlText: string): string {
+function extractFB2FallbackBodyHtml(xmlText: string, imageLimit: number): string {
   const $ = cheerio.load(xmlText, { xmlMode: true });
-  const binaryMap = buildFb2BinaryMap($);
+  const binaryMap = buildFb2BinaryMap($, imageLimit);
   const bodies = $("FictionBook > body, fictionbook > body").toArray() as Fb2Node[];
   return bodies
     .filter((body) => {
@@ -969,7 +1011,7 @@ function getPositiveIntegerAttr(node: Fb2Node, name: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 && parsed <= 100 ? parsed : null;
 }
 
-function buildFb2BinaryMap($: CheerioAPI): Map<string, string> {
+function buildFb2BinaryMap($: CheerioAPI, imageLimit: number): Map<string, string> {
   const binaryMap = new Map<string, string>();
   const binaries = $("binary").toArray() as Fb2Node[];
 
@@ -980,7 +1022,7 @@ function buildFb2BinaryMap($: CheerioAPI): Map<string, string> {
     if (!id || !data || !SAFE_IMAGE_MIME_TYPES.has(contentType)) continue;
 
     const imageBytes = Buffer.byteLength(data, "base64");
-    if (imageBytes > MAX_FB2_EMBEDDED_IMAGE_BYTES) continue;
+    if (imageBytes > imageLimit) continue;
 
     binaryMap.set(id, `data:${contentType};base64,${data}`);
   }
@@ -1064,6 +1106,7 @@ function inlineEpubImages(
   docDir: string,
   zip: AdmZip,
   entries: AdmZip.IZipEntry[],
+  imageLimit: number,
 ): string {
   if (!/<img\b/i.test(html)) return html;
 
@@ -1093,7 +1136,7 @@ function inlineEpubImages(
     const resolved = path.posix.normalize(path.posix.join(docDir, decodedSrc));
     const mime = EPUB_IMAGE_MIME_BY_EXT[path.posix.extname(resolved).toLowerCase()];
     const entry = isUnsafeZipPath(resolved) ? undefined : entries.find((e) => e.entryName === resolved);
-    const data = entry && mime && entry.header.size <= MAX_EPUB_EMBEDDED_IMAGE_BYTES ? zip.readFile(entry) : null;
+    const data = entry && mime && entry.header.size <= imageLimit ? zip.readFile(entry) : null;
 
     if (!data || !mime) {
       $doc(el).remove();
@@ -1162,10 +1205,11 @@ function splitEpubHtmlByToc(
   return result.length >= 2 ? result : null;
 }
 
-export function parseEPUB(buffer: Buffer): ParsedBook {
-  validateBookFile(buffer, "epub");
+export function parseEPUB(buffer: Buffer, options: ParseBookOptions = {}): ParsedBook {
+  validateBookFile(buffer, "epub", options);
   const zip = new AdmZip(buffer);
   const entries = zip.getEntries();
+  const imageLimit = resolveImageBytesLimit(options);
 
   const findEntry = (entryPath: string, href: string) => {
     const exact = entries.find((e) => e.entryName === entryPath);
@@ -1357,7 +1401,7 @@ export function parseEPUB(buffer: Buffer): ParsedBook {
     const split = splitEpubHtmlByToc(htmlText, tocByFile.get(entryPath) ?? []);
     if (split) {
       for (const part of split) {
-        const clean = sanitize(inlineEpubImages(part.html, docDir, zip, entries));
+        const clean = sanitize(inlineEpubImages(part.html, docDir, zip, entries, imageLimit));
         const text = cheerio.load(clean).text();
         if (!text.trim() && !/<img\b/i.test(clean)) continue;
         chapters.push({
@@ -1373,7 +1417,7 @@ export function parseEPUB(buffer: Buffer): ParsedBook {
 
     const readable = extractReadableEpubHtml(htmlText);
     const bodyHtml = readable.html || htmlText;
-    const clean = sanitize(inlineEpubImages(bodyHtml, docDir, zip, entries));
+    const clean = sanitize(inlineEpubImages(bodyHtml, docDir, zip, entries, imageLimit));
 
     const plainText = readable.text || cheerio.load(clean).text();
     const hasImages = /<img\b/i.test(clean);
@@ -1406,8 +1450,11 @@ export function parseEPUB(buffer: Buffer): ParsedBook {
 
 // ─── MOBI Parser ──────────────────────────────────────────────────────────────
 
-function parseMOBI(buffer: Buffer): ParsedBook {
-  const raw = parseMobiRaw(buffer);
+function parseMOBI(buffer: Buffer, options: ParseBookOptions = {}): ParsedBook {
+  const raw = parseMobiRaw(buffer, {
+    maxUncompressedBytes: resolveUncompressedBytesLimit(options),
+    maxImageBytes: resolveImageBytesLimit(options),
+  });
   const chapters: ParsedChapter[] = [];
   for (const chapter of raw.chapters) {
     if (chapters.length >= MAX_BOOK_CHAPTERS) throw new Error("Книга содержит слишком много глав");
@@ -1608,8 +1655,9 @@ const CBZ_IMAGE_MIME_BY_EXT: Record<string, string> = {
 
 const naturalCompare = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare;
 
-function parseCBZ(buffer: Buffer): ParsedBook {
+function parseCBZ(buffer: Buffer, options: ParseBookOptions = {}): ParsedBook {
   const zip = new AdmZip(buffer);
+  const imageLimit = resolveImageBytesLimit(options);
   const pages = zip
     .getEntries()
     .filter((entry) => !entry.isDirectory && CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(entry.entryName).toLowerCase()] != null)
@@ -1619,7 +1667,7 @@ function parseCBZ(buffer: Buffer): ParsedBook {
 
   const coverEntry = pages[0];
   const coverMime = CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(coverEntry.entryName).toLowerCase()];
-  const coverData = coverEntry.header.size <= MAX_EPUB_EMBEDDED_IMAGE_BYTES ? zip.readFile(coverEntry) : null;
+  const coverData = coverEntry.header.size <= imageLimit ? zip.readFile(coverEntry) : null;
 
   const chapters: ParsedChapter[] = [];
   for (let start = 0; start < pages.length; start += CBZ_PAGES_PER_CHAPTER) {
@@ -1627,7 +1675,7 @@ function parseCBZ(buffer: Buffer): ParsedBook {
     const group = pages.slice(start, start + CBZ_PAGES_PER_CHAPTER);
     const images: string[] = [];
     for (const entry of group) {
-      if (entry.header.size > MAX_EPUB_EMBEDDED_IMAGE_BYTES) continue;
+      if (entry.header.size > imageLimit) continue;
       const mime = CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(entry.entryName).toLowerCase()];
       const data = zip.readFile(entry);
       if (!data || data.length === 0) continue;

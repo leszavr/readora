@@ -577,3 +577,18 @@ test("parseBook отклоняет неизвестный формат и пус
   assert.throws(() => validateBookFile(Buffer.alloc(0), "txt"), /пустой/);
   assert.throws(() => validateBookFile(Buffer.from("PK".padEnd(64, "x")), "cbz"), /ZIP/);
 });
+
+// Лимиты парсера синхронизируются с настройками квоты: размер файла берётся
+// из sizeLimits, а не из захардкоженных констант.
+test("validateBookFile: лимит файла синхронизирован с sizeLimits квоты", () => {
+  const big = Buffer.alloc(51 * 1024 * 1024); // 51 МБ > стандартных 50 МБ
+
+  // без sizeLimits — стандартный лимит парсера
+  assert.throws(() => validateBookFile(big, "txt"), /слишком большой/);
+
+  // повышенный пользователем лимит из админки пропускает файл
+  validateBookFile(big, "txt", { sizeLimits: { maxFileBytes: 60 * 1024 * 1024 } });
+
+  // админ (null) — без лимита
+  validateBookFile(big, "txt", { sizeLimits: { maxFileBytes: null } });
+});

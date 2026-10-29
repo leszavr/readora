@@ -6,7 +6,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, giftEditionsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
-import { parseBook, bookFormatFromExtension, type BookFormat } from "../lib/parser";
+import { parseBook, bookFormatFromExtension, type BookFormat, type ParseBookOptions } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
@@ -303,7 +303,7 @@ async function processBookUploadJob(jobId: number): Promise<void> {
   const [job] = await db.select().from(bookUploadJobsTable).where(eq(bookUploadJobsTable.id, jobId));
   if (!job?.status || job.status !== "queued") return;
 
-  const [owner] = await db.select({ id: usersTable.id, analyticsOptIn: usersTable.analyticsOptIn }).from(usersTable).where(eq(usersTable.id, job.ownerUserId));
+  const [owner] = await db.select({ id: usersTable.id, role: usersTable.role, analyticsOptIn: usersTable.analyticsOptIn }).from(usersTable).where(eq(usersTable.id, job.ownerUserId));
   if (!owner) return;
 
   const tempPath = path.join(tempUploadsDir, job.tempStorageKey);
@@ -318,7 +318,13 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     const filePath = resolveUploadPath(storageKey);
 
     await updateUploadJob(jobId, { stage: "parsing", progress: 35 });
-    const parsed = parseBook(buffer, ext);
+    // Лимиты парсера синхронизированы с квотой владельца: админ — без лимитов,
+    // обычный пользователь — настраиваемый в админке maxFileSizeMb.
+    const quota = await getStorageQuota(owner);
+    const parseOptions: ParseBookOptions = quota.isExempt
+      ? { sizeLimits: { maxFileBytes: null } }
+      : { sizeLimits: { maxFileBytes: quota.maxFileSizeBytes } };
+    const parsed = parseBook(buffer, ext, parseOptions);
 
     await updateUploadJob(jobId, { stage: "saving", progress: 80 });
     if (!fs.existsSync(filePath)) {
