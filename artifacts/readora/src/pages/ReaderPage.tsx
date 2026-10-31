@@ -1470,7 +1470,18 @@ export default function ReaderPage() {
                           className="flex-1 text-left"
                           onClick={() => {
                             if (isSameBook) {
-                              if (chIdx >= 0) navigateToChapterIndex(chIdx, { positionRaw: bm.positionRaw });
+                              if (chIdx >= 0) {
+                                // Подсветка и гарантия видимости якоря — как у заметок:
+                                // restore позиции неточен для legacy-закладок, якорь
+                                // выделения сам докручивается в видимую область
+                                const position = parseNotePosition(bm.positionRaw);
+                                setPendingNoteHighlight({
+                                  chapterId: chapters[chIdx].id,
+                                  anchor: position.textSelection ?? null,
+                                  text: bm.selectedText,
+                                });
+                                navigateToChapterIndex(chIdx, { positionRaw: bm.positionRaw });
+                              }
                             } else {
                               jumpToBookPosition({ bookId: bm.bookId, chapterId: bm.chapterId, positionRaw: bm.positionRaw, highlightedText: bm.selectedText });
                             }

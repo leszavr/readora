@@ -381,6 +381,40 @@ async function run(): Promise<void> {
         console.log(`FAIL [заметка в ридере] ${label}: ${String(error).slice(0, 120)}`);
       }
     }
+    // ---------------------------------------------------------------
+    // Фаза 5: переход по закладке той же книги внутри ридера
+    // ---------------------------------------------------------------
+    {
+      await page.goto(`${BASE_URL}/reader/${CYCLE_BOOK_A}`);
+      await page.waitForSelector(".reader-content-area", { timeout: 20000 });
+      await page.waitForTimeout(1000);
+      await page.click('button[aria-label="Закладки"]');
+      await page.waitForTimeout(500);
+
+      // закладка текущей книги: карточка с «Глава N» без названия чужой книги
+      const panel = page.locator("div.fixed.right-2.top-14");
+      const sameBookBookmark = panel.locator("button.flex-1", { hasText: "Глава" }).first();
+      const label = (await sameBookBookmark.innerText()).slice(0, 60);
+      const expectedText = await extractQuote(sameBookBookmark);
+      try {
+        const urlBefore = page.url();
+        await sameBookBookmark.click();
+        await page.waitForSelector(".readora-note-highlight-overlay", { state: "attached", timeout: 8000 });
+        const url = page.url();
+        const checks = await checkHighlight(page, expectedText);
+        const pass = verdict(checks, url, String(CYCLE_BOOK_A)) && url === urlBefore;
+        results.push({ phase: "ридер: закладка той же книги", item: label, url, checks, pass });
+        console.log(`${pass ? "OK " : "FAIL"} [закладка в ридере] ${label}`);
+      } catch (error) {
+        results.push({
+          phase: "ридер: закладка той же книги",
+          item: label,
+          error: String(error).slice(0, 200),
+          pass: false,
+        });
+        console.log(`FAIL [закладка в ридере] ${label}: ${String(error).slice(0, 120)}`);
+      }
+    }
   } finally {
     await browser.close();
   }
