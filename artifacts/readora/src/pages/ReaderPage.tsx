@@ -96,7 +96,10 @@ import {
 import { useBookmarks, useCreateBookmark, useDeleteBookmark } from "@/hooks/use-bookmarks";
 import { useNotes, useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/use-notes";
 import { NotesPanel } from "@/components/reader/NotesPanel";
+import { NoteEditor } from "@/components/reader/NoteEditor";
 import { TextSelectionToolbar } from "@/components/reader/TextSelectionToolbar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { setReaderJumpIntent, takeReaderJumpIntent } from "@/lib/reader-jump";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
 const READER_IDLE_TIMEOUT_MS = 5 * 60_000;
@@ -322,7 +325,7 @@ function usePendingScrollRestore({
 // Main reader component
 // ---------------------------------------------------------------------------
 export default function ReaderPage() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [, params] = useRoute("/reader/:id");
   const routeBookId = parseInt(params?.id ?? "0", 10);
   const locationBookIdMatch = location.match(/^\/reader\/(\d+)/);
@@ -361,6 +364,11 @@ export default function ReaderPage() {
     text: string | null;
   } | null>(null);
   const noteHighlightCleanupRef = useRef<(() => void) | null>(null);
+  const [noteDraft, setNoteDraft] = useState<{
+    chapterId: number;
+    positionRaw: string;
+    highlightedText: string | null;
+  } | null>(null);
   
   // Scroll position tracking for smart navigation
   const [isAtChapterStart, setIsAtChapterStart] = useState(true);
@@ -395,6 +403,8 @@ export default function ReaderPage() {
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const tocActiveChapterRef = useRef<HTMLButtonElement | null>(null);
   const manualRestoreCleanupRef = useRef<(() => void) | null>(null);
+  // Главы, открытые через jump по заметке/закладке: restore по прогрессу для них пропускаем
+  const progressRestoreSkipChaptersRef = useRef<Set<number>>(new Set());
   const programmaticScrollUntilRef = useRef(0);
   const readerSessionRef = useRef<{ id: string; startProgressPct: number; maxProgressPct: number; activeReadingMs: number; lastActiveAt: number; ended: boolean } | null>(null);
   const remoteProgressRef = useRef(0);
@@ -634,6 +644,7 @@ export default function ReaderPage() {
     contentReady: !chapterLoading,
     onProgrammaticScroll: setProgrammaticScroll,
     isProgrammaticScroll,
+    skipChaptersRef: progressRestoreSkipChaptersRef,
   });
 
   // ---------------------------------------------------------------------------
@@ -708,16 +719,28 @@ export default function ReaderPage() {
       }
     }
 
-    const noteText = prompt("Введите текст заметки:");
-    if (!noteText || !noteText.trim()) return;
+    setNoteDraft({ chapterId: currentChapterId, positionRaw, highlightedText });
+  }, [currentChapterId]);
 
-    createNote.mutate({ chapterId: currentChapterId, positionRaw, highlightedText, noteText: noteText.trim(), color: "yellow" }, {
-      onSuccess: () => {
-        // Открываем панель заметок после создания
-        setNotesOpen(true);
+  // ---------------------------------------------------------------------------
+  // Переход к позиции в другой книге цикла (заметка/закладка из панели)
+  // ---------------------------------------------------------------------------
+  const jumpToBookPosition = useCallback(
+    (target: { bookId: number; chapterId: number; positionRaw: string; highlightedText: string | null }) => {
+      if (target.bookId === bookId) return;
+      if (currentChapterIdx !== null && currentChapterId !== null) {
+        saveProgressNow({ chapterId: currentChapterId, chapterIdx: currentChapterIdx });
       }
-    });
-  }, [currentChapterId, createNote]);
+      setReaderJumpIntent({
+        bookId: target.bookId,
+        chapterId: target.chapterId,
+        positionRaw: target.positionRaw,
+        highlightedText: target.highlightedText,
+      });
+      navigate(`/reader/${target.bookId}`);
+    },
+    [bookId, currentChapterId, currentChapterIdx, navigate, saveProgressNow]
+  );
 
   // ---------------------------------------------------------------------------
   // Chapter navigation
@@ -869,7 +892,23 @@ export default function ReaderPage() {
             noteHighlightCleanupRef.current = null;
           }
         }, 3_000);
-        range.getBoundingClientRect();
+
+        // Гарантируем видимость якоря: при неточном восстановлении позиции
+        // (legacy scrollTop, изменившаяся геометрия) фрагмент может оказаться
+        // за пределами окна — приводим его верх к границе viewport с inset
+        const container = scrollContainerRef.current;
+        if (container) {
+          const rect = range.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          if (rect.height > 0 && (rect.top < containerRect.top + 8 || rect.top > containerRect.bottom - 8)) {
+            const delta = rect.top - (containerRect.top + 8);
+            const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+            container.scrollTo({
+              top: Math.max(0, Math.min(container.scrollTop + delta, maxScroll)),
+              behavior: "auto",
+            });
+          }
+        }
       }
       setPendingNoteHighlight(null);
     }, 450);
@@ -1066,6 +1105,28 @@ export default function ReaderPage() {
     if (currentChapterIdx !== null) return;
     // Wait for chapters to load
     if (!chapters.length) return;
+
+    // Переход по заметке/закладке из другой книги или библиотеки — приоритетнее прогресса
+    const jump = takeReaderJumpIntent(bookId);
+    if (jump) {
+      const jumpIdx = chapters.findIndex((c) => c.id === jump.chapterId);
+      chapterNavigationSourceRef.current = "restore";
+      setCurrentChapterIdx(jumpIdx >= 0 ? jumpIdx : 0);
+      if (jumpIdx >= 0) {
+        // Позицию задаёт jump: restore по прогрессу для этой главы не должен
+        // перезаписать его поздним скроллом
+        progressRestoreSkipChaptersRef.current.add(jump.chapterId);
+        setPendingScrollRestore({ chapterId: jump.chapterId, positionRaw: jump.positionRaw });
+        const jumpPosition = parseNotePosition(jump.positionRaw);
+        setPendingNoteHighlight({
+          chapterId: jump.chapterId,
+          anchor: jumpPosition.textSelection ?? null,
+          text: jump.highlightedText,
+        });
+      }
+      return;
+    }
+
     // Wait for progress to be determined
     if (progressQuery.isLoading) return;
 
@@ -1079,7 +1140,7 @@ export default function ReaderPage() {
 
     chapterNavigationSourceRef.current = "restore";
     setCurrentChapterIdx(targetIdx);
-  }, [chapters, effectiveProgress, progressQuery.isLoading, currentChapterIdx]);
+  }, [bookId, chapters, effectiveProgress, progressQuery.isLoading, currentChapterIdx]);
 
   // ---------------------------------------------------------------------------
   // Reset on bookId change
@@ -1439,17 +1500,29 @@ export default function ReaderPage() {
                 ) : (
                   bookmarks.map((bm) => {
                     const chIdx = chapters.findIndex((c) => c.id === bm.chapterId);
+                    const isSameBook = bm.bookId === bookId;
                     const chTitle = chIdx >= 0 ? chapters[chIdx].title : `Глава ${bm.chapterId}`;
                     return (
                       <div key={bm.id} className="flex items-center gap-1 rounded-lg hover:bg-muted px-2 py-2">
                         <button
                           className="flex-1 text-left"
                           onClick={() => {
-                            if (chIdx >= 0) navigateToChapterIndex(chIdx, { positionRaw: bm.positionRaw });
+                            if (isSameBook) {
+                              if (chIdx >= 0) navigateToChapterIndex(chIdx, { positionRaw: bm.positionRaw });
+                            } else {
+                              jumpToBookPosition({ bookId: bm.bookId, chapterId: bm.chapterId, positionRaw: bm.positionRaw, highlightedText: bm.selectedText });
+                            }
                             setBookmarksOpen(false);
                           }}
                         >
-                          <span className="text-xs opacity-60 block">{chIdx >= 0 ? `Глава ${chIdx + 1}` : ""} {chTitle}</span>
+                          {isSameBook ? (
+                            <span className="text-xs opacity-60 block">{chIdx >= 0 ? `Глава ${chIdx + 1}` : ""} {chTitle}</span>
+                          ) : (
+                            <span className="text-xs opacity-60 block flex items-center gap-1">
+                              <BookOpen className="size-3 shrink-0" />
+                              <span className="line-clamp-1">{bm.bookTitle ?? "Другая книга цикла"}</span>
+                            </span>
+                          )}
                           {bm.selectedText && (
                             <p className="text-sm italic text-muted-foreground line-clamp-2 mt-0.5">«{bm.selectedText}»</p>
                           )}
@@ -1473,21 +1546,68 @@ export default function ReaderPage() {
           <NotesPanel
             notes={notes}
             chapters={chapters}
+            currentBookId={bookId}
             onClose={() => setNotesOpen(false)}
-            onNavigate={(chIdx, posRaw, highlightedText) => {
-              const position = parseNotePosition(posRaw);
-              setPendingNoteHighlight({
-                chapterId: chapters[chIdx]?.id ?? 0,
-                anchor: position.textSelection ?? null,
-                text: highlightedText,
-              });
-              navigateToChapterIndex(chIdx, { positionRaw: posRaw });
+            onNavigate={(target) => {
+              if (target.bookId === bookId) {
+                const chIdx = chapters.findIndex((c) => c.id === target.chapterId);
+                if (chIdx < 0) return;
+                const position = parseNotePosition(target.positionRaw);
+                setPendingNoteHighlight({
+                  chapterId: chapters[chIdx].id,
+                  anchor: position.textSelection ?? null,
+                  text: target.highlightedText,
+                });
+                navigateToChapterIndex(chIdx, { positionRaw: target.positionRaw });
+              } else {
+                jumpToBookPosition(target);
+              }
               setNotesOpen(false);
             }}
             onDelete={(noteId) => deleteNote.mutate(noteId)}
             onUpdate={(noteId, noteText, color) => updateNote.mutate({ noteId, noteText, color })}
           />
         )}
+
+        {/* New note dialog (единый редактор для добавления и правки заметок) */}
+        <Dialog open={noteDraft !== null} onOpenChange={(open) => { if (!open) setNoteDraft(null); }}>
+          {noteDraft && (
+            <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+              <DialogHeader>
+                <DialogTitle>Новая заметка</DialogTitle>
+              </DialogHeader>
+              {noteDraft.highlightedText && (
+                <p className="text-sm italic text-muted-foreground line-clamp-3 -mt-2">
+                  «{noteDraft.highlightedText}»
+                </p>
+              )}
+              <NoteEditor
+                initialText=""
+                initialColor="yellow"
+                saveLabel="Добавить"
+                autoFocus
+                onSave={(noteText, color) => {
+                  createNote.mutate(
+                    {
+                      chapterId: noteDraft.chapterId,
+                      positionRaw: noteDraft.positionRaw,
+                      highlightedText: noteDraft.highlightedText,
+                      noteText,
+                      color,
+                    },
+                    {
+                      onSuccess: () => {
+                        setNoteDraft(null);
+                        setNotesOpen(true);
+                      },
+                    }
+                  );
+                }}
+                onCancel={() => setNoteDraft(null)}
+              />
+            </DialogContent>
+          )}
+        </Dialog>
 
         {/* Settings panel */}
         {settingsOpen && (

@@ -61,6 +61,12 @@ interface UseRestoreReaderScrollOptions {
   delayMs?: number;
   retryAttempts?: number;
   retryDelayMs?: number;
+  /**
+   * Главы, для которых восстановление позиции чтения пропускается в этой сессии.
+   * Используется при переходе к заметке/закладке: позицию задаёт jump-intent,
+   * и поздний restore по прогрессу не должен его перезаписывать.
+   */
+  skipChaptersRef?: RefObject<Set<number> | null>;
 }
 
 interface RestoreReaderScrollPositionOptions {
@@ -503,6 +509,7 @@ export function useRestoreReaderScroll({
   delayMs = 300,
   retryAttempts = 4,
   retryDelayMs = 150,
+  skipChaptersRef,
 }: UseRestoreReaderScrollOptions) {
   const restoredChaptersRef = useRef<Set<number>>(new Set());
   const interactedChaptersRef = useRef<Set<number>>(new Set());
@@ -534,6 +541,13 @@ export function useRestoreReaderScroll({
 
   useEffect(() => {
     if (currentChapterId === null) return;
+
+    // Глава открыта через jump по заметке/закладке — позицию задаёт jump,
+    // восстановление по прогрессу пропускаем
+    if (skipChaptersRef?.current?.has(currentChapterId)) {
+      restoredChaptersRef.current.add(currentChapterId);
+      return;
+    }
 
     if (restoredChaptersRef.current.has(currentChapterId)) {
       return;

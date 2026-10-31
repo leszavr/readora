@@ -8,6 +8,7 @@ export interface BookmarkDto {
   positionRaw: string;
   label: string | null;
   selectedText: string | null;
+  bookTitle?: string | null;
   createdAt: string;
 }
 

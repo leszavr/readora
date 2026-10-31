@@ -37,13 +37,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import { ShelfView } from "@/components/ShelfView";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
+import { AnnotationsView } from "@/components/AnnotationsView";
 import { trackLibraryViewed } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
 type GroupOption = "none" | "genre" | "author" | "cycle";
-type LibrarySection = "library" | "gift" | "shelf";
+type LibrarySection = "library" | "gift" | "shelf" | "annotations";
 
 function isFinishedBook(book: any): boolean {
   return book?.readingStatus === "finished";
@@ -181,7 +182,8 @@ export default function LibraryPage() {
 
   useEffect(() => {
     const filterCount = [search, statusFilter !== "all", genreFilter !== "all", sortBy !== "uploadedAt", groupBy !== "none"].filter(Boolean).length;
-    trackLibraryViewed(librarySection === "shelf" ? "shelf" : viewMode, filterCount, search.trim().length > 0);
+    const viewedAs = librarySection === "shelf" ? "shelf" : librarySection === "annotations" ? "annotations" : viewMode;
+    trackLibraryViewed(viewedAs, filterCount, search.trim().length > 0);
   }, [librarySection, viewMode, search, statusFilter, genreFilter, sortBy, groupBy]);
 
   useEffect(() => {
@@ -322,6 +324,7 @@ function LibraryPageLayout({
       <Layout>
         <div className="max-w-7xl mx-auto px-4 py-8">
           <LibraryHeader
+            section={librarySection}
             showGrouped={showGrouped}
             groupedSectionCount={groupedSectionCount}
             visibleBookItems={visibleBookItems}
@@ -341,46 +344,52 @@ function LibraryPageLayout({
             showGiftSection={isAdmin}
           />
 
-          <LibraryFiltersBar
-            search={search}
-            setSearch={setSearch}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-            librarySection={librarySection}
-            genreItems={genreItems}
-            genreFilter={genreFilter}
-            setGenreFilter={setGenreFilter}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            sortDir={sortDir}
-            setSortDir={setSortDir}
-            groupBy={groupBy}
-            setGroupBy={setGroupBy}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            visibleBookItems={visibleBookItems}
-            selectedBooks={selectedBooks}
-            isSelectionMode={isSelectionMode}
-            clearSelection={clearSelection}
-            selectAll={selectAll}
-          />
+          {librarySection !== "annotations" && (
+            <LibraryFiltersBar
+              search={search}
+              setSearch={setSearch}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              librarySection={librarySection}
+              genreItems={genreItems}
+              genreFilter={genreFilter}
+              setGenreFilter={setGenreFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              sortDir={sortDir}
+              setSortDir={setSortDir}
+              groupBy={groupBy}
+              setGroupBy={setGroupBy}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              visibleBookItems={visibleBookItems}
+              selectedBooks={selectedBooks}
+              isSelectionMode={isSelectionMode}
+              clearSelection={clearSelection}
+              selectAll={selectAll}
+            />
+          )}
 
-          <LibraryContent
-            isLoading={isLoading}
-            bookItems={visibleBookItems}
-            isGrouped={showGrouped}
-            books={sectionGroupedBooks}
-            search={search}
-            statusFilter={statusFilter}
-            genreFilter={genreFilter}
-            section={librarySection}
-            viewMode={viewMode}
-            selectedBooks={selectedBooks}
-            toggleBookSelection={toggleBookSelection}
-            setUploadOpen={setUploadOpen}
-            groupBy={groupBy}
-            isSelectionMode={isSelectionMode}
-          />
+          {librarySection === "annotations" ? (
+            <AnnotationsView />
+          ) : (
+            <LibraryContent
+              isLoading={isLoading}
+              bookItems={visibleBookItems}
+              isGrouped={showGrouped}
+              books={sectionGroupedBooks}
+              search={search}
+              statusFilter={statusFilter}
+              genreFilter={genreFilter}
+              section={librarySection}
+              viewMode={viewMode}
+              selectedBooks={selectedBooks}
+              toggleBookSelection={toggleBookSelection}
+              setUploadOpen={setUploadOpen}
+              groupBy={groupBy}
+              isSelectionMode={isSelectionMode}
+            />
+          )}
         </div>
 
         <UploadBookDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
@@ -408,6 +417,7 @@ function LibraryPageLayout({
 }
 
 function LibraryHeader({
+  section,
   showGrouped,
   groupedSectionCount,
   visibleBookItems,
@@ -418,6 +428,7 @@ function LibraryHeader({
   clearSelection,
   setUploadOpen,
 }: Readonly<{
+  section: LibrarySection;
   showGrouped: boolean;
   groupedSectionCount: number;
   visibleBookItems: any[];
@@ -428,16 +439,21 @@ function LibraryHeader({
   clearSelection: () => void;
   setUploadOpen: (open: boolean) => void;
 }>) {
+  const isAnnotations = section === "annotations";
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div>
-        <h1 className="text-2xl font-bold">Моя библиотека</h1>
+        <h1 className="text-2xl font-bold">{isAnnotations ? "Заметки и закладки" : "Моя библиотека"}</h1>
         <p className="text-muted-foreground text-sm">
-          {showGrouped ? `${groupedSectionCount} групп` : `${visibleBookItems.length} книг`}
+          {isAnnotations
+            ? "Все заметки и закладки по вашим книгам"
+            : showGrouped
+              ? `${groupedSectionCount} групп`
+              : `${visibleBookItems.length} книг`}
         </p>
       </div>
       <div className="flex gap-2">
-        {isSelectionMode && (
+        {!isAnnotations && isSelectionMode && (
           <>
             {selectedBooks.size > 0 && (
               <Button
@@ -461,7 +477,7 @@ function LibraryHeader({
             </Button>
           </>
         )}
-        {!isSelectionMode && visibleBookItems.length > 0 && (
+        {!isAnnotations && !isSelectionMode && visibleBookItems.length > 0 && (
           <Button variant="outline" size="sm" onClick={() => setIsSelectionMode(true)}>
             Выбрать
           </Button>
@@ -514,6 +530,15 @@ function LibrarySectionSwitch({
         className="h-8 flex-1 sm:flex-none"
       >
         Книжная полка
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant={librarySection === "annotations" ? "secondary" : "ghost"}
+        onClick={() => setLibrarySection("annotations")}
+        className="h-8 flex-1 sm:flex-none"
+      >
+        Заметки и закладки
       </Button>
     </div>
   );

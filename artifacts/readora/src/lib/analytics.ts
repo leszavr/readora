@@ -223,7 +223,7 @@ export function trackAppOpened(entryPoint: EntryPoint): void {
   queue("app_opened", { entryPoint });
 }
 
-export function trackLibraryViewed(viewMode: "grid" | "list" | "shelf", filterCount: number, hasSearch: boolean): void {
+export function trackLibraryViewed(viewMode: "grid" | "list" | "shelf" | "annotations", filterCount: number, hasSearch: boolean): void {
   queue("library_viewed", { viewMode, filterCount, hasSearch });
 }
 
