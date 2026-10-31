@@ -47,8 +47,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 import {
-  createReaderProgressPayload,
-  createSemanticProgressPayload,
   type ReaderProgressPayload,
 } from "@/components/reader/core/reader-progress-core";
 import {
@@ -100,9 +98,18 @@ import { NoteEditor } from "@/components/reader/NoteEditor";
 import { TextSelectionToolbar } from "@/components/reader/TextSelectionToolbar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { setReaderJumpIntent, takeReaderJumpIntent } from "@/lib/reader-jump";
+import {
+  createProgressSaveHold,
+  isProgressSaveHeld,
+  trackProgressHoldScroll,
+  type ProgressSaveHold,
+} from "@/components/reader/core/reader-progress-hold";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
 const READER_IDLE_TIMEOUT_MS = 5 * 60_000;
+// Restore позиции прыжка (120ms + 5 ретраев × 120ms) и highlight-подгонка
+// (450ms) завершаются в пределах ~1.2s
+const PROGRESS_HOLD_SETTLE_MS = 1500;
 
 type DeviceMode = "desktop" | "mobile";
 type ChapterNavigationSource = "toc" | "next_chapter" | "prev_chapter" | "restore";
@@ -144,124 +151,6 @@ function parseNotePosition(raw: string): NotePositionData {
   } catch {
     return {};
   }
-}
-
-// ---------------------------------------------------------------------------
-// usePersistProgressOnUnmount — saves to localStorage + keepalive fetch on exit
-// ---------------------------------------------------------------------------
-function usePersistProgressOnUnmount({
-  scrollContainerRef,
-  contentAreaRef,
-  chapters,
-  currentChapterId,
-  currentChapterIdx,
-  contentLoading,
-  bookId,
-}: {
-  scrollContainerRef: RefObject<HTMLDivElement | null>;
-  contentAreaRef: RefObject<HTMLDivElement | null>;
-  chapters: Array<{ id: number }>;
-  currentChapterId: number | null;
-  currentChapterIdx: number | null;
-  contentLoading: boolean;
-  bookId: number;
-}) {
-  const contentLoadingRef = useRef(contentLoading);
-  useEffect(() => {
-    contentLoadingRef.current = contentLoading;
-  }, [contentLoading]);
-
-  const chaptersRef = useRef(chapters);
-  useEffect(() => {
-    chaptersRef.current = chapters;
-  }, [chapters]);
-
-  const currentChapterIdRef = useRef(currentChapterId);
-  useEffect(() => {
-    currentChapterIdRef.current = currentChapterId;
-  }, [currentChapterId]);
-
-  const currentChapterIdxRef = useRef(currentChapterIdx);
-  useEffect(() => {
-    currentChapterIdxRef.current = currentChapterIdx;
-  }, [currentChapterIdx]);
-
-  useEffect(() => {
-    return () => {
-      const container = scrollContainerRef.current;
-      const chs = chaptersRef.current;
-      const chId = currentChapterIdRef.current;
-      const chIdx = currentChapterIdxRef.current;
-      if (!container || !chs.length || chId === null || chIdx === null) return;
-      if (contentLoadingRef.current) return;
-
-      // Используем семантическое позиционирование (v2) при сохранении при закрытии
-      const contentArea = contentAreaRef.current;
-      let payload: ReaderProgressPayload;
-      
-      if (contentArea) {
-        const semanticPosition = captureSemanticPosition({
-          chapterId: chId,
-          scrollContainer: container,
-          contentArea,
-          viewportInset: 8,
-        });
-        
-        if (semanticPosition) {
-          payload = createSemanticProgressPayload({
-            chapterId: chId,
-            chapterIndex: chIdx,
-            totalChapters: chs.length,
-            semanticPosition,
-          });
-        } else {
-          // Fallback к legacy
-          payload = createReaderProgressPayload({
-            chapterId: chId,
-            chapterIndex: chIdx,
-            totalChapters: chs.length,
-            scrollTop: container.scrollTop,
-            scrollHeight: container.scrollHeight,
-            clientHeight: container.clientHeight,
-          });
-        }
-      } else {
-        // Fallback к legacy если нет contentArea
-        payload = createReaderProgressPayload({
-          chapterId: chId,
-          chapterIndex: chIdx,
-          totalChapters: chs.length,
-          scrollTop: container.scrollTop,
-          scrollHeight: container.scrollHeight,
-          clientHeight: container.clientHeight,
-        });
-      }
-
-      // Save to localStorage for instant restore on next visit
-      saveReaderProgressToStorage(
-        { bookId },
-        {
-          currentChapterId: payload.currentChapterId,
-          currentPosition: payload.currentPosition,
-          progressPercent: payload.progressPercent,
-        }
-      );
-
-      fetch(`/api/books/${bookId}/progress`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentChapterId: payload.currentChapterId,
-          currentPosition: payload.currentPosition,
-          progressPercent: payload.progressPercent,
-          readingStatus: payload.progressPercent >= 99 ? "finished" : "reading",
-        }),
-        credentials: "include",
-        keepalive: true,
-      });
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId, scrollContainerRef]);
 }
 
 // ---------------------------------------------------------------------------
@@ -521,6 +410,35 @@ export default function ReaderPage() {
   }, []);
 
   // ---------------------------------------------------------------------------
+  // Jump-hold: после перехода по заметке/закладке не перезаписываем позицию
+  // чтения, пока пользователь не продолжил чтение (скролл на экран или
+  // навигация на другую главу). См. core/reader-progress-hold.ts.
+  // ---------------------------------------------------------------------------
+  const progressSaveHoldRef = useRef<ProgressSaveHold | null>(null);
+
+  const beginProgressSaveHold = useCallback((chapterId: number) => {
+    const hold = createProgressSaveHold(chapterId);
+    progressSaveHoldRef.current = hold;
+    // Restore позиции и highlight-подгонка завершаются в течение ~1.2s
+    // после приземления; фиксируем точку отсчёта, если скролл-событий не было
+    window.setTimeout(() => {
+      if (progressSaveHoldRef.current !== hold) return;
+      const container = scrollContainerRef.current;
+      if (container && hold.baselineScrollTop === null) {
+        hold.baselineScrollTop = container.scrollTop;
+      }
+    }, PROGRESS_HOLD_SETTLE_MS);
+  }, []);
+
+  const releaseProgressSaveHold = useCallback(() => {
+    progressSaveHoldRef.current = null;
+  }, []);
+
+  const isSaveHeldForChapter = useCallback((chapterId: number) => {
+    return isProgressSaveHeld(progressSaveHoldRef.current, chapterId);
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // saveProgress adapter: ReaderProgressPayload → useSaveProgress mutation
   // ---------------------------------------------------------------------------
   const saveProgress = useCallback(
@@ -623,8 +541,35 @@ export default function ReaderPage() {
       debounceMs: 1500,
       enabled: currentChapterId !== null && chapters.length > 0,
       isProgrammaticScroll,
+      isSaveHeld: isSaveHeldForChapter,
       useSemanticPosition: true, // Включаем семантическое позиционирование v2
     });
+
+  // Накопление пользовательского скролла после прыжка: когда набран
+  // один экран — чтение продолжается, hold снимается и сохранение
+  // возобновляется (текущий скролл сразу уходит в debounce-сохранение)
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleHoldScroll = () => {
+      const hold = progressSaveHoldRef.current;
+      if (!hold) return;
+      const released = trackProgressHoldScroll(
+        hold,
+        container.scrollTop,
+        container.clientHeight,
+        isProgrammaticScroll(),
+      );
+      if (released) {
+        progressSaveHoldRef.current = null;
+        scheduleProgressSave();
+      }
+    };
+
+    container.addEventListener("scroll", handleHoldScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleHoldScroll);
+  }, [isProgrammaticScroll, scheduleProgressSave]);
 
   // Periodic auto-save disabled - debounced save on scroll is enough
   // usePeriodicProgressSave({
@@ -750,7 +695,7 @@ export default function ReaderPage() {
       if (!chapters.length) return;
 
       const bounded = Math.max(0, Math.min(chapters.length - 1, nextIdx));
-      
+
       // Фикс: если переходим на ту же главу с positionRaw — обновляем только позицию
       if (currentChapterIdx !== null && bounded === currentChapterIdx && options?.positionRaw) {
         const boundedChapterId = chapters[bounded]?.id;
@@ -759,13 +704,23 @@ export default function ReaderPage() {
             chapterId: boundedChapterId,
             positionRaw: options.positionRaw,
           });
+          // Повторный прыжок в ту же главу — новая точка приземления
+          beginProgressSaveHold(boundedChapterId);
         }
         return;
       }
-      
+
       if (currentChapterIdx !== null && bounded === currentChapterIdx) return;
 
-      // Save current chapter progress before navigating
+      // Обычная навигация (оглавление, следующая/предыдущая глава) —
+      // пользователь продолжает чтение: hold снимается, сохранение
+      // перед уходом с главы работает как обычно
+      if (!options?.positionRaw) {
+        releaseProgressSaveHold();
+      }
+
+      // Save current chapter progress before navigating.
+      // Подавляется сам, если hold активен для текущей главы (цепочка прыжков)
       if (currentChapterIdx !== null) {
         saveProgressNow({
           chapterId: chapters[currentChapterIdx]?.id,
@@ -785,6 +740,9 @@ export default function ReaderPage() {
             chapterId: boundedChapterId,
             positionRaw: options.positionRaw,
           });
+          // Переход по заметке/закладке: позицию задаёт прыжок —
+          // держим сохранение до подтверждения продолжения чтения
+          beginProgressSaveHold(boundedChapterId);
         }
       } else {
         setTimeout(() => {
@@ -792,7 +750,7 @@ export default function ReaderPage() {
         }, 100);
       }
     },
-    [chapters, currentChapterIdx, saveProgressNow, setProgrammaticScroll]
+    [chapters, currentChapterIdx, saveProgressNow, setProgrammaticScroll, beginProgressSaveHold, releaseProgressSaveHold]
   );
 
   // ---------------------------------------------------------------------------
@@ -844,15 +802,11 @@ export default function ReaderPage() {
   // ---------------------------------------------------------------------------
   // Persist on unmount (localStorage + keepalive)
   // ---------------------------------------------------------------------------
-  usePersistProgressOnUnmount({
-    scrollContainerRef,
-    contentAreaRef,
-    chapters,
-    currentChapterId,
-    currentChapterIdx,
-    contentLoading: chapterLoading,
-    bookId,
-  });
+  // Persist on unmount: usePersistProgressOnUnmount удалён — сохранение при
+  // демонтаже ридера никогда не срабатывало (React обнуляет DOM-refs до
+  // passive-cleanup), а cleanup при смене bookId дублировал явное сохранение
+  // в jumpToBookPosition. Позицию закрывают debounce-сохранение по скроллу
+  // и сохранение перед уходом с главы/книги.
 
   // ---------------------------------------------------------------------------
   // Pending scroll restore (after chapter navigation with a saved position)
@@ -940,7 +894,7 @@ export default function ReaderPage() {
       }
 
       lastChapterAutoSavePendingRef.current = chapterId;
-      saveProgressNow({
+      const saved = saveProgressNow({
         onSuccess: () => {
           lastChapterAutoSaveRef.current = chapterId;
           if (lastChapterAutoSavePendingRef.current === chapterId) {
@@ -961,6 +915,11 @@ export default function ReaderPage() {
           }, 2_000);
         },
       });
+      // Сохранение подавлено (jump-hold) или невозможно — разблокируем
+      // повторную попытку, когда чтение продолжится
+      if (!saved) {
+        lastChapterAutoSavePendingRef.current = null;
+      }
     };
 
     const handleScroll = () => {
@@ -1123,6 +1082,8 @@ export default function ReaderPage() {
           anchor: jumpPosition.textSelection ?? null,
           text: jump.highlightedText,
         });
+        // И сохранение позиции чтения — тоже: до подтверждения чтения
+        beginProgressSaveHold(jump.chapterId);
       }
       return;
     }
@@ -1156,6 +1117,7 @@ export default function ReaderPage() {
       chapterNavigationSourceRef.current = "restore";
       setCurrentChapterIdx(null);
       setPendingScrollRestore(null);
+      progressSaveHoldRef.current = null;
       readerSessionRef.current = null;
       setSessionReady(false);
       prevBookIdRef.current = bookId;

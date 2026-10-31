@@ -7,16 +7,15 @@
  */
 import bcrypt from "bcryptjs";
 import { eq, inArray } from "drizzle-orm";
+import { db, usersTable } from "@workspace/db";
 import {
-  db,
   booksTable,
   bookmarksTable,
   chaptersTable,
   cyclesTable,
   notesTable,
   readingProgressTable,
-  usersTable,
-} from "@workspace/db";
+} from "@workspace/db/schema";
 
 const TEST_EMAIL = "reader.e2e@test.local";
 const TEST_USERNAME = "E2E Reader";
@@ -261,7 +260,7 @@ async function main(): Promise<void> {
       .orderBy(chaptersTable.index);
     if (srcChapters.length > 0) {
       await db.insert(chaptersTable).values(
-        srcChapters.map((ch) => ({
+        srcChapters.map((ch: { index: number; title: string; htmlContent: string; wordCount: number | null }) => ({
           bookId: copy.id,
           index: ch.index,
           title: ch.title,
@@ -285,7 +284,7 @@ async function main(): Promise<void> {
     // Только главы с достаточным текстом
     chaptersByBook.set(
       bookId,
-      rows.filter((r) => r.htmlContent.includes("<p>")),
+      rows.filter((r: { id: number; title: string; htmlContent: string }) => r.htmlContent.includes("<p>")),
     );
   }
 

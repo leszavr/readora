@@ -43,7 +43,13 @@ interface UseDebouncedReaderProgressSaveOptions {
   debounceMs?: number;
   enabled?: boolean;
   isProgrammaticScroll?: () => boolean;
-  /** 
+  /**
+   * Hold сохранения после перехода по заметке/закладке: пока активен
+   * для главы, сохранение позиции подавляется (позицию задаёт прыжок,
+   * а не чтение). См. reader-progress-hold.ts.
+   */
+  isSaveHeld?: (chapterId: number) => boolean;
+  /**
    * Использовать семантическое позиционирование (v2) вместо legacy (v1).
    * По умолчанию true.
    */
@@ -362,6 +368,7 @@ export function useDebouncedReaderProgressSave({
   debounceMs = 1000,
   enabled = true,
   isProgrammaticScroll,
+  isSaveHeld,
   useSemanticPosition = true,
 }: UseDebouncedReaderProgressSaveOptions) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,22 +380,29 @@ export function useDebouncedReaderProgressSave({
     }
   }, []);
 
-  const saveNow = useCallback((options?: SaveNowOptions) => {
-    if (!enabled) return;
+  // false — сохранение не выполнено (подавлено hold-ом или нет данных);
+  // true — payload отправлен в onSave
+  const saveNow = useCallback((options?: SaveNowOptions): boolean => {
+    if (!enabled) return false;
 
     const container = scrollContainerRef.current;
     const contentArea = contentAreaRef?.current;
-    
+
     if (!container) {
       console.warn('[DebouncedSave] saveNow: No scroll container');
-      return;
+      return false;
     }
 
     const chapterId = options?.chapterId ?? currentChapterId;
     const chapterIdx = options?.chapterIdx ?? currentChapterIdx;
     if (chapterId === null || chapterIdx === null) {
       console.warn('[DebouncedSave] saveNow: No chapter selected');
-      return;
+      return false;
+    }
+
+    if (isSaveHeld?.(chapterId)) {
+      console.log('[DebouncedSave] saveNow suppressed: jump hold active for chapter', chapterId);
+      return false;
     }
 
     console.log('[DebouncedSave] saveNow called:', {
@@ -465,10 +479,12 @@ export function useDebouncedReaderProgressSave({
       onSuccess: options?.onSuccess,
       onError: options?.onError,
     });
-  }, [enabled, scrollContainerRef, contentAreaRef, currentChapterId, currentChapterIdx, totalChapters, onSave, useSemanticPosition]);
+    return true;
+  }, [enabled, scrollContainerRef, contentAreaRef, currentChapterId, currentChapterIdx, totalChapters, onSave, useSemanticPosition, isSaveHeld]);
 
   const scheduleSave = useCallback(() => {
     if (!enabled || isProgrammaticScroll?.()) return;
+    if (currentChapterId !== null && isSaveHeld?.(currentChapterId)) return;
 
     const container = scrollContainerRef.current;
     if (!container) {
