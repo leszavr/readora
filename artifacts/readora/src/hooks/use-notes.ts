@@ -9,6 +9,7 @@ export interface NoteDto {
   highlightedText: string | null;
   noteText: string;
   color: string;
+  bookTitle?: string | null;
   createdAt: string;
   updatedAt: string;
 }

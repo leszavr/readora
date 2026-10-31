@@ -54,10 +54,29 @@ export interface SemanticReadingPosition {
    * Текстовый превью (первые ~50 символов) — для отладки и отображения пользователю
    */
   textPreview: string;
-  
+
+  /**
+   * Глобальный символьный оффсет якоря от начала текста главы.
+   * Подсказка (hint) для поиска по цитате при смене структуры DOM.
+   */
+  textOffset?: number;
+
+  /**
+   * Цитата якоря (TextQuoteSelector, подход W3C Web Annotation / Hypothesis):
+   * точный текст, начиная с якорного символа. Поиск с нормализацией пробелов —
+   * переживает смену разметки и reflow.
+   */
+  quoteExact?: string;
+
+  /** Контекст до якоря (нормализованный, ~32 символа) */
+  quotePrefix?: string;
+
+  /** Контекст после якоря (нормализованный, ~32 символа) */
+  quoteSuffix?: string;
+
   /** Версия формата для миграций */
   version: 2;
-  
+
   /** Timestamp сохранения */
   timestamp: number;
 }
@@ -81,6 +100,10 @@ export interface TextSelectionAnchor {
   startOffset: number;
   endOffset: number;
   selectedText: string;
+  /** Контекст до выделения (нормализованный) — для устойчивого поиска при смене DOM */
+  quotePrefix?: string;
+  /** Контекст после выделения (нормализованный) */
+  quoteSuffix?: string;
 }
 
 // =============================================================================
@@ -91,6 +114,12 @@ const POSITION_VERSION = 2;
 const CONTENT_HASH_LENGTH = 100;
 const TEXT_PREVIEW_LENGTH = 50;
 const MAX_ELEMENT_PATH_DEPTH = 5;
+/** Длина цитаты якоря (символов, до нормализации пробелов) */
+const QUOTE_EXACT_LENGTH = 64;
+/** Длина контекста до/после якоря (символов) */
+const QUOTE_CONTEXT_LENGTH = 32;
+/** Минимальная длина цитаты для поиска (короткие фразы неоднозначны) */
+const MIN_QUOTE_LENGTH = 8;
 
 /**
  * Допуск в пикселях, при котором позиция считается концом главы.
@@ -313,6 +342,180 @@ export function findTextRangeByText(root: HTMLElement, text: string): Range | nu
   );
 }
 
+// =============================================================================
+// Quote matching (TextQuoteSelector: exact + prefix + suffix + hint)
+// =============================================================================
+
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+interface ChapterTextIndex {
+  /** Полный текст главы с нормализованными пробелами (для поиска) */
+  normText: string;
+  /** normText[i] → сырой оффсет в конкатенации текстовых узлов */
+  rawIndexOf: number[];
+  nodes: Text[];
+  nodeStarts: number[];
+}
+
+/**
+ * Строит индекс текста главы: конкатенация текстовых узлов + нормализация
+ * пробелов с картой соответствия нормализованных позиций сырым оффсетам.
+ * Нормализация позволяет матчить цитаты при любых переносах строк и границах
+ * элементов (практика W3C Web Annotation / Chromium Text Fragments).
+ */
+function buildChapterTextIndex(contentArea: HTMLElement): ChapterTextIndex | null {
+  const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+  const nodes: Text[] = [];
+  const nodeStarts: number[] = [];
+  const parts: string[] = [];
+  let rawPos = 0;
+  let n: Node | null;
+  while ((n = walker.nextNode())) {
+    const textNode = n as Text;
+    const s = textNode.textContent || "";
+    nodes.push(textNode);
+    nodeStarts.push(rawPos);
+    parts.push(s);
+    rawPos += s.length;
+  }
+  if (nodes.length === 0) return null;
+
+  const rawText = parts.join("");
+  let normText = "";
+  const rawIndexOf: number[] = [];
+  let prevWasSpace = true; // съедает ведущие пробелы
+  const wsRe = /\s/;
+  for (let i = 0; i < rawText.length; i++) {
+    const ch = rawText[i];
+    if (wsRe.test(ch)) {
+      if (!prevWasSpace) {
+        normText += " ";
+        rawIndexOf.push(i);
+        prevWasSpace = true;
+      }
+    } else {
+      normText += ch;
+      rawIndexOf.push(i);
+      prevWasSpace = false;
+    }
+  }
+  if (normText.endsWith(" ")) {
+    normText = normText.slice(0, -1);
+    rawIndexOf.pop();
+  }
+  if (!normText) return null;
+
+  return { normText, rawIndexOf, nodes, nodeStarts };
+}
+
+function findTextPositionByIndex(
+  index: ChapterTextIndex,
+  rawOffset: number,
+): { node: Text; offset: number } | null {
+  let lo = 0;
+  let hi = index.nodes.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const start = index.nodeStarts[mid];
+    const end = start + (index.nodes[mid].textContent || "").length;
+    if (rawOffset < start) {
+      hi = mid - 1;
+    } else if (rawOffset >= end) {
+      lo = mid + 1;
+    } else {
+      return { node: index.nodes[mid], offset: rawOffset - start };
+    }
+  }
+  const last = index.nodes.length - 1;
+  if (last >= 0) {
+    const node = index.nodes[last];
+    return { node, offset: (node.textContent || "").length };
+  }
+  return null;
+}
+
+interface QuoteContext {
+  exact: string;
+  prefix?: string;
+  suffix?: string;
+  /** Ожидаемая сырая позиция совпадения (тай-брейкер при повторах) */
+  hint?: number;
+}
+
+/**
+ * Ищет цитату в тексте главы. Возвращает Range, накрывающий совпадение,
+ * либо null. Кандидаты ранжируются по скорингу в духе Hypothesis:
+ * цитата (50) + префикс (20) + суффикс (20) + близость к hint (2).
+ */
+function matchQuoteInContentArea(contentArea: HTMLElement, quote: QuoteContext): Range | null {
+  const normExact = collapseWhitespace(quote.exact);
+  if (normExact.length < MIN_QUOTE_LENGTH) return null;
+
+  const index = buildChapterTextIndex(contentArea);
+  if (!index) return null;
+
+  const candidates: number[] = [];
+  let pos = index.normText.indexOf(normExact);
+  while (pos !== -1) {
+    candidates.push(pos);
+    pos = index.normText.indexOf(normExact, pos + 1);
+  }
+  if (candidates.length === 0) return null;
+
+  const normPrefix = quote.prefix ? collapseWhitespace(quote.prefix) : "";
+  const normSuffix = quote.suffix ? collapseWhitespace(quote.suffix) : "";
+  const rawLength = index.rawIndexOf.length;
+
+  let bestPos = candidates[0];
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    const prefixOk =
+      normPrefix.length >= MIN_QUOTE_LENGTH &&
+      candidate >= normPrefix.length &&
+      index.normText.startsWith(normPrefix, candidate - normPrefix.length)
+        ? 1
+        : 0;
+    const suffixOk =
+      normSuffix.length >= MIN_QUOTE_LENGTH &&
+      index.normText.startsWith(normSuffix, candidate + normExact.length)
+        ? 1
+        : 0;
+    let posScore = 0;
+    if (typeof quote.hint === "number" && rawLength > 0) {
+      const rawStart = index.rawIndexOf[candidate] ?? 0;
+      posScore = Math.max(0, 1 - Math.abs(rawStart - quote.hint) / rawLength);
+    }
+    const score = 50 + 20 * prefixOk + 20 * suffixOk + 2 * posScore;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPos = candidate;
+    }
+  }
+
+  const rawStart = index.rawIndexOf[bestPos] ?? 0;
+  const rawEndRaw = index.rawIndexOf[Math.min(bestPos + normExact.length - 1, rawLength - 1)] ?? rawStart;
+  const startPoint = findTextPositionByIndex(index, rawStart);
+  const endPoint = findTextPositionByIndex(index, rawEndRaw + 1);
+  if (!startPoint || !endPoint) return null;
+
+  const range = document.createRange();
+  range.setStart(startPoint.node, startPoint.offset);
+  range.setEnd(endPoint.node, endPoint.offset);
+  return range;
+}
+
+function getChapterRawText(contentArea: HTMLElement): string {
+  const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+  const parts: string[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) {
+    parts.push(n.textContent || "");
+  }
+  return parts.join("");
+}
+
 export function captureTextSelectionAnchor(
   selection: Selection | null,
   contentArea: HTMLElement,
@@ -328,7 +531,19 @@ export function captureTextSelectionAnchor(
 
   if (!selectedText || endOffset <= startOffset) return null;
 
-  return { version: 1, startOffset, endOffset, selectedText };
+  // Контекст вокруг выделения — для поиска при несовпадении оффсетов
+  const rawText = getChapterRawText(contentArea);
+  const rawPrefix = rawText.slice(Math.max(0, startOffset - QUOTE_CONTEXT_LENGTH), startOffset);
+  const rawSuffix = rawText.slice(endOffset, endOffset + QUOTE_CONTEXT_LENGTH);
+
+  return {
+    version: 1,
+    startOffset,
+    endOffset,
+    selectedText,
+    quotePrefix: collapseWhitespace(rawPrefix) || undefined,
+    quoteSuffix: collapseWhitespace(rawSuffix) || undefined,
+  };
 }
 
 export function restoreTextSelectionAnchor(
@@ -339,12 +554,30 @@ export function restoreTextSelectionAnchor(
 
   const start = findTextPosition(contentArea, anchor.startOffset);
   const end = findTextPosition(contentArea, anchor.endOffset);
-  if (!start || !end) return null;
+  if (start && end) {
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
 
-  const range = document.createRange();
-  range.setStart(start.node, start.offset);
-  range.setEnd(end.node, end.offset);
-  return range;
+    // Верификация: оффсеты могли сместиться при изменении DOM/текста
+    const rangeText = collapseWhitespace(range.toString());
+    const expected = collapseWhitespace(anchor.selectedText);
+    if (!expected || rangeText.includes(expected)) {
+      return range;
+    }
+  }
+
+  // Fallback: поиск выделения по тексту с контекстом
+  if (anchor.selectedText) {
+    return matchQuoteInContentArea(contentArea, {
+      exact: anchor.selectedText,
+      prefix: anchor.quotePrefix,
+      suffix: anchor.quoteSuffix,
+      hint: anchor.startOffset,
+    });
+  }
+
+  return null;
 }
 
 export function showTextSelectionHighlight(
@@ -523,6 +756,33 @@ export function captureSemanticPosition(options: CapturePositionOptions): Semant
   const contentHash = createContentHash(elementText);
   const textPreview = elementText.slice(0, TEXT_PREVIEW_LENGTH).replace(/\s+/g, ' ').trim();
   
+  // Цитата якоря с контекстом (TextQuoteSelector): глобальный оффсет якоря
+  // в тексте главы + exact/prefix/suffix. Переживает смену DOM-структуры
+  // и правки текста выше по документу.
+  const chapterRawText = getChapterRawText(contentArea);
+  let textBeforeElement = 0;
+  {
+    const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+    const parts: string[] = [];
+    let node: Node | null;
+    let seenElement = false;
+    while ((node = walker.nextNode())) {
+      if (!seenElement && textElement.contains(node)) {
+        seenElement = true;
+        textBeforeElement = parts.reduce((acc, p) => acc + p.length, 0);
+      }
+      parts.push(node.textContent || "");
+    }
+  }
+  const anchorGlobalOffset = textBeforeElement + Math.max(0, charOffset);
+  const rawExact = chapterRawText.slice(anchorGlobalOffset, anchorGlobalOffset + QUOTE_EXACT_LENGTH);
+  const rawPrefix = chapterRawText.slice(Math.max(0, anchorGlobalOffset - QUOTE_CONTEXT_LENGTH), anchorGlobalOffset);
+  const rawSuffix = chapterRawText.slice(
+    anchorGlobalOffset + rawExact.length,
+    anchorGlobalOffset + rawExact.length + QUOTE_CONTEXT_LENGTH,
+  );
+  const quoteExact = collapseWhitespace(rawExact);
+
   // Вычисляем процент прогресса в главе
   const atChapterEnd = isReaderScrollAtEnd(
     scrollContainer.scrollTop,
@@ -543,6 +803,10 @@ export function captureSemanticPosition(options: CapturePositionOptions): Semant
     chapterPercent,
     contentHash,
     textPreview,
+    textOffset: anchorGlobalOffset,
+    quoteExact: quoteExact.length >= MIN_QUOTE_LENGTH ? quoteExact : undefined,
+    quotePrefix: collapseWhitespace(rawPrefix) || undefined,
+    quoteSuffix: collapseWhitespace(rawSuffix) || undefined,
     version: POSITION_VERSION,
     timestamp: Date.now(),
   };
@@ -564,7 +828,7 @@ export interface RestorePositionOptions {
 
 export interface RestoreResult {
   success: boolean;
-  method: 'exact' | 'element-start' | 'percent' | 'failed';
+  method: 'exact' | 'quote' | 'element-start' | 'percent' | 'failed';
   actualElement?: HTMLElement;
 }
 
@@ -574,29 +838,63 @@ export interface RestoreResult {
  * Алгоритм:
  * 1. Находит элемент по сохранённому пути
  * 2. Проверяет хеш содержимого (валидация)
- * 3. Если хеш не совпадает — ищем по текстовому превью
+ * 3. Если хеш не совпадает — ищет по цитате с контекстом (TextQuoteSelector),
+ *    затем по текстовому превью
  * 4. Прокручивает к нужному символьному offset внутри элемента
  * 5. Fallback к началу элемента → проценту → началу главы
  */
 export function restoreSemanticPosition(options: RestorePositionOptions): RestoreResult {
   const { position, scrollContainer, contentArea, viewportInset = 8, smooth = false } = options;
-  
+
+  const scrollRangeIntoView = (range: Range): void => {
+    const rect = range.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const desiredTop = containerRect.top + viewportInset;
+    const delta = rect.top - desiredTop;
+    const targetScrollTop = scrollContainer.scrollTop + delta;
+    const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+    const clampedScrollTop = Math.max(0, Math.min(targetScrollTop, maxScroll));
+
+    scrollContainer.scrollTo({
+      top: clampedScrollTop,
+      behavior: smooth ? 'smooth' : 'auto'
+    });
+  };
+
   // Шаг 1: Находим элемент по пути
   let element = findElementByPath(position.elementPath, contentArea);
   let method: RestoreResult['method'] = 'exact';
-  
+  let elementValid = element !== null && validateContentHash(element, position.contentHash);
+
   // Шаг 2: Валидация по хешу
-  if (element && !validateContentHash(element, position.contentHash)) {
+  if (element && !elementValid) {
     // Хеш не совпадает — элемент изменился
-    console.warn('[TextAnchor] Content hash mismatch, trying text preview fallback');
-    
-    // Пробуем найти по текстовому превью
+    console.warn('[TextAnchor] Content hash mismatch, trying quote fallback');
+
+    // Шаг 2a: поиск по цитате с контекстом — точнее превью, находит якорный символ
+    if (position.quoteExact) {
+      const quoteRange = matchQuoteInContentArea(contentArea, {
+        exact: position.quoteExact,
+        prefix: position.quotePrefix,
+        suffix: position.quoteSuffix,
+        hint: position.textOffset,
+      });
+      if (quoteRange) {
+        const anchorPoint = document.createRange();
+        anchorPoint.setStart(quoteRange.startContainer, quoteRange.startOffset);
+        anchorPoint.setEnd(quoteRange.startContainer, quoteRange.startOffset);
+        scrollRangeIntoView(anchorPoint);
+        return { success: true, method: 'quote' };
+      }
+    }
+
+    // Шаг 2b: пробуем найти по текстовому превью
     const previewText = position.textPreview.toLowerCase();
     const candidates = Array.from(contentArea.querySelectorAll(position.elementTag)) as HTMLElement[];
-    
+
     let bestMatch: HTMLElement | null = null;
     let bestScore = 0;
-    
+
     for (const candidate of candidates) {
       const text = getElementTextContent(candidate).toLowerCase();
       if (text.includes(previewText.slice(0, 20))) {
@@ -608,44 +906,47 @@ export function restoreSemanticPosition(options: RestorePositionOptions): Restor
         }
       }
     }
-    
+
     if (bestMatch) {
       element = bestMatch;
       method = 'element-start';
+      elementValid = true;
       console.log('[TextAnchor] Found element by text preview');
     } else {
       element = null;
     }
   }
-  
+
+  // Шаг 2c: путь не разрезолвился — тоже пробуем цитату до процента
+  if (!elementValid && element === null && position.quoteExact) {
+    const quoteRange = matchQuoteInContentArea(contentArea, {
+      exact: position.quoteExact,
+      prefix: position.quotePrefix,
+      suffix: position.quoteSuffix,
+      hint: position.textOffset,
+    });
+    if (quoteRange) {
+      const anchorPoint = document.createRange();
+      anchorPoint.setStart(quoteRange.startContainer, quoteRange.startOffset);
+      anchorPoint.setEnd(quoteRange.startContainer, quoteRange.startOffset);
+      scrollRangeIntoView(anchorPoint);
+      return { success: true, method: 'quote' };
+    }
+  }
+
   // Шаг 3: Восстановление позиции
   if (element) {
     // Находим текстовый узел и offset
     const target = findTextNodeInElement(element, position.charOffset);
-    
+
     if (target) {
       // Создаём range для получения координат
       const range = document.createRange();
       range.setStart(target.node, target.offset);
       range.setEnd(target.node, target.offset);
-      
-      const rect = range.getBoundingClientRect();
-      const containerRect = scrollContainer.getBoundingClientRect();
-      
-      // Вычисляем нужную позицию скролла
-      const desiredTop = containerRect.top + viewportInset;
-      const delta = rect.top - desiredTop;
-      const targetScrollTop = scrollContainer.scrollTop + delta;
-      
-      // Прокручиваем
-      const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-      const clampedScrollTop = Math.max(0, Math.min(targetScrollTop, maxScroll));
-      
-      scrollContainer.scrollTo({
-        top: clampedScrollTop,
-        behavior: smooth ? 'smooth' : 'auto'
-      });
-      
+
+      scrollRangeIntoView(range);
+
       return {
         success: true,
         method,
@@ -657,9 +958,9 @@ export function restoreSemanticPosition(options: RestorePositionOptions): Restor
       const elementRect = element.getBoundingClientRect();
       const containerRect = scrollContainer.getBoundingClientRect();
       const delta = elementRect.top - containerRect.top - viewportInset;
-      
+
       scrollContainer.scrollTop += delta;
-      
+
       return {
         success: true,
         method,
@@ -667,17 +968,17 @@ export function restoreSemanticPosition(options: RestorePositionOptions): Restor
       };
     }
   }
-  
+
   // Шаг 4: Fallback к проценту прогресса
   method = 'percent';
   const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
   const targetScrollTop = (position.chapterPercent / 100) * maxScroll;
-  
+
   scrollContainer.scrollTo({
     top: targetScrollTop,
     behavior: smooth ? 'smooth' : 'auto'
   });
-  
+
   return {
     success: true,
     method: 'percent'
@@ -725,6 +1026,10 @@ export function parseReadingPosition(raw: string | null | undefined): SemanticRe
           chapterPercent: typeof parsed.chapterPercent === 'number' ? parsed.chapterPercent : 0,
           contentHash: parsed.contentHash || '',
           textPreview: parsed.textPreview || '',
+          textOffset: typeof parsed.textOffset === 'number' ? parsed.textOffset : undefined,
+          quoteExact: typeof parsed.quoteExact === 'string' && parsed.quoteExact ? parsed.quoteExact : undefined,
+          quotePrefix: typeof parsed.quotePrefix === 'string' ? parsed.quotePrefix : undefined,
+          quoteSuffix: typeof parsed.quoteSuffix === 'string' ? parsed.quoteSuffix : undefined,
           version: POSITION_VERSION,
           timestamp: parsed.timestamp || Date.now(),
         };
