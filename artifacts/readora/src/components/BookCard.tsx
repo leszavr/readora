@@ -235,12 +235,14 @@ export function BookListItem({
   selected = false,
   onSelect,
   showCheckbox = false,
+  revealCheckbox = false,
   shelf = false,
 }: Readonly<{
   book: Book;
   selected?: boolean;
   onSelect?: () => void;
   showCheckbox?: boolean;
+  revealCheckbox?: boolean;
   shelf?: boolean;
 }>) {
   const [, navigate] = useLocation();
@@ -257,12 +259,20 @@ export function BookListItem({
   };
 
   return (
-    <div className={`flex items-center gap-4 p-4 rounded-lg border bg-card transition-colors ${selected ? "ring-2 ring-primary" : ""}`}>
+    <div className={`group flex items-center gap-4 p-4 rounded-lg border bg-card transition-colors ${selected ? "ring-2 ring-primary" : ""}`}>
       {showCheckbox && onSelect && (
         <Checkbox
           checked={selected}
           onCheckedChange={onSelect}
           onClick={(event) => event.stopPropagation()}
+          aria-label={`Выбрать книгу: ${book.title}`}
+          title="Выбрать книгу"
+          className={cn(
+            "bg-background",
+            revealCheckbox && !selected
+              ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              : "opacity-100",
+          )}
         />
       )}
       <Link href={`/book/${book.id}`} className="flex min-w-0 flex-1 items-center gap-4 rounded-md hover:bg-accent/50">

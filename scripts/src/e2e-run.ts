@@ -9,14 +9,34 @@
  * Запуск: pnpm --filter @workspace/scripts exec tsx src/e2e-run.ts
  */
 import { chromium } from "playwright-core";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const TEST_EMAIL = "reader.e2e@test.local";
 const TEST_PASSWORD = "E2eReader#2026";
-const CYCLE_BOOK_A = 141; // На струне (цикл) — id из последнего e2e-seed
+
+// Актуальные ID книг берём из маппинга последнего e2e-seed
+// (.tmp/e2e-book-ids.json): пересев меняет id, константы протухают.
+function loadSeededBookIds(): Record<number, number> {
+  try {
+    const file = path.join(process.cwd(), ".tmp", "e2e-book-ids.json");
+    if (existsSync(file)) {
+      const parsed = JSON.parse(readFileSync(file, "utf8")) as { books?: Record<string, number> };
+      if (parsed.books) {
+        return Object.fromEntries(Object.entries(parsed.books).map(([oldId, newId]) => [Number(oldId), newId]));
+      }
+    }
+  } catch {
+    // фолбэк — значения последнего известного сида
+  }
+  return { 31: 141, 32: 142, 33: 143, 1: 139, 7: 140 };
+}
+const SEEDED_BOOK_IDS = loadSeededBookIds();
+const CYCLE_BOOK_A = SEEDED_BOOK_IDS[31] ?? 141; // На струне (цикл)
+const CYCLE_BOOK_B = SEEDED_BOOK_IDS[32] ?? 142; // Под струной
+const CYCLE_BOOK_C = SEEDED_BOOK_IDS[33] ?? 143; // Коготок Большого Взрыва
 const SAMPLE_PER_PHASE = 12;
 
 const chromiumPath = path.join(
@@ -287,7 +307,7 @@ async function run(): Promise<void> {
         const expectedText = await extractQuote(target);
         try {
           await target.click();
-          await page.waitForURL(new RegExp(`/reader/(142|143)`), { timeout: 15000 });
+          await page.waitForURL(new RegExp(`/reader/(${CYCLE_BOOK_B}|${CYCLE_BOOK_C})`), { timeout: 15000 });
           await page.waitForSelector(".reader-content-area", { timeout: 15000 });
           await page.waitForSelector(".readora-note-highlight-overlay", { state: "attached", timeout: 8000 });
           const url = page.url();
@@ -328,12 +348,12 @@ async function run(): Promise<void> {
         const expectedText = await extractQuote(target);
         try {
           await target.click();
-          await page.waitForURL(/\/reader\/143/, { timeout: 15000 });
+          await page.waitForURL(new RegExp(`/reader/${CYCLE_BOOK_C}`), { timeout: 15000 });
           await page.waitForSelector(".reader-content-area", { timeout: 15000 });
           await page.waitForSelector(".readora-note-highlight-overlay", { state: "attached", timeout: 8000 });
           const url = page.url();
           const checks = await checkHighlight(page, expectedText);
-          const pass = verdict(checks, url, "143");
+          const pass = verdict(checks, url, String(CYCLE_BOOK_C));
           results.push({ phase: "ридер: межцикловый переход (заметка)", item: label, url, checks, pass });
           console.log(`${pass ? "OK " : "FAIL"} [межцикловая заметка] ${label}`);
         } catch (error) {

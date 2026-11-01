@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ListBooksStatus, useListBooks, useListGenres, useDeleteBulkBooks, useAssignBooksToCycle, useListCycles } from "@workspace/api-client-react";
+import { cn } from "@/lib/utils";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { BookCard, BookListItem } from "@/components/BookCard";
@@ -219,6 +220,19 @@ export default function LibraryPage() {
     setSelectedBooks(newSelection);
   };
 
+  // Быстрый выбор с карточки (чекбокс при наведении): автоматически включает
+  // режим выделения — как в Gmail/Google Drive, отдельная кнопка не нужна.
+  const quickSelectBook = (bookId: number) => {
+    if (!isSelectionMode) setIsSelectionMode(true);
+    const newSelection = new Set(selectedBooks);
+    if (newSelection.has(bookId)) {
+      newSelection.delete(bookId);
+    } else {
+      newSelection.add(bookId);
+    }
+    setSelectedBooks(newSelection);
+  };
+
   const selectAll = () => {
     const allIds = new Set(visibleBookItems.map((b: any) => b.id));
     setSelectedBooks(allIds);
@@ -317,6 +331,7 @@ export default function LibraryPage() {
       setShowAssignCycleDialog={setShowAssignCycleDialog}
       assignCyclePending={assignCycleMutation.isPending}
       toggleBookSelection={toggleBookSelection}
+      quickSelectBook={quickSelectBook}
       hasGiftBooks={bookItems.some((book: any) => book?.isGiftEdition)}
       isAdmin={isAdmin}
     />
@@ -362,6 +377,7 @@ function LibraryPageLayout({
   setShowAssignCycleDialog,
   assignCyclePending,
   toggleBookSelection,
+  quickSelectBook,
   hasGiftBooks,
   isAdmin,
 }: any) {
@@ -374,12 +390,8 @@ function LibraryPageLayout({
             showGrouped={showGrouped}
             groupedSectionCount={groupedSectionCount}
             visibleBookItems={visibleBookItems}
-            selectedBooks={selectedBooks}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
-            setShowDeleteDialog={setShowDeleteDialog}
-            setShowAssignCycleDialog={setShowAssignCycleDialog}
-            clearSelection={clearSelection}
             setUploadOpen={setUploadOpen}
           />
 
@@ -432,6 +444,7 @@ function LibraryPageLayout({
               viewMode={viewMode}
               selectedBooks={selectedBooks}
               toggleBookSelection={toggleBookSelection}
+              quickSelectBook={quickSelectBook}
               setUploadOpen={setUploadOpen}
               groupBy={groupBy}
               isSelectionMode={isSelectionMode}
@@ -467,6 +480,49 @@ function LibraryPageLayout({
           pending={assignCyclePending}
           onAssign={handleAssignCycle}
         />
+
+        {/* Плавающая панель массовых действий: всегда в зоне видимости */}
+        {librarySection !== "annotations" && isSelectionMode && (
+          <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+            <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border bg-card/95 py-2 pl-4 pr-2 shadow-lg backdrop-blur">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                Выбрано: {selectedBooks.size}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-2 rounded-full"
+                disabled={selectedBooks.size === 0 || assignCyclePending}
+                onClick={() => setShowAssignCycleDialog(true)}
+              >
+                <BookMarked className="w-4 h-4" />
+                В цикл
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="gap-2 rounded-full"
+                disabled={selectedBooks.size === 0}
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="w-4 h-4" />
+                Удалить
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="gap-2 rounded-full"
+                onClick={clearSelection}
+              >
+                <X className="w-4 h-4" />
+                Готово
+              </Button>
+            </div>
+          </div>
+        )}
       </Layout>
     </ProtectedRoute>
   );
@@ -597,24 +653,16 @@ function LibraryHeader({
   showGrouped,
   groupedSectionCount,
   visibleBookItems,
-  selectedBooks,
   isSelectionMode,
   setIsSelectionMode,
-  setShowDeleteDialog,
-  setShowAssignCycleDialog,
-  clearSelection,
   setUploadOpen,
 }: Readonly<{
   section: LibrarySection;
   showGrouped: boolean;
   groupedSectionCount: number;
   visibleBookItems: any[];
-  selectedBooks: Set<number>;
   isSelectionMode: boolean;
   setIsSelectionMode: (enabled: boolean) => void;
-  setShowDeleteDialog: (open: boolean) => void;
-  setShowAssignCycleDialog: (open: boolean) => void;
-  clearSelection: () => void;
   setUploadOpen: (open: boolean) => void;
 }>) {
   const isAnnotations = section === "annotations";
@@ -633,32 +681,10 @@ function LibraryHeader({
       <div className="flex gap-2">
         {!isAnnotations && isSelectionMode && (
           <>
-            {selectedBooks.size > 0 && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAssignCycleDialog(true)}
-                  className="gap-2"
-                >
-                  <BookMarked className="w-4 h-4" />
-                  В цикл ({selectedBooks.size})
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Удалить ({selectedBooks.size})
-                </Button>
-              </>
-            )}
             <Button
               variant="outline"
               size="sm"
-              onClick={clearSelection}
+              onClick={() => setIsSelectionMode(false)}
               className="gap-2"
             >
               <X className="w-4 h-4" />
@@ -965,6 +991,7 @@ function LibraryContent({
   viewMode,
   selectedBooks,
   toggleBookSelection,
+  quickSelectBook,
   setUploadOpen,
   groupBy,
   isSelectionMode,
@@ -980,6 +1007,7 @@ function LibraryContent({
   viewMode: ViewMode;
   selectedBooks: Set<number>;
   toggleBookSelection: (id: number) => void;
+  quickSelectBook: (id: number) => void;
   setUploadOpen: (open: boolean) => void;
   groupBy: GroupOption;
   isSelectionMode: boolean;
@@ -1016,17 +1044,17 @@ function LibraryContent({
         viewMode={viewMode}
         isSelectionMode={isSelectionMode}
         selectedBooks={selectedBooks}
-        onToggleSelection={toggleBookSelection}
+        onQuickSelect={quickSelectBook}
       />
     );
   }
-  
+
   return (
-    <BooksGridView 
+    <BooksGridView
       bookItems={bookItems}
       viewMode={viewMode}
       selectedBooks={selectedBooks}
-      onToggleSelection={toggleBookSelection}
+      onQuickSelect={quickSelectBook}
       isSelectionMode={isSelectionMode}
     />
   );
@@ -1114,12 +1142,12 @@ function EmptyState({ section, hasFilters, onUploadClick }: Readonly<{ section: 
   );
 }
 
-function GroupedBooksView({ books, viewMode, isSelectionMode, selectedBooks, onToggleSelection }: Readonly<{
+function GroupedBooksView({ books, viewMode, isSelectionMode, selectedBooks, onQuickSelect }: Readonly<{
   books: any;
   viewMode: ViewMode;
   isSelectionMode: boolean;
   selectedBooks: Set<number>;
-  onToggleSelection: (id: number) => void;
+  onQuickSelect: (id: number) => void;
 }>) {
   return (
     <div className="space-y-8">
@@ -1136,7 +1164,7 @@ function GroupedBooksView({ books, viewMode, isSelectionMode, selectedBooks, onT
             bookItems={groupBooks}
             viewMode={viewMode}
             selectedBooks={selectedBooks}
-            onToggleSelection={onToggleSelection}
+            onQuickSelect={onQuickSelect}
             isSelectionMode={isSelectionMode}
           />
         </div>
@@ -1145,41 +1173,49 @@ function GroupedBooksView({ books, viewMode, isSelectionMode, selectedBooks, onT
   );
 }
 
-function BooksGridView({ 
-  bookItems, 
-  viewMode, 
-  selectedBooks, 
-  onToggleSelection,
+function BooksGridView({
+  bookItems,
+  viewMode,
+  selectedBooks,
+  onQuickSelect,
   isSelectionMode,
-}: Readonly<{ 
-  bookItems: any[]; 
-  viewMode: ViewMode; 
-  selectedBooks: Set<number>; 
-  onToggleSelection: (id: number) => void;
+}: Readonly<{
+  bookItems: any[];
+  viewMode: ViewMode;
+  selectedBooks: Set<number>;
+  onQuickSelect: (id: number) => void;
   isSelectionMode: boolean;
 }>) {
   return (
     <div className={viewMode === "grid" ? CARD_GRID_CLASS : "space-y-2"}>
       {bookItems.map((book: any) => (
-        <div key={book.id} className={`relative self-start ${viewMode === "grid" ? CARD_ITEM_HEIGHT_CLASS : ""}`}>
-          {isSelectionMode && (
+        <div key={book.id} className={`group relative self-start ${viewMode === "grid" ? CARD_ITEM_HEIGHT_CLASS : ""}`}>
+          {/* Чекбокс выбора: виден при наведении, клик включает режим выделения */}
+          {viewMode === "grid" && (
             <div className="absolute top-2 left-2 z-10">
               <Checkbox
                 checked={selectedBooks.has(book.id)}
-                onCheckedChange={() => onToggleSelection(book.id)}
-                onClick={(event) => event.stopPropagation()}
-                className="bg-background border-2"
+                onCheckedChange={() => onQuickSelect(book.id)}
+                aria-label={`Выбрать книгу: ${book.title}`}
+                title="Выбрать книгу"
+                className={cn(
+                  "bg-background border-2 transition-opacity",
+                  isSelectionMode || selectedBooks.has(book.id)
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                )}
               />
             </div>
           )}
           {viewMode === "grid" ? (
             <BookCard book={book} className="h-full" />
           ) : (
-            <BookListItem 
-              book={book} 
+            <BookListItem
+              book={book}
               selected={selectedBooks.has(book.id)}
-              onSelect={() => onToggleSelection(book.id)}
-              showCheckbox={isSelectionMode}
+              onSelect={() => onQuickSelect(book.id)}
+              showCheckbox
+              revealCheckbox
             />
           )}
         </div>

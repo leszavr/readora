@@ -17,14 +17,29 @@
  * Запуск: pnpm --filter @workspace/scripts exec tsx src/e2e-progress-hold.ts
  */
 import { chromium, type Page } from "playwright-core";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const TEST_EMAIL = "reader.e2e@test.local";
 const TEST_PASSWORD = "E2eReader#2026";
-const BOOK_ID = parseInt(process.env.E2E_BOOK_ID ?? "126", 10);
+// ID книги — из env или из маппинга последнего e2e-seed (.tmp/e2e-book-ids.json).
+function resolveBookId(): number {
+  if (process.env.E2E_BOOK_ID) return parseInt(process.env.E2E_BOOK_ID, 10);
+  try {
+    const file = path.join(process.cwd(), ".tmp", "e2e-book-ids.json");
+    if (existsSync(file)) {
+      const parsed = JSON.parse(readFileSync(file, "utf8")) as { books?: Record<string, number> };
+      const seeded = parsed.books?.["31"];
+      if (typeof seeded === "number") return seeded;
+    }
+  } catch {
+    // фолбэк ниже
+  }
+  return 126;
+}
+const BOOK_ID = resolveBookId();
 
 const chromiumPath = path.join(
   homedir(),

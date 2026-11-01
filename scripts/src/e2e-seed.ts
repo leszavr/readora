@@ -6,6 +6,8 @@
  * Идемпотентно: пересоздаёт тестового пользователя (каскад чистит его данные).
  */
 import bcrypt from "bcryptjs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import {
@@ -404,6 +406,16 @@ async function main(): Promise<void> {
   console.log(`Логин: ${TEST_EMAIL}`);
   console.log(`Пароль: ${TEST_PASSWORD}`);
   console.log(`Книги: ${[...oldToNewBook.entries()].map(([o, n]) => `${o}→${n}`).join(", ")}`);
+
+  // Маппинг ID книг для e2e-run: константы в скриптах не нужно обновлять
+  // после каждого пересева.
+  mkdirSync(path.join(process.cwd(), ".tmp"), { recursive: true });
+  const mapping = Object.fromEntries([...oldToNewBook.entries()]);
+  writeFileSync(
+    path.join(process.cwd(), ".tmp", "e2e-book-ids.json"),
+    JSON.stringify({ seededAt: new Date().toISOString(), books: mapping }, null, 2),
+  );
+  console.log("Маппинг ID книг: .tmp/e2e-book-ids.json");
   process.exit(0);
 }
 
