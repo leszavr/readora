@@ -110,6 +110,9 @@ export interface ParsedBook {
   coverMime: string | null;
   genres: string[];
   chapters: ParsedChapter[];
+  // Серия/цикл из метаданных файла (FB2 <sequence>, EPUB calibre:series).
+  seriesName?: string | null;
+  seriesNumber?: number | null;
 }
 
 export interface ParsedChapter {
@@ -550,6 +553,25 @@ export function parseFB2(buffer: Buffer, options: ParseBookOptions = {}): Parsed
   const genreArr = Array.isArray(titleInfo?.genre) ? titleInfo.genre : titleInfo?.genre ? [titleInfo.genre] : [];
   const genres: string[] = genreArr.map((g: unknown) => textValue(g).trim()).filter(Boolean);
 
+  // Series/cycle: <sequence name="..." number="..."/> в title-info, при
+  // отсутствии — в publish-info или src-title-info.
+  const publishInfo =
+    fb2?.description?.[0]?.["publish-info"]?.[0] ??
+    fb2?.description?.["publish-info"]?.[0] ??
+    fb2?.description?.["publish-info"] ??
+    {};
+  const srcTitleInfo = fb2?.description?.[0]?.["src-title-info"]?.[0] ?? fb2?.description?.["src-title-info"]?.[0] ?? {};
+  const sequenceRaw = titleInfo?.sequence ?? publishInfo?.sequence ?? srcTitleInfo?.sequence;
+  const sequence = Array.isArray(sequenceRaw) ? sequenceRaw[0] : sequenceRaw;
+  const seriesName = (typeof sequence === "object" && sequence !== null
+    ? String((sequence as Record<string, unknown>)["@_name"] ?? "").trim()
+    : "") || null;
+  const seriesNumberRaw = typeof sequence === "object" && sequence !== null
+    ? String((sequence as Record<string, unknown>)["@_number"] ?? "").trim()
+    : "";
+  const seriesNumberParsed = Number.parseFloat(seriesNumberRaw);
+  const seriesNumber = seriesNumberRaw !== "" && Number.isFinite(seriesNumberParsed) ? seriesNumberParsed : null;
+
   // Cover image
   let coverBase64: string | null = null;
   let coverMime: string | null = null;
@@ -581,7 +603,7 @@ export function parseFB2(buffer: Buffer, options: ParseBookOptions = {}): Parsed
     chapters.push({ index: 0, title: "Содержание", htmlContent: clean, wordCount: countHtmlWords(clean) });
   }
 
-  return { title, author, description, language, publicationYear, coverBase64, coverMime, genres, chapters };
+  return { title, author, description, language, publicationYear, coverBase64, coverMime, genres, chapters, seriesName, seriesNumber };
 }
 
 function nodeName(node: Fb2Node): string {
@@ -1262,6 +1284,18 @@ export function parseEPUB(buffer: Buffer, options: ParseBookOptions = {}): Parse
   const yearMatch = dateRaw.match(/\d{4}/);
   const publicationYear = yearMatch ? parseInt(yearMatch[0], 10) : null;
 
+  // Серия/цикл: конвенция calibre (meta name="calibre:series").
+  const calibreSeriesMeta = elementsByLocalName($.root(), "meta")
+    .toArray()
+    .find((el) => firstAttr(el, "name") === "calibre:series");
+  const seriesName = (calibreSeriesMeta ? firstAttr(calibreSeriesMeta, "content") : undefined)?.trim() || null;
+  const calibreSeriesIndexMeta = elementsByLocalName($.root(), "meta")
+    .toArray()
+    .find((el) => firstAttr(el, "name") === "calibre:series_index");
+  const seriesIndexRaw = (calibreSeriesIndexMeta ? firstAttr(calibreSeriesIndexMeta, "content") : undefined)?.trim() ?? "";
+  const seriesIndexParsed = Number.parseFloat(seriesIndexRaw);
+  const seriesNumber = seriesIndexRaw !== "" && Number.isFinite(seriesIndexParsed) ? seriesIndexParsed : null;
+
   // В некоторых EPUB заголовки в TOC содержат служебные префиксы вида
   // "8 Название книги Глава 8. ...". Убираем их для читаемого оглавления.
   const normalizeChapterTitle = (raw: string): string => {
@@ -1445,7 +1479,7 @@ export function parseEPUB(buffer: Buffer, options: ParseBookOptions = {}): Parse
     }
   }
 
-  return { title, author: authorFull, description, language, publicationYear, coverBase64, coverMime, genres, chapters };
+  return { title, author: authorFull, description, language, publicationYear, coverBase64, coverMime, genres, chapters, seriesName, seriesNumber };
 }
 
 // ─── MOBI Parser ──────────────────────────────────────────────────────────────

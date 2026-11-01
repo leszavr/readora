@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { eq, and, ilike, inArray, desc, asc, sql, notInArray } from "drizzle-orm";
+import { eq, and, ilike, inArray, desc, asc, sql, notInArray, type SQL } from "drizzle-orm";
 import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
@@ -10,6 +10,7 @@ import { parseBook, bookFormatFromExtension, type BookFormat, type ParseBookOpti
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
+import { storeOptimizedCover, deleteCoverIfUnreferenced } from "../lib/cover-storage";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
@@ -104,29 +105,10 @@ async function updateUploadJob(jobId: number, values: Partial<typeof bookUploadJ
   await db.update(bookUploadJobsTable).set(values).where(eq(bookUploadJobsTable.id, jobId));
 }
 
-async function deleteCoverIfUnreferenced(coverPath: string, excludingBookIds: number[]): Promise<void> {
-  const [{ count: sameCoverCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(booksTable)
-    .where(and(eq(booksTable.coverPath, coverPath), notInArray(booksTable.id, excludingBookIds)));
-
-  if (sameCoverCount === 0) {
-    fs.rmSync(resolveUploadPath(coverPath), { force: true });
-  }
-}
-
 function buildCoverUrl(bookId: number, coverPath: string, isPublic = false): string {
   const route = isPublic ? "cover-public" : "cover";
   // coverPath contains hashed filename, so this query param busts browser cache after replacement.
   return `/api/books/${bookId}/${route}?v=${encodeURIComponent(coverPath)}`;
-}
-
-async function storeOptimizedCover(inputBuffer: Buffer, filePrefix: string): Promise<string> {
-  const optimized = await optimizeImage(inputBuffer, "cover");
-  const coverHash = crypto.createHash("sha256").update(optimized.buffer).digest("hex");
-  const coverStorageKey = `covers/${filePrefix}-${coverHash}.webp`;
-  fs.writeFileSync(resolveUploadPath(coverStorageKey), optimized.buffer);
-  return coverStorageKey;
 }
 
 function parseOptionalNumber(value: unknown): number | undefined {
@@ -450,19 +432,23 @@ function buildBookFilters(
   return conditions;
 }
 
-function determineSortOrder(sortBy: string, sortDir: string) {
+function determineSortOrder(sortBy: string, sortDir: string): SQL[] {
   const isDesc = sortDir === "desc";
-  
+
   switch (sortBy) {
     case "title":
-      return isDesc ? desc(booksTable.title) : asc(booksTable.title);
+      return [isDesc ? desc(booksTable.title) : asc(booksTable.title)];
     case "author":
-      return isDesc ? desc(booksTable.author) : asc(booksTable.author);
+      return [isDesc ? desc(booksTable.author) : asc(booksTable.author)];
     case "publicationYear":
-      return isDesc ? desc(booksTable.publicationYear) : asc(booksTable.publicationYear);
+      return [isDesc ? desc(booksTable.publicationYear) : asc(booksTable.publicationYear)];
+    case "cycleNumber":
+      return isDesc
+        ? [sql`${booksTable.cycleNumber} desc nulls last`, asc(booksTable.title)]
+        : [sql`${booksTable.cycleNumber} asc nulls last`, asc(booksTable.title)];
     case "uploadedAt":
     default:
-      return isDesc ? desc(booksTable.uploadedAt) : asc(booksTable.uploadedAt);
+      return [isDesc ? desc(booksTable.uploadedAt) : asc(booksTable.uploadedAt)];
   }
 }
 
@@ -513,7 +499,7 @@ function groupBooks(books: any[], groupBy?: string) {
   
   for (const book of books) {
     let key: string;
-    
+
     if (groupBy === "genre") {
       key = book?.genres?.[0]?.name || "Без жанра";
     } else if (groupBy === "author") {
@@ -523,11 +509,23 @@ function groupBooks(books: any[], groupBy?: string) {
     } else {
       continue;
     }
-    
+
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(book);
   }
-  
+
+  if (groupBy === "cycle") {
+    // Внутри цикла книги показываем в порядке серии (cycleNumber), null — в
+    // конце с сохранением исходного порядка (стабильная сортировка).
+    for (const key of Object.keys(grouped)) {
+      grouped[key].sort((a, b) => {
+        const aNumber = typeof a?.cycleNumber === "number" ? a.cycleNumber : Number.POSITIVE_INFINITY;
+        const bNumber = typeof b?.cycleNumber === "number" ? b.cycleNumber : Number.POSITIVE_INFINITY;
+        return aNumber - bNumber;
+      });
+    }
+  }
+
   return { grouped, groupBy };
 }
 
@@ -559,7 +557,7 @@ router.get("/books", requireAuth, async (req, res): Promise<void> => {
     .select()
     .from(booksTable)
     .where(and(...conditions))
-    .orderBy(orderByClause);
+    .orderBy(...orderByClause);
 
   const giftEditionBookIds = new Set<number>();
   if (books.length > 0) {
@@ -745,6 +743,56 @@ router.post("/books/delete-bulk", requireAuth, async (req, res): Promise<void> =
   }
   const result = await db.delete(booksTable).where(and(eq(booksTable.ownerUserId, user.id), inArray(booksTable.id, ids))).returning();
   res.json({ deleted: result.length });
+});
+
+// POST /books/assign-cycle — массовое назначение книг в цикл (или снятие).
+router.post("/books/assign-cycle", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  const ids = normalizeBookIds((req.body ?? {}).bookIds);
+  if (!ids) {
+    res.status(400).json({ error: "Укажите список книг (1–500)" });
+    return;
+  }
+  const { cycleId, cycleName } = (req.body ?? {}) as { cycleId?: unknown; cycleName?: unknown };
+
+  let targetCycleId: number | null = null;
+  let targetCycleName: string | null = null;
+
+  if (typeof cycleName === "string" && cycleName.trim()) {
+    const name = cycleName.trim().slice(0, 200);
+    const [existing] = await db
+      .select({ id: cyclesTable.id })
+      .from(cyclesTable)
+      .where(and(eq(cyclesTable.ownerUserId, user.id), eq(cyclesTable.name, name)));
+    if (existing) {
+      targetCycleId = existing.id;
+    } else {
+      const [created] = await db
+        .insert(cyclesTable)
+        .values({ ownerUserId: user.id, name })
+        .returning({ id: cyclesTable.id });
+      targetCycleId = created.id;
+    }
+    targetCycleName = name;
+  } else if (typeof cycleId === "number" && Number.isInteger(cycleId) && cycleId > 0) {
+    const [cycle] = await db
+      .select({ id: cyclesTable.id, name: cyclesTable.name })
+      .from(cyclesTable)
+      .where(and(eq(cyclesTable.id, cycleId), eq(cyclesTable.ownerUserId, user.id)));
+    if (!cycle) {
+      res.status(404).json({ error: "Цикл не найден" });
+      return;
+    }
+    targetCycleId = cycle.id;
+    targetCycleName = cycle.name;
+  }
+
+  const result = await db
+    .update(booksTable)
+    .set({ cycleId: targetCycleId, cycleName: targetCycleName, cycleNumber: null })
+    .where(and(eq(booksTable.ownerUserId, user.id), inArray(booksTable.id, ids)))
+    .returning({ id: booksTable.id });
+  res.json({ updated: result.length, cycleId: targetCycleId, cycleName: targetCycleName });
 });
 
 // GET /public/popular-books

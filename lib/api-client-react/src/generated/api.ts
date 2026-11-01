@@ -23,6 +23,9 @@ import type {
   AdminAnalytics,
   AdminAnalyticsUsers,
   AdminBook,
+  AdminControlExternalSyncJob200,
+  AdminControlExternalSyncJobBody,
+  AdminExternalStorageStats,
   AdminStats,
   AdminUser,
   AdminUserCreate,
@@ -31,6 +34,8 @@ import type {
   AnalyticsEventsBatchResult,
   AppSettings,
   AppSettingsUpdate,
+  AssignBooksToCycle200,
+  AssignBooksToCycleBody,
   AuthResult,
   Book,
   BookStorageQuota,
@@ -42,11 +47,17 @@ import type {
   Chapter,
   ChapterContent,
   ClearSavedEmails200,
+  ControlExternalSyncJobBody,
   Cycle,
   CycleInput,
   DeleteAccountInput,
   DeleteAdminFeedbackParams,
+  DeleteExternalStorageConnection200,
   ErrorResponse,
+  ExternalStorageConnection,
+  ExternalStorageConnectionUpdate,
+  ExternalStorageFolderList,
+  ExternalSyncJob,
   FeedbackDeleteResult,
   FeedbackStatsResponse,
   FeedbackSubmitResult,
@@ -59,6 +70,7 @@ import type {
   GetAdminAnalyticsParams,
   GetAdminAnalyticsUsersParams,
   GetAdminFeedbackParams,
+  GetExternalStorageFeatureStatus200,
   GetPopularBooksParams,
   GiftEdition,
   GiftEditionCreate,
@@ -73,7 +85,9 @@ import type {
   ListAdminBooksParams,
   ListAdminUsersParams,
   ListBooksParams,
+  ListExternalStorageFoldersParams,
   LoginInput,
+  MailRuConnectRequest,
   MaintenanceStatus,
   ProfileUpdate,
   ProgressInput,
@@ -1408,6 +1422,77 @@ export const useCreateCycle = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateCycleMutationOptions(options));
+    }
+
+export const getAssignBooksToCycleUrl = () => {
+
+
+
+
+  return `/api/books/assign-cycle`
+}
+
+/**
+ * @summary Bulk assign books to a cycle (or clear assignment)
+ */
+export const assignBooksToCycle = async (assignBooksToCycleBody: AssignBooksToCycleBody, options?: RequestInit): Promise<AssignBooksToCycle200> => {
+
+  return customFetch<AssignBooksToCycle200>(getAssignBooksToCycleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      assignBooksToCycleBody,)
+  }
+);}
+
+
+
+
+export const getAssignBooksToCycleMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignBooksToCycle>>, TError,{data: BodyType<AssignBooksToCycleBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignBooksToCycle>>, TError,{data: BodyType<AssignBooksToCycleBody>}, TContext> => {
+
+const mutationKey = ['assignBooksToCycle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignBooksToCycle>>, {data: BodyType<AssignBooksToCycleBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  assignBooksToCycle(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignBooksToCycleMutationResult = NonNullable<Awaited<ReturnType<typeof assignBooksToCycle>>>
+    export type AssignBooksToCycleMutationBody = BodyType<AssignBooksToCycleBody>
+    export type AssignBooksToCycleMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Bulk assign books to a cycle (or clear assignment)
+ */
+export const useAssignBooksToCycle = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignBooksToCycle>>, TError,{data: BodyType<AssignBooksToCycleBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignBooksToCycle>>,
+        TError,
+        {data: BodyType<AssignBooksToCycleBody>},
+        TContext
+      > => {
+      return useMutation(getAssignBooksToCycleMutationOptions(options));
     }
 
 export const getListBooksUrl = (params?: ListBooksParams,) => {
@@ -5912,4 +5997,828 @@ export const useDeleteSavedEmail = <TError = ErrorType<void>,
       > => {
       return useMutation(getDeleteSavedEmailMutationOptions(options));
     }
+
+export const getGetExternalStorageFeatureStatusUrl = () => {
+
+
+
+
+  return `/api/external-storage/feature-status`
+}
+
+/**
+ * @summary Check whether external storage feature is enabled
+ */
+export const getExternalStorageFeatureStatus = async ( options?: RequestInit): Promise<GetExternalStorageFeatureStatus200> => {
+
+  return customFetch<GetExternalStorageFeatureStatus200>(getGetExternalStorageFeatureStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExternalStorageFeatureStatusQueryKey = () => {
+    return [
+    `/api/external-storage/feature-status`
+    ] as const;
+    }
+
+
+export const getGetExternalStorageFeatureStatusQueryOptions = <TData = Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExternalStorageFeatureStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>> = ({ signal }) => getExternalStorageFeatureStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExternalStorageFeatureStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>>
+export type GetExternalStorageFeatureStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether external storage feature is enabled
+ */
+
+export function useGetExternalStorageFeatureStatus<TData = Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalStorageFeatureStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExternalStorageFeatureStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListExternalStorageConnectionsUrl = () => {
+
+
+
+
+  return `/api/external-storage/connections`
+}
+
+/**
+ * @summary List user external storage connections
+ */
+export const listExternalStorageConnections = async ( options?: RequestInit): Promise<ExternalStorageConnection[]> => {
+
+  return customFetch<ExternalStorageConnection[]>(getListExternalStorageConnectionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalStorageConnectionsQueryKey = () => {
+    return [
+    `/api/external-storage/connections`
+    ] as const;
+    }
+
+
+export const getListExternalStorageConnectionsQueryOptions = <TData = Awaited<ReturnType<typeof listExternalStorageConnections>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalStorageConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalStorageConnectionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalStorageConnections>>> = ({ signal }) => listExternalStorageConnections({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalStorageConnections>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalStorageConnectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalStorageConnections>>>
+export type ListExternalStorageConnectionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List user external storage connections
+ */
+
+export function useListExternalStorageConnections<TData = Awaited<ReturnType<typeof listExternalStorageConnections>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalStorageConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalStorageConnectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getConnectMailRuStorageUrl = () => {
+
+
+
+
+  return `/api/external-storage/connections/mailru`
+}
+
+/**
+ * @summary Connect Mail.ru Cloud via WebDAV app password
+ */
+export const connectMailRuStorage = async (mailRuConnectRequest: MailRuConnectRequest, options?: RequestInit): Promise<ExternalStorageConnection> => {
+
+  return customFetch<ExternalStorageConnection>(getConnectMailRuStorageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mailRuConnectRequest,)
+  }
+);}
+
+
+
+
+export const getConnectMailRuStorageMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectMailRuStorage>>, TError,{data: BodyType<MailRuConnectRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof connectMailRuStorage>>, TError,{data: BodyType<MailRuConnectRequest>}, TContext> => {
+
+const mutationKey = ['connectMailRuStorage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectMailRuStorage>>, {data: BodyType<MailRuConnectRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  connectMailRuStorage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConnectMailRuStorageMutationResult = NonNullable<Awaited<ReturnType<typeof connectMailRuStorage>>>
+    export type ConnectMailRuStorageMutationBody = BodyType<MailRuConnectRequest>
+    export type ConnectMailRuStorageMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Connect Mail.ru Cloud via WebDAV app password
+ */
+export const useConnectMailRuStorage = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectMailRuStorage>>, TError,{data: BodyType<MailRuConnectRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof connectMailRuStorage>>,
+        TError,
+        {data: BodyType<MailRuConnectRequest>},
+        TContext
+      > => {
+      return useMutation(getConnectMailRuStorageMutationOptions(options));
+    }
+
+export const getUpdateExternalStorageConnectionUrl = (id: number,) => {
+
+
+
+
+  return `/api/external-storage/connections/${id}`
+}
+
+/**
+ * @summary Update connection root folder
+ */
+export const updateExternalStorageConnection = async (id: number,
+    externalStorageConnectionUpdate: ExternalStorageConnectionUpdate, options?: RequestInit): Promise<ExternalStorageConnection> => {
+
+  return customFetch<ExternalStorageConnection>(getUpdateExternalStorageConnectionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      externalStorageConnectionUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateExternalStorageConnectionMutationOptions = <TError = ErrorType<ErrorResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExternalStorageConnection>>, TError,{id: number;data: BodyType<ExternalStorageConnectionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExternalStorageConnection>>, TError,{id: number;data: BodyType<ExternalStorageConnectionUpdate>}, TContext> => {
+
+const mutationKey = ['updateExternalStorageConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExternalStorageConnection>>, {id: number;data: BodyType<ExternalStorageConnectionUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateExternalStorageConnection(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateExternalStorageConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof updateExternalStorageConnection>>>
+    export type UpdateExternalStorageConnectionMutationBody = BodyType<ExternalStorageConnectionUpdate>
+    export type UpdateExternalStorageConnectionMutationError = ErrorType<ErrorResponse | void>
+
+    /**
+ * @summary Update connection root folder
+ */
+export const useUpdateExternalStorageConnection = <TError = ErrorType<ErrorResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExternalStorageConnection>>, TError,{id: number;data: BodyType<ExternalStorageConnectionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateExternalStorageConnection>>,
+        TError,
+        {id: number;data: BodyType<ExternalStorageConnectionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateExternalStorageConnectionMutationOptions(options));
+    }
+
+export const getDeleteExternalStorageConnectionUrl = (id: number,) => {
+
+
+
+
+  return `/api/external-storage/connections/${id}`
+}
+
+/**
+ * @summary Disconnect external storage (books and progress are kept)
+ */
+export const deleteExternalStorageConnection = async (id: number, options?: RequestInit): Promise<DeleteExternalStorageConnection200> => {
+
+  return customFetch<DeleteExternalStorageConnection200>(getDeleteExternalStorageConnectionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteExternalStorageConnectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExternalStorageConnection>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteExternalStorageConnection>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteExternalStorageConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteExternalStorageConnection>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteExternalStorageConnection(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteExternalStorageConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteExternalStorageConnection>>>
+
+    export type DeleteExternalStorageConnectionMutationError = ErrorType<void>
+
+    /**
+ * @summary Disconnect external storage (books and progress are kept)
+ */
+export const useDeleteExternalStorageConnection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExternalStorageConnection>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteExternalStorageConnection>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteExternalStorageConnectionMutationOptions(options));
+    }
+
+export const getListExternalStorageFoldersUrl = (id: number,
+    params?: ListExternalStorageFoldersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/external-storage/connections/${id}/folders?${stringifiedParams}` : `/api/external-storage/connections/${id}/folders`
+}
+
+/**
+ * @summary List subfolders of a path in external storage
+ */
+export const listExternalStorageFolders = async (id: number,
+    params?: ListExternalStorageFoldersParams, options?: RequestInit): Promise<ExternalStorageFolderList> => {
+
+  return customFetch<ExternalStorageFolderList>(getListExternalStorageFoldersUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExternalStorageFoldersQueryKey = (id: number,
+    params?: ListExternalStorageFoldersParams,) => {
+    return [
+    `/api/external-storage/connections/${id}/folders`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListExternalStorageFoldersQueryOptions = <TData = Awaited<ReturnType<typeof listExternalStorageFolders>>, TError = ErrorType<ErrorResponse | void>>(id: number,
+    params?: ListExternalStorageFoldersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalStorageFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExternalStorageFoldersQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExternalStorageFolders>>> = ({ signal }) => listExternalStorageFolders(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExternalStorageFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExternalStorageFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof listExternalStorageFolders>>>
+export type ListExternalStorageFoldersQueryError = ErrorType<ErrorResponse | void>
+
+
+/**
+ * @summary List subfolders of a path in external storage
+ */
+
+export function useListExternalStorageFolders<TData = Awaited<ReturnType<typeof listExternalStorageFolders>>, TError = ErrorType<ErrorResponse | void>>(
+ id: number,
+    params?: ListExternalStorageFoldersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExternalStorageFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExternalStorageFoldersQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSyncExternalStorageUrl = (id: number,) => {
+
+
+
+
+  return `/api/external-storage/connections/${id}/sync`
+}
+
+/**
+ * @summary Start synchronization of external storage
+ */
+export const syncExternalStorage = async (id: number, options?: RequestInit): Promise<ExternalSyncJob> => {
+
+  return customFetch<ExternalSyncJob>(getSyncExternalStorageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSyncExternalStorageMutationOptions = <TError = ErrorType<void | ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncExternalStorage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncExternalStorage>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['syncExternalStorage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncExternalStorage>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  syncExternalStorage(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncExternalStorageMutationResult = NonNullable<Awaited<ReturnType<typeof syncExternalStorage>>>
+
+    export type SyncExternalStorageMutationError = ErrorType<void | ErrorResponse>
+
+    /**
+ * @summary Start synchronization of external storage
+ */
+export const useSyncExternalStorage = <TError = ErrorType<void | ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncExternalStorage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncExternalStorage>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getSyncExternalStorageMutationOptions(options));
+    }
+
+export const getGetExternalSyncJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/external-storage/sync-jobs/${id}`
+}
+
+/**
+ * @summary Get external storage sync job status
+ */
+export const getExternalSyncJob = async (id: number, options?: RequestInit): Promise<ExternalSyncJob> => {
+
+  return customFetch<ExternalSyncJob>(getGetExternalSyncJobUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExternalSyncJobQueryKey = (id: number,) => {
+    return [
+    `/api/external-storage/sync-jobs/${id}`
+    ] as const;
+    }
+
+
+export const getGetExternalSyncJobQueryOptions = <TData = Awaited<ReturnType<typeof getExternalSyncJob>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalSyncJob>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExternalSyncJobQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExternalSyncJob>>> = ({ signal }) => getExternalSyncJob(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExternalSyncJob>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExternalSyncJobQueryResult = NonNullable<Awaited<ReturnType<typeof getExternalSyncJob>>>
+export type GetExternalSyncJobQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get external storage sync job status
+ */
+
+export function useGetExternalSyncJob<TData = Awaited<ReturnType<typeof getExternalSyncJob>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExternalSyncJob>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExternalSyncJobQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getControlExternalSyncJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/external-storage/sync-jobs/${id}`
+}
+
+/**
+ * @summary Pause, resume or cancel external storage sync job
+ */
+export const controlExternalSyncJob = async (id: number,
+    controlExternalSyncJobBody: ControlExternalSyncJobBody, options?: RequestInit): Promise<ExternalSyncJob> => {
+
+  return customFetch<ExternalSyncJob>(getControlExternalSyncJobUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      controlExternalSyncJobBody,)
+  }
+);}
+
+
+
+
+export const getControlExternalSyncJobMutationOptions = <TError = ErrorType<void | ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof controlExternalSyncJob>>, TError,{id: number;data: BodyType<ControlExternalSyncJobBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof controlExternalSyncJob>>, TError,{id: number;data: BodyType<ControlExternalSyncJobBody>}, TContext> => {
+
+const mutationKey = ['controlExternalSyncJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof controlExternalSyncJob>>, {id: number;data: BodyType<ControlExternalSyncJobBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  controlExternalSyncJob(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ControlExternalSyncJobMutationResult = NonNullable<Awaited<ReturnType<typeof controlExternalSyncJob>>>
+    export type ControlExternalSyncJobMutationBody = BodyType<ControlExternalSyncJobBody>
+    export type ControlExternalSyncJobMutationError = ErrorType<void | ErrorResponse>
+
+    /**
+ * @summary Pause, resume or cancel external storage sync job
+ */
+export const useControlExternalSyncJob = <TError = ErrorType<void | ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof controlExternalSyncJob>>, TError,{id: number;data: BodyType<ControlExternalSyncJobBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof controlExternalSyncJob>>,
+        TError,
+        {id: number;data: BodyType<ControlExternalSyncJobBody>},
+        TContext
+      > => {
+      return useMutation(getControlExternalSyncJobMutationOptions(options));
+    }
+
+export const getAdminControlExternalSyncJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/external-storage/sync-jobs/${id}`
+}
+
+/**
+ * @summary Control any user's external storage sync job (system admin)
+ */
+export const adminControlExternalSyncJob = async (id: number,
+    adminControlExternalSyncJobBody: AdminControlExternalSyncJobBody, options?: RequestInit): Promise<AdminControlExternalSyncJob200> => {
+
+  return customFetch<AdminControlExternalSyncJob200>(getAdminControlExternalSyncJobUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminControlExternalSyncJobBody,)
+  }
+);}
+
+
+
+
+export const getAdminControlExternalSyncJobMutationOptions = <TError = ErrorType<void | ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminControlExternalSyncJob>>, TError,{id: number;data: BodyType<AdminControlExternalSyncJobBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminControlExternalSyncJob>>, TError,{id: number;data: BodyType<AdminControlExternalSyncJobBody>}, TContext> => {
+
+const mutationKey = ['adminControlExternalSyncJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminControlExternalSyncJob>>, {id: number;data: BodyType<AdminControlExternalSyncJobBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  adminControlExternalSyncJob(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminControlExternalSyncJobMutationResult = NonNullable<Awaited<ReturnType<typeof adminControlExternalSyncJob>>>
+    export type AdminControlExternalSyncJobMutationBody = BodyType<AdminControlExternalSyncJobBody>
+    export type AdminControlExternalSyncJobMutationError = ErrorType<void | ErrorResponse>
+
+    /**
+ * @summary Control any user's external storage sync job (system admin)
+ */
+export const useAdminControlExternalSyncJob = <TError = ErrorType<void | ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminControlExternalSyncJob>>, TError,{id: number;data: BodyType<AdminControlExternalSyncJobBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminControlExternalSyncJob>>,
+        TError,
+        {id: number;data: BodyType<AdminControlExternalSyncJobBody>},
+        TContext
+      > => {
+      return useMutation(getAdminControlExternalSyncJobMutationOptions(options));
+    }
+
+export const getGetAdminExternalStorageStatsUrl = () => {
+
+
+
+
+  return `/api/admin/external-storage/stats`
+}
+
+/**
+ * @summary External storage metrics (system admin)
+ */
+export const getAdminExternalStorageStats = async ( options?: RequestInit): Promise<AdminExternalStorageStats> => {
+
+  return customFetch<AdminExternalStorageStats>(getGetAdminExternalStorageStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminExternalStorageStatsQueryKey = () => {
+    return [
+    `/api/admin/external-storage/stats`
+    ] as const;
+    }
+
+
+export const getGetAdminExternalStorageStatsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminExternalStorageStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminExternalStorageStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminExternalStorageStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminExternalStorageStats>>> = ({ signal }) => getAdminExternalStorageStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminExternalStorageStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminExternalStorageStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminExternalStorageStats>>>
+export type GetAdminExternalStorageStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary External storage metrics (system admin)
+ */
+
+export function useGetAdminExternalStorageStats<TData = Awaited<ReturnType<typeof getAdminExternalStorageStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminExternalStorageStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminExternalStorageStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

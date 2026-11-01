@@ -14,10 +14,12 @@ export default function AdminSettings() {
   const [allowReg, setAllowReg] = useState(true);
   const [maxSize, setMaxSize] = useState(50);
   const [libraryStorageLimit, setLibraryStorageLimit] = useState(1024);
+  const [externalCacheBudget, setExternalCacheBudget] = useState(2048);
   const [maintenance, setMaintenance] = useState(false);
   const [maintenanceReason, setMaintenanceReason] = useState("");
   const [maintenanceEta, setMaintenanceEta] = useState("");
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [externalStorage, setExternalStorage] = useState(true);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -26,10 +28,12 @@ export default function AdminSettings() {
       setAllowReg(settings.allowRegistration ?? true);
       setMaxSize(settings.maxFileSizeMb ?? 50);
       setLibraryStorageLimit(settings.libraryStorageLimitMb ?? 1024);
+      setExternalCacheBudget(settings.externalCacheBudgetMb ?? 2048);
       setMaintenance(settings.maintenanceMode ?? false);
       setMaintenanceReason(settings.maintenanceReason ?? "");
       setMaintenanceEta(settings.maintenanceEta ?? "");
       setMaintenanceMessage(settings.maintenanceMessage ?? "");
+      setExternalStorage(settings.externalStorageEnabled ?? true);
     }
   }, [settings]);
 
@@ -51,6 +55,8 @@ export default function AdminSettings() {
         allowRegistration: allowReg,
         maxFileSizeMb: maxSize,
         libraryStorageLimitMb: libraryStorageLimit,
+        externalCacheBudgetMb: externalCacheBudget,
+        externalStorageEnabled: externalStorage,
         maintenanceMode: maintenance,
         maintenanceReason: maintenanceReason || null,
         maintenanceEta: maintenanceEta || null,
@@ -99,6 +105,29 @@ export default function AdminSettings() {
             {libraryStorageLimit < maxSize && (
               <p className="text-xs text-destructive">Лимит библиотеки не может быть меньше максимального размера одной книги.</p>
             )}
+          </div>
+          <div className="space-y-2">
+            <Label>Бюджет кэша внешних хранилищ (МБ)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={externalCacheBudget}
+              onChange={(e) => setExternalCacheBudget(Number.parseInt(e.target.value, 10) || 2048)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Суммарный размер кэша контента глав книг из внешних хранилищ на сервере. При превышении
+              наименее недавно читаемые книги выгружаются из кэша. Верхнего предела нет — ориентируйтесь
+              на объём диска сервера.
+            </p>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <p className="text-sm font-medium">Внешние хранилища</p>
+              <p className="text-xs text-muted-foreground">
+                Подключение Яндекс.Диска и Облака Mail.ru, синхронизация и подгрузка контента из облаков
+              </p>
+            </div>
+            <Switch checked={externalStorage} onCheckedChange={setExternalStorage} />
           </div>
           <div className="flex items-center justify-between py-2">
             <div>

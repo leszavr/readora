@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart, Gift, MessageSquareText } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, PanelsTopLeft, LineChart, Gift, MessageSquareText, HardDrive } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -16,6 +16,7 @@ const AdminLandingBooks = lazy(() => import("@/pages/admin/AdminLandingBooks"));
 const AdminGiftEditions = lazy(() => import("@/pages/admin/AdminGiftEditions"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
 const AdminFeedback = lazy(() => import("@/pages/admin/AdminFeedback"));
+const AdminExternalStorage = lazy(() => import("@/pages/admin/AdminExternalStorage"));
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
@@ -28,6 +29,7 @@ const TABS = [
   { id: "genres", label: "Жанры", icon: Tags },
   { id: "email", label: "Email", icon: Mail },
   { id: "saved-emails", label: "Письма", icon: Inbox },
+  { id: "external-storage", label: "Хранилища", icon: HardDrive },
   { id: "settings", label: "Настройки", icon: Settings },
 ] as const;
 
@@ -89,6 +91,7 @@ export default function AdminPage() {
                 {tab === "genres" && <AdminGenres />}
                 {tab === "email" && <AdminSmtp />}
                 {tab === "saved-emails" && <AdminEmails />}
+                {tab === "external-storage" && isAdmin && <AdminExternalStorage />}
                 {tab === "settings" && <AdminSettings />}
               </Suspense>
             </section>

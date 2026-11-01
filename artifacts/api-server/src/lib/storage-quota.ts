@@ -79,7 +79,12 @@ async function getUsage(userId: number) {
     db
       .select({ usedBytes: sql<number>`coalesce(sum(${booksTable.fileSize}), 0)::double precision` })
       .from(booksTable)
-      .where(and(eq(booksTable.ownerUserId, userId), isNull(booksTable.contentBookId))),
+      .where(and(
+        eq(booksTable.ownerUserId, userId),
+        isNull(booksTable.contentBookId),
+        // Внешние книги хранятся в облаке владельца и не занимают место на сервере.
+        isNull(booksTable.externalConnectionId),
+      )),
     db
       .select({ reservedBytes: sql<number>`coalesce(sum(${bookUploadJobsTable.fileSize}), 0)::double precision` })
       .from(bookUploadJobsTable)
@@ -145,7 +150,11 @@ export async function createUploadJobWithinQuota(
         tx
           .select({ usedBytes: sql<number>`coalesce(sum(${booksTable.fileSize}), 0)::double precision` })
           .from(booksTable)
-          .where(and(eq(booksTable.ownerUserId, user.id), isNull(booksTable.contentBookId))),
+          .where(and(
+            eq(booksTable.ownerUserId, user.id),
+            isNull(booksTable.contentBookId),
+            isNull(booksTable.externalConnectionId),
+          )),
         tx
           .select({ reservedBytes: sql<number>`coalesce(sum(${bookUploadJobsTable.fileSize}), 0)::double precision` })
           .from(bookUploadJobsTable)
@@ -178,8 +187,8 @@ export async function createUploadJobWithinQuota(
   });
 }
 
-export function validateQuotaSetting(value: unknown, maximum: number): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= maximum
+export function validateQuotaSetting(value: unknown, maximum?: number): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= (maximum ?? Infinity)
     ? value
     : null;
 }

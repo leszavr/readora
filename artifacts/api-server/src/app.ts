@@ -22,6 +22,7 @@ declare module "express-session" {
   interface SessionData {
     userId?: number;
     yandexOAuthState?: string;
+    yandexDiskConnectState?: string;
     vkOAuthState?: string;
     vkOAuthCodeVerifier?: string;
   }

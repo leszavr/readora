@@ -24,6 +24,8 @@ tags:
     description: Private analytics operations
   - name: feedback
     description: Feedback survey operations
+  - name: external-storage
+    description: External book storage connections
 
 paths:
   /healthz:
@@ -433,6 +435,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Cycle"
+
+  /books/assign-cycle:
+    post:
+      operationId: assignBooksToCycle
+      tags: [books]
+      summary: Bulk assign books to a cycle (or clear assignment)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bookIds:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+                  maxItems: 500
+                cycleId:
+                  type: [integer, "null"]
+                cycleName:
+                  type: [string, "null"]
+                  maxLength: 200
+              required: [bookIds]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+                  cycleId:
+                    type: [integer, "null"]
+                  cycleName:
+                    type: [string, "null"]
+                required: [updated]
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Cycle not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # BOOKS
   /books:
@@ -1730,8 +1784,510 @@ paths:
         "404":
           description: Not found
 
+  /external-storage/feature-status:
+    get:
+      operationId: getExternalStorageFeatureStatus
+      tags: [external-storage]
+      summary: Check whether external storage feature is enabled
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                required: [enabled]
+
+  /external-storage/connections:
+    get:
+      operationId: listExternalStorageConnections
+      tags: [external-storage]
+      summary: List user external storage connections
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExternalStorageConnection"
+
+  /external-storage/connections/mailru:
+    post:
+      operationId: connectMailRuStorage
+      tags: [external-storage]
+      summary: Connect Mail.ru Cloud via WebDAV app password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MailRuConnectRequest"
+      responses:
+        "200":
+          description: Updated existing connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalStorageConnection"
+        "201":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalStorageConnection"
+        "400":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /external-storage/connections/{id}:
+    patch:
+      operationId: updateExternalStorageConnection
+      tags: [external-storage]
+      summary: Update connection root folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalStorageConnectionUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalStorageConnection"
+        "400":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteExternalStorageConnection
+      tags: [external-storage]
+      summary: Disconnect external storage (books and progress are kept)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "404":
+          description: Not found
+
+  /external-storage/connections/{id}/folders:
+    get:
+      operationId: listExternalStorageFolders
+      tags: [external-storage]
+      summary: List subfolders of a path in external storage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: path
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "/"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalStorageFolderList"
+        "401":
+          description: Authorization error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+
+  /external-storage/connections/{id}/sync:
+    post:
+      operationId: syncExternalStorage
+      tags: [external-storage]
+      summary: Start synchronization of external storage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Sync job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalSyncJob"
+        "404":
+          description: Not found
+        "409":
+          description: Sync already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /external-storage/sync-jobs/{id}:
+    get:
+      operationId: getExternalSyncJob
+      tags: [external-storage]
+      summary: Get external storage sync job status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalSyncJob"
+        "404":
+          description: Not found
+    patch:
+      operationId: controlExternalSyncJob
+      tags: [external-storage]
+      summary: Pause, resume or cancel external storage sync job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [pause, resume, cancel]
+              required: [action]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalSyncJob"
+        "400":
+          description: Invalid action
+        "404":
+          description: Not found
+        "409":
+          description: Action not applicable to current status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/external-storage/sync-jobs/{id}:
+    patch:
+      operationId: adminControlExternalSyncJob
+      tags: [admin]
+      summary: Control any user's external storage sync job (system admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [pause, resume, cancel]
+              required: [action]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  status:
+                    type: string
+                    enum: [queued, processing, paused, cancelled, completed, failed]
+                  progress:
+                    type: integer
+                required: [id, status, progress]
+        "400":
+          description: Invalid action
+        "404":
+          description: Not found
+        "409":
+          description: Action not applicable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/external-storage/stats:
+    get:
+      operationId: getAdminExternalStorageStats
+      tags: [admin]
+      summary: External storage metrics (system admin)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminExternalStorageStats"
+
 components:
   schemas:
+    ExternalStorageConnection:
+      type: object
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+          enum: [yandex_disk, mail_ru_cloud]
+        providerLabel:
+          type: string
+        rootFolder:
+          type: string
+        status:
+          type: string
+          enum: [active, auth_error, error]
+        lastError:
+          type: [string, "null"]
+        lastSyncedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        booksCount:
+          type: integer
+        missingBooksCount:
+          type: integer
+        activeSyncJobId:
+          type: [integer, "null"]
+        activeSyncJobStatus:
+          type: [string, "null"]
+          enum: [queued, processing, paused, "null"]
+      required: [id, provider, providerLabel, rootFolder, status, booksCount, missingBooksCount]
+
+    MailRuConnectRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          maxLength: 200
+        appPassword:
+          type: string
+          maxLength: 200
+        rootFolder:
+          type: string
+          maxLength: 2000
+      required: [login, appPassword]
+
+    ExternalStorageConnectionUpdate:
+      type: object
+      properties:
+        rootFolder:
+          type: string
+          maxLength: 2000
+      required: [rootFolder]
+
+    ExternalStorageFolderList:
+      type: object
+      properties:
+        path:
+          type: string
+        folders:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              path:
+                type: string
+            required: [name, path]
+      required: [path, folders]
+
+    ExternalSyncJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        connectionId:
+          type: integer
+        status:
+          type: string
+          enum: [queued, processing, paused, cancelled, completed, failed]
+        progress:
+          type: integer
+        filesFound:
+          type: integer
+        filesImported:
+          type: integer
+        filesUpdated:
+          type: integer
+        filesMissing:
+          type: integer
+        filesFailed:
+          type: integer
+        errorMessage:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+      required: [id, connectionId, status, progress, filesFound, filesImported, filesUpdated, filesMissing, filesFailed]
+
+    AdminExternalStorageStats:
+      type: object
+      properties:
+        connections:
+          type: object
+          properties:
+            total:
+              type: integer
+            byProvider:
+              type: array
+              items:
+                type: object
+                properties:
+                  provider:
+                    type: string
+                  count:
+                    type: integer
+                  users:
+                    type: integer
+            byStatus:
+              type: array
+              items:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  count:
+                    type: integer
+        books:
+          type: object
+          properties:
+            externalBooks:
+              type: integer
+            missingBooks:
+              type: integer
+        cache:
+          type: object
+          properties:
+            cachedBooks:
+              type: integer
+            cachedBytes:
+              type: integer
+            budgetBytes:
+              type: integer
+        sync:
+          type: object
+          properties:
+            last30Days:
+              type: [object, "null"]
+              properties:
+                total:
+                  type: integer
+                completed:
+                  type: integer
+                failed:
+                  type: integer
+                filesFound:
+                  type: integer
+                filesImported:
+                  type: integer
+                filesUpdated:
+                  type: integer
+                filesMissing:
+                  type: integer
+                filesFailed:
+                  type: integer
+            recentJobs:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  provider:
+                    type: string
+                  ownerUsername:
+                    type: [string, "null"]
+                  status:
+                    type: string
+                  filesFound:
+                    type: integer
+                  filesImported:
+                    type: integer
+                  filesUpdated:
+                    type: integer
+                  filesMissing:
+                    type: integer
+                  filesFailed:
+                    type: integer
+                  errorMessage:
+                    type: [string, "null"]
+                  createdAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: [string, "null"]
+                    format: date-time
+
     HealthStatus:
       type: object
       properties:
@@ -2994,6 +3550,10 @@ components:
           type: integer
         libraryStorageLimitMb:
           type: integer
+        externalCacheBudgetMb:
+          type: integer
+        externalStorageEnabled:
+          type: boolean
         smtpHost:
           type: ["string", "null"]
         smtpPort:
@@ -3030,6 +3590,11 @@ components:
           type: integer
           minimum: 1
           maximum: 102400
+        externalCacheBudgetMb:
+          type: integer
+          minimum: 1
+        externalStorageEnabled:
+          type: boolean
         smtpHost:
           type: ["string", "null"]
         smtpPort:

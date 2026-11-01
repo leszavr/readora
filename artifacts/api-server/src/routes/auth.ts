@@ -24,6 +24,8 @@ import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import { logger } from "../lib/logger";
+import { completeYandexDiskConnect } from "../lib/external-storage/yandex-connect";
+import { isExternalStorageEnabled, externalStorageDisabledMessage } from "../lib/external-storage/feature";
 import { grantGiftEditionsOnSignup, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import {
   consumeVkOAuthState,
@@ -791,6 +793,35 @@ router.get("/auth/yandex/callback", async (req, res): Promise<void> => {
   }
 
   const state = typeof req.query.state === "string" ? req.query.state : "";
+
+  // Подключение Яндекс.Диска использует тот же Callback URL, что и вход
+  // (в приложении Яндекса зарегистрирован один redirect_uri): поток
+  // различаем по state из сессии.
+  const diskConnectState = req.session.yandexDiskConnectState;
+  if (diskConnectState && state && state === diskConnectState) {
+    delete req.session.yandexDiskConnectState;
+    const appOrigin = (process.env.APP_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
+    const failConnect = (message: string): void => {
+      res.redirect(`${appOrigin}/profile?storage=error&message=${encodeURIComponent(message)}`);
+    };
+    if (!(await isExternalStorageEnabled())) {
+      failConnect(externalStorageDisabledMessage());
+      return;
+    }
+    if (!req.session.userId) {
+      failConnect("Сессия истекла. Войдите снова и повторите подключение хранилища.");
+      return;
+    }
+    try {
+      await completeYandexDiskConnect(req.session.userId, code);
+      res.redirect(`${appOrigin}/profile?storage=connected`);
+    } catch (error) {
+      logger.warn({ err: error }, "Yandex Disk connect callback failed");
+      failConnect(error instanceof Error ? error.message : "Не удалось подключить Яндекс.Диск");
+    }
+    return;
+  }
+
   if (!state || state !== req.session.yandexOAuthState) {
     res.status(400).json({ error: "Недействительный запрос авторизации" });
     return;

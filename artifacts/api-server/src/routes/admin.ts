@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import fs from "node:fs";
 import os from "node:os";
@@ -23,6 +23,8 @@ import {
   readingProgressTable,
   giftEditionsTable,
   feedbackResponsesTable,
+  externalStorageConnectionsTable,
+  externalSyncJobsTable,
 } from "@workspace/db";
 import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
@@ -35,6 +37,9 @@ import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
+import { downloadExternalBookFile } from "../lib/external-storage/content-cache";
+import { getExternalCacheBudgetBytes } from "../lib/external-storage/content-cache";
+import { applySyncJobControl } from "../lib/external-storage/sync";
 import { GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
 import { isRegistrationEnabled } from "../lib/registration-status";
@@ -47,6 +52,9 @@ import {
 
 const router = Router();
 const PWA_INSTALL_ACCEPTED_KEY = "pwa_install_accepted_count";
+// Бюджет кэша внешних хранилищ не имеет верхнего предела: единственное место
+// задания лимита — значение настройки в админке.
+const DEFAULT_EXTERNAL_CACHE_BUDGET_MB = 2048;
 
 // GET /admin/system-metrics
 router.get(
@@ -922,6 +930,30 @@ router.get(
       res.status(404).json({ error: "Книга не найдена" });
       return;
     }
+
+    const safeTitle = (book.title ?? "").replace(/[\\/:*?"<>|\r\n]+/g, " ").trim() || `book-${book.id}`;
+    const utf8Name = encodeURIComponent(`${safeTitle}.${book.format}`);
+    const contentHeaders = () => {
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="book-${book.id}.${book.format}"; filename*=UTF-8''${utf8Name}`,
+      );
+    };
+
+    // Внешняя книга: файл скачивается из облака владельца напрямую.
+    if (book.externalProvider) {
+      try {
+        const buffer = await downloadExternalBookFile(book);
+        contentHeaders();
+        res.send(buffer);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Не удалось скачать файл из внешнего хранилища";
+        res.status(502).json({ error: message });
+      }
+      return;
+    }
+
     let filePath: string;
     try {
       filePath = resolveUploadPath(book.storageKey);
@@ -933,13 +965,7 @@ router.get(
       res.status(404).json({ error: "Файл книги не найден в хранилище" });
       return;
     }
-    const safeTitle = (book.title ?? "").replace(/[\\/:*?"<>|\r\n]+/g, " ").trim() || `book-${book.id}`;
-    const utf8Name = encodeURIComponent(`${safeTitle}.${book.format}`);
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="book-${book.id}.${book.format}"; filename*=UTF-8''${utf8Name}`,
-    );
+    contentHeaders();
     fs.createReadStream(filePath).pipe(res);
   },
 );
@@ -1048,6 +1074,8 @@ router.get(
       allowRegistration: map.allowRegistration !== "false",
       maxFileSizeMb: validateQuotaSetting(map.maxFileSizeMb ? Number(map.maxFileSizeMb) : undefined, quotaSettingBounds.maxBookFileSizeMb) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB,
       libraryStorageLimitMb: validateQuotaSetting(map.libraryStorageLimitMb ? Number(map.libraryStorageLimitMb) : undefined, quotaSettingBounds.libraryStorageMb) ?? DEFAULT_LIBRARY_STORAGE_MB,
+      externalCacheBudgetMb: validateQuotaSetting(map.externalCacheBudgetMb ? Number(map.externalCacheBudgetMb) : undefined) ?? DEFAULT_EXTERNAL_CACHE_BUDGET_MB,
+      externalStorageEnabled: map.externalStorageEnabled !== "false",
       smtpHost: map.smtpHost ?? null,
       smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
       smtpUser: map.smtpUser ?? null,
@@ -1083,9 +1111,13 @@ router.patch(
     const libraryStorageLimitMb = updates.libraryStorageLimitMb === undefined
       ? undefined
       : validateQuotaSetting(updates.libraryStorageLimitMb, quotaSettingBounds.libraryStorageMb);
+    const externalCacheBudgetMb = updates.externalCacheBudgetMb === undefined
+      ? undefined
+      : validateQuotaSetting(updates.externalCacheBudgetMb);
     if (
       (updates.maxFileSizeMb !== undefined && maxFileSizeMb === null) ||
-      (updates.libraryStorageLimitMb !== undefined && libraryStorageLimitMb === null)
+      (updates.libraryStorageLimitMb !== undefined && libraryStorageLimitMb === null) ||
+      (updates.externalCacheBudgetMb !== undefined && externalCacheBudgetMb === null)
     ) {
       res.status(400).json({ error: "Лимиты должны быть целыми положительными числами в допустимом диапазоне" });
       return;
@@ -1154,6 +1186,8 @@ router.patch(
       allowRegistration: map.allowRegistration !== "false",
       maxFileSizeMb: validateQuotaSetting(map.maxFileSizeMb ? Number(map.maxFileSizeMb) : undefined, quotaSettingBounds.maxBookFileSizeMb) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB,
       libraryStorageLimitMb: validateQuotaSetting(map.libraryStorageLimitMb ? Number(map.libraryStorageLimitMb) : undefined, quotaSettingBounds.libraryStorageMb) ?? DEFAULT_LIBRARY_STORAGE_MB,
+      externalCacheBudgetMb: validateQuotaSetting(map.externalCacheBudgetMb ? Number(map.externalCacheBudgetMb) : undefined) ?? DEFAULT_EXTERNAL_CACHE_BUDGET_MB,
+      externalStorageEnabled: map.externalStorageEnabled !== "false",
       smtpHost: map.smtpHost ?? null,
       smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
       smtpUser: map.smtpUser ?? null,
@@ -1597,6 +1631,131 @@ router.delete(
       return;
     }
     res.json({ deleted: deleted.length });
+  },
+);
+
+// GET /admin/external-storage/stats — метрики внешних хранилищ:
+// подключения, синхронизации, оперативный кэш контента.
+router.get(
+  "/admin/external-storage/stats",
+  requireSystemAdmin,
+  async (_req, res): Promise<void> => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [connectionsByProvider, connectionsByStatus, booksRow, cacheBudgetBytes, jobsTotals, recentJobs] =
+      await Promise.all([
+        db
+          .select({
+            provider: externalStorageConnectionsTable.provider,
+            count: sql<number>`count(*)::int`,
+            users: sql<number>`count(distinct ${externalStorageConnectionsTable.ownerUserId})::int`,
+          })
+          .from(externalStorageConnectionsTable)
+          .groupBy(externalStorageConnectionsTable.provider),
+        db
+          .select({
+            status: externalStorageConnectionsTable.status,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(externalStorageConnectionsTable)
+          .groupBy(externalStorageConnectionsTable.status),
+        db
+          .select({
+            externalBooks: sql<number>`count(*)::int`,
+            missingBooks: sql<number>`count(*) filter (where ${booksTable.externalMissing})::int`,
+            cachedBooks: sql<number>`count(*) filter (where ${booksTable.contentCacheBytes} > 0)::int`,
+            cachedBytes: sql<number>`coalesce(sum(${booksTable.contentCacheBytes}), 0)::bigint`,
+          })
+          .from(booksTable)
+          .where(isNotNull(booksTable.externalProvider)),
+        getExternalCacheBudgetBytes(),
+        db
+          .select({
+            total: sql<number>`count(*)::int`,
+            completed: sql<number>`count(*) filter (where ${externalSyncJobsTable.status} = 'completed')::int`,
+            failed: sql<number>`count(*) filter (where ${externalSyncJobsTable.status} = 'failed')::int`,
+            filesFound: sql<number>`coalesce(sum(${externalSyncJobsTable.filesFound}), 0)::int`,
+            filesImported: sql<number>`coalesce(sum(${externalSyncJobsTable.filesImported}), 0)::int`,
+            filesUpdated: sql<number>`coalesce(sum(${externalSyncJobsTable.filesUpdated}), 0)::int`,
+            filesMissing: sql<number>`coalesce(sum(${externalSyncJobsTable.filesMissing}), 0)::int`,
+            filesFailed: sql<number>`coalesce(sum(${externalSyncJobsTable.filesFailed}), 0)::int`,
+          })
+          .from(externalSyncJobsTable)
+          .where(gte(externalSyncJobsTable.createdAt, since)),
+        db
+          .select({
+            id: externalSyncJobsTable.id,
+            provider: externalStorageConnectionsTable.provider,
+            ownerUsername: usersTable.username,
+            status: externalSyncJobsTable.status,
+            filesFound: externalSyncJobsTable.filesFound,
+            filesImported: externalSyncJobsTable.filesImported,
+            filesUpdated: externalSyncJobsTable.filesUpdated,
+            filesMissing: externalSyncJobsTable.filesMissing,
+            filesFailed: externalSyncJobsTable.filesFailed,
+            errorMessage: externalSyncJobsTable.errorMessage,
+            createdAt: externalSyncJobsTable.createdAt,
+            completedAt: externalSyncJobsTable.completedAt,
+          })
+          .from(externalSyncJobsTable)
+          .innerJoin(
+            externalStorageConnectionsTable,
+            eq(externalSyncJobsTable.connectionId, externalStorageConnectionsTable.id),
+          )
+          .leftJoin(usersTable, eq(externalSyncJobsTable.ownerUserId, usersTable.id))
+          .orderBy(desc(externalSyncJobsTable.createdAt))
+          .limit(15),
+      ]);
+
+    const books = booksRow[0];
+    res.json({
+      connections: {
+        byProvider: connectionsByProvider,
+        byStatus: connectionsByStatus,
+        total: connectionsByProvider.reduce((sum, row) => sum + row.count, 0),
+      },
+      books: {
+        externalBooks: books?.externalBooks ?? 0,
+        missingBooks: books?.missingBooks ?? 0,
+      },
+      cache: {
+        cachedBooks: books?.cachedBooks ?? 0,
+        cachedBytes: Number(books?.cachedBytes ?? 0),
+        budgetBytes: cacheBudgetBytes,
+      },
+      sync: {
+        last30Days: jobsTotals[0] ?? null,
+        recentJobs,
+      },
+    });
+  },
+);
+
+// PATCH /admin/external-storage/sync-jobs/:id — управление синхронизацией
+// любого пользователя (пауза/возобновление/отмена).
+router.patch(
+  "/admin/external-storage/sync-jobs/:id",
+  requireSystemAdmin,
+  async (req, res): Promise<void> => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const [job] = await db
+      .select({ id: externalSyncJobsTable.id, ownerUserId: externalSyncJobsTable.ownerUserId })
+      .from(externalSyncJobsTable)
+      .where(eq(externalSyncJobsTable.id, id));
+    if (!job) {
+      res.status(404).json({ error: "Задача синхронизации не найдена" });
+      return;
+    }
+    const result = await applySyncJobControl(job.id, job.ownerUserId, (req.body ?? {}).action);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({
+      id: result.job.id,
+      status: result.job.status,
+      progress: Math.round(result.job.progress),
+    });
   },
 );
 

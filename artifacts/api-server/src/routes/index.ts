@@ -12,6 +12,7 @@ import landingBooksRouter from "./landing-books";
 import analyticsRouter from "./analytics";
 import giftEditionsRouter from "./gift-editions";
 import annotationsRouter from "./annotations";
+import externalStorageRouter from "./external-storage";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(landingBooksRouter);
 router.use(analyticsRouter);
 router.use(giftEditionsRouter);
 router.use(annotationsRouter);
+router.use(externalStorageRouter);
 
 export default router;

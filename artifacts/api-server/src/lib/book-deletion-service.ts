@@ -16,12 +16,15 @@ export async function deleteStoredFilesIfUnreferenced(
   book: StoredBook,
   excludingBookIds: number[] = [book.id],
 ): Promise<void> {
-  const [{ count: sameFileCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(booksTable)
-    .where(and(eq(booksTable.storageKey, book.storageKey), notInArray(booksTable.id, excludingBookIds)));
-  if (sameFileCount === 0) {
-    fs.rmSync(resolveUploadPath(book.storageKey), { force: true });
+  // Внешние книги: оригинал лежит в облаке владельца, локального файла нет.
+  if (!book.externalProvider) {
+    const [{ count: sameFileCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(booksTable)
+      .where(and(eq(booksTable.storageKey, book.storageKey), notInArray(booksTable.id, excludingBookIds)));
+    if (sameFileCount === 0) {
+      fs.rmSync(resolveUploadPath(book.storageKey), { force: true });
+    }
   }
 
   if (!book.coverPath) return;

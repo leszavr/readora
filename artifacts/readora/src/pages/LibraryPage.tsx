@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ListBooksStatus, useListBooks, useListGenres, useDeleteBulkBooks } from "@workspace/api-client-react";
+import { ListBooksStatus, useListBooks, useListGenres, useDeleteBulkBooks, useAssignBooksToCycle, useListCycles } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { BookCard, BookListItem } from "@/components/BookCard";
@@ -19,10 +19,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { 
-  Upload, Search, BookOpen, SlidersHorizontal, LayoutGrid, 
-  List, Trash2, X, Layers
+import {
+  Upload, Search, BookOpen, SlidersHorizontal, LayoutGrid,
+  List, Trash2, X, Layers, BookMarked, Loader2
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -89,6 +97,7 @@ export default function LibraryPage() {
   const [selectedBooks, setSelectedBooks] = useState<Set<number>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAssignCycleDialog, setShowAssignCycleDialog] = useState(false);
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
 
@@ -106,6 +115,8 @@ export default function LibraryPage() {
 
   const { data: genres = [] } = useListGenres();
   const deleteBooksMutation = useDeleteBulkBooks();
+  const assignCycleMutation = useAssignBooksToCycle();
+  const { data: cycles = [] } = useListCycles();
 
   const bookItems = Array.isArray(books) ? books : [];
   const genreItems = Array.isArray(genres) ? genres : [];
@@ -241,6 +252,31 @@ export default function LibraryPage() {
     }
   };
 
+  const handleAssignCycle = async (payload: { cycleId?: number | null; cycleName?: string | null }) => {
+    if (selectedBooks.size === 0) return;
+    try {
+      const result = await assignCycleMutation.mutateAsync({ data: { bookIds: [...selectedBooks], ...payload } });
+      toast({
+        title: payload.cycleId === null && !payload.cycleName ? "Книги убраны из цикла" : "Цикл назначен",
+        description:
+          payload.cycleId === null && !payload.cycleName
+            ? `Обновлено книг: ${result.updated}`
+            : `«${result.cycleName ?? ""}»: ${result.updated} книг(и)`,
+      });
+      setSelectedBooks(new Set());
+      setIsSelectionMode(false);
+      setShowAssignCycleDialog(false);
+      refetch();
+    } catch (error) {
+      console.error("Failed to assign cycle:", error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось назначить цикл выбранным книгам",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <LibraryPageLayout
       uploadOpen={uploadOpen}
@@ -275,6 +311,11 @@ export default function LibraryPage() {
       sectionGroupedBooks={sectionGroupedBooks}
       showDeleteDialog={showDeleteDialog}
       handleBulkDelete={handleBulkDelete}
+      handleAssignCycle={handleAssignCycle}
+      cycles={cycles}
+      showAssignCycleDialog={showAssignCycleDialog}
+      setShowAssignCycleDialog={setShowAssignCycleDialog}
+      assignCyclePending={assignCycleMutation.isPending}
       toggleBookSelection={toggleBookSelection}
       hasGiftBooks={bookItems.some((book: any) => book?.isGiftEdition)}
       isAdmin={isAdmin}
@@ -315,6 +356,11 @@ function LibraryPageLayout({
   sectionGroupedBooks,
   showDeleteDialog,
   handleBulkDelete,
+  handleAssignCycle,
+  cycles,
+  showAssignCycleDialog,
+  setShowAssignCycleDialog,
+  assignCyclePending,
   toggleBookSelection,
   hasGiftBooks,
   isAdmin,
@@ -332,6 +378,7 @@ function LibraryPageLayout({
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             setShowDeleteDialog={setShowDeleteDialog}
+            setShowAssignCycleDialog={setShowAssignCycleDialog}
             clearSelection={clearSelection}
             setUploadOpen={setUploadOpen}
           />
@@ -411,8 +458,137 @@ function LibraryPageLayout({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <AssignCycleDialog
+          open={showAssignCycleDialog}
+          onOpenChange={setShowAssignCycleDialog}
+          cycles={cycles}
+          selectedCount={selectedBooks.size}
+          pending={assignCyclePending}
+          onAssign={handleAssignCycle}
+        />
       </Layout>
     </ProtectedRoute>
+  );
+}
+
+function AssignCycleDialog({
+  open,
+  onOpenChange,
+  cycles,
+  selectedCount,
+  pending,
+  onAssign,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  cycles: { id: number; name: string }[];
+  selectedCount: number;
+  pending: boolean;
+  onAssign: (payload: { cycleId?: number | null; cycleName?: string | null }) => void;
+}) {
+  const [mode, setMode] = useState<"existing" | "new">("existing");
+  const [cycleId, setCycleId] = useState<string>("");
+  const [newCycleName, setNewCycleName] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setMode(cycles.length > 0 ? "existing" : "new");
+      setCycleId(cycles.length > 0 ? String(cycles[0].id) : "");
+      setNewCycleName("");
+    }
+  }, [open, cycles]);
+
+  const canSubmit =
+    selectedCount > 0 &&
+    !pending &&
+    (mode === "new" ? newCycleName.trim().length > 0 : cycleId !== "");
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Назначить цикл</DialogTitle>
+          <DialogDescription>
+            Выбранные книги ({selectedCount}) будут отнесены к циклу. Порядковый номер в цикле
+            задаётся отдельно в карточке каждой книги.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex gap-1 rounded-lg border p-1">
+            <button
+              type="button"
+              disabled={cycles.length === 0}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
+                mode === "existing" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setMode("existing")}
+            >
+              Существующий
+            </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                mode === "new" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setMode("new")}
+            >
+              Новый
+            </button>
+          </div>
+
+          {mode === "existing" ? (
+            <div className="space-y-2">
+              <Select value={cycleId} onValueChange={setCycleId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите цикл" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cycles.map((cycle) => (
+                    <SelectItem key={cycle.id} value={String(cycle.id)}>
+                      {cycle.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Input
+                value={newCycleName}
+                onChange={(e) => setNewCycleName(e.target.value)}
+                placeholder="Название цикла"
+                maxLength={200}
+              />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => onAssign({ cycleId: null })}
+          >
+            Убрать из цикла
+          </Button>
+          <Button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() =>
+              onAssign(
+                mode === "new"
+                  ? { cycleName: newCycleName.trim() }
+                  : { cycleId: Number.parseInt(cycleId, 10) },
+              )
+            }
+          >
+            {pending && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+            Назначить
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -425,6 +601,7 @@ function LibraryHeader({
   isSelectionMode,
   setIsSelectionMode,
   setShowDeleteDialog,
+  setShowAssignCycleDialog,
   clearSelection,
   setUploadOpen,
 }: Readonly<{
@@ -436,6 +613,7 @@ function LibraryHeader({
   isSelectionMode: boolean;
   setIsSelectionMode: (enabled: boolean) => void;
   setShowDeleteDialog: (open: boolean) => void;
+  setShowAssignCycleDialog: (open: boolean) => void;
   clearSelection: () => void;
   setUploadOpen: (open: boolean) => void;
 }>) {
@@ -456,15 +634,26 @@ function LibraryHeader({
         {!isAnnotations && isSelectionMode && (
           <>
             {selectedBooks.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-                className="gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Удалить ({selectedBooks.size})
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAssignCycleDialog(true)}
+                  className="gap-2"
+                >
+                  <BookMarked className="w-4 h-4" />
+                  В цикл ({selectedBooks.size})
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Удалить ({selectedBooks.size})
+                </Button>
+              </>
             )}
             <Button
               variant="outline"

@@ -16,7 +16,7 @@ import path from "node:path";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const TEST_EMAIL = "reader.e2e@test.local";
 const TEST_PASSWORD = "E2eReader#2026";
-const CYCLE_BOOK_A = 126; // На струне (цикл)
+const CYCLE_BOOK_A = 141; // На струне (цикл) — id из последнего e2e-seed
 const SAMPLE_PER_PHASE = 12;
 
 const chromiumPath = path.join(
@@ -287,7 +287,7 @@ async function run(): Promise<void> {
         const expectedText = await extractQuote(target);
         try {
           await target.click();
-          await page.waitForURL(new RegExp(`/reader/(127|128)`), { timeout: 15000 });
+          await page.waitForURL(new RegExp(`/reader/(142|143)`), { timeout: 15000 });
           await page.waitForSelector(".reader-content-area", { timeout: 15000 });
           await page.waitForSelector(".readora-note-highlight-overlay", { state: "attached", timeout: 8000 });
           const url = page.url();
@@ -328,12 +328,12 @@ async function run(): Promise<void> {
         const expectedText = await extractQuote(target);
         try {
           await target.click();
-          await page.waitForURL(/\/reader\/128/, { timeout: 15000 });
+          await page.waitForURL(/\/reader\/143/, { timeout: 15000 });
           await page.waitForSelector(".reader-content-area", { timeout: 15000 });
           await page.waitForSelector(".readora-note-highlight-overlay", { state: "attached", timeout: 8000 });
           const url = page.url();
           const checks = await checkHighlight(page, expectedText);
-          const pass = verdict(checks, url, "128");
+          const pass = verdict(checks, url, "143");
           results.push({ phase: "ридер: межцикловый переход (заметка)", item: label, url, checks, pass });
           console.log(`${pass ? "OK " : "FAIL"} [межцикловая заметка] ${label}`);
         } catch (error) {

@@ -7,6 +7,8 @@ import type { usersTable } from "@workspace/db";
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { getContentBookId } from "../lib/gift-editions-service";
 import { resolveProgressUpdate } from "../lib/reading-progress";
+import { ensureBookContentCached } from "../lib/external-storage/content-cache";
+import { ExternalStorageError } from "../lib/external-storage/drivers";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
@@ -94,6 +96,20 @@ router.get("/books/:id/chapters/:chapterId", requireAuth, async (req, res): Prom
 
   const [book] = await db.select().from(booksTable).where(and(eq(booksTable.id, bookId), eq(booksTable.ownerUserId, user.id)));
   if (!book) { res.status(403).json({ error: "Доступ запрещён" }); return; }
+
+  // Внешняя книга: контент глав живёт в оперативном кэше и при необходимости
+  // восстанавливается из облака владельца.
+  if (book.externalProvider) {
+    try {
+      await ensureBookContentCached(getContentBookId(book));
+    } catch (e) {
+      if (e instanceof ExternalStorageError) {
+        res.status(503).json({ error: e.message });
+        return;
+      }
+      throw e;
+    }
+  }
 
   const [chapter] = await db.select().from(chaptersTable).where(and(eq(chaptersTable.id, chapterId), eq(chaptersTable.bookId, getContentBookId(book))));
   if (!chapter) { res.status(404).json({ error: "Глава не найдена" }); return; }

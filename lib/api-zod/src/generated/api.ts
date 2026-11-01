@@ -263,6 +263,28 @@ export const CreateCycleBody = zod.object({
 
 
 /**
+ * @summary Bulk assign books to a cycle (or clear assignment)
+ */
+export const assignBooksToCycleBodyBookIdsMax = 500;
+
+export const assignBooksToCycleBodyCycleNameMax = 200;
+
+
+
+export const AssignBooksToCycleBody = zod.object({
+  "bookIds": zod.array(zod.number()).min(1).max(assignBooksToCycleBodyBookIdsMax),
+  "cycleId": zod.number().nullish(),
+  "cycleName": zod.string().max(assignBooksToCycleBodyCycleNameMax).nullish()
+})
+
+export const AssignBooksToCycleResponse = zod.object({
+  "updated": zod.number(),
+  "cycleId": zod.number().nullish(),
+  "cycleName": zod.string().nullish()
+})
+
+
+/**
  * @summary List user books
  */
 export const ListBooksQueryParams = zod.object({
@@ -1407,6 +1429,8 @@ export const GetAppSettingsResponse = zod.object({
   "allowRegistration": zod.boolean().optional(),
   "maxFileSizeMb": zod.number().optional(),
   "libraryStorageLimitMb": zod.number().optional(),
+  "externalCacheBudgetMb": zod.number().optional(),
+  "externalStorageEnabled": zod.boolean().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
   "smtpUser": zod.string().nullish(),
@@ -1429,11 +1453,14 @@ export const updateAppSettingsBodyLibraryStorageLimitMbMax = 102400;
 
 
 
+
 export const UpdateAppSettingsBody = zod.object({
   "siteName": zod.string().optional(),
   "allowRegistration": zod.boolean().optional(),
   "maxFileSizeMb": zod.number().min(1).max(updateAppSettingsBodyMaxFileSizeMbMax).optional(),
   "libraryStorageLimitMb": zod.number().min(1).max(updateAppSettingsBodyLibraryStorageLimitMbMax).optional(),
+  "externalCacheBudgetMb": zod.number().min(1).optional(),
+  "externalStorageEnabled": zod.boolean().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
   "smtpUser": zod.string().nullish(),
@@ -1452,6 +1479,8 @@ export const UpdateAppSettingsResponse = zod.object({
   "allowRegistration": zod.boolean().optional(),
   "maxFileSizeMb": zod.number().optional(),
   "libraryStorageLimitMb": zod.number().optional(),
+  "externalCacheBudgetMb": zod.number().optional(),
+  "externalStorageEnabled": zod.boolean().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
   "smtpUser": zod.string().nullish(),
@@ -1510,6 +1539,262 @@ export const GetSavedEmailResponse = zod.object({
  */
 export const DeleteSavedEmailParams = zod.object({
   "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Check whether external storage feature is enabled
+ */
+export const GetExternalStorageFeatureStatusResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * @summary List user external storage connections
+ */
+export const ListExternalStorageConnectionsResponseItem = zod.object({
+  "id": zod.number(),
+  "provider": zod.enum(['yandex_disk', 'mail_ru_cloud']),
+  "providerLabel": zod.string(),
+  "rootFolder": zod.string(),
+  "status": zod.enum(['active', 'auth_error', 'error']),
+  "lastError": zod.string().nullish(),
+  "lastSyncedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "booksCount": zod.number(),
+  "missingBooksCount": zod.number(),
+  "activeSyncJobId": zod.number().nullish(),
+  "activeSyncJobStatus": zod.enum(['queued', 'processing', 'paused', 'null']).nullish()
+})
+export const ListExternalStorageConnectionsResponse = zod.array(ListExternalStorageConnectionsResponseItem)
+
+
+/**
+ * @summary Connect Mail.ru Cloud via WebDAV app password
+ */
+export const connectMailRuStorageBodyLoginMax = 200;
+
+export const connectMailRuStorageBodyAppPasswordMax = 200;
+
+export const connectMailRuStorageBodyRootFolderMax = 2000;
+
+
+
+export const ConnectMailRuStorageBody = zod.object({
+  "login": zod.string().max(connectMailRuStorageBodyLoginMax),
+  "appPassword": zod.string().max(connectMailRuStorageBodyAppPasswordMax),
+  "rootFolder": zod.string().max(connectMailRuStorageBodyRootFolderMax).optional()
+})
+
+export const ConnectMailRuStorageResponse = zod.object({
+  "id": zod.number(),
+  "provider": zod.enum(['yandex_disk', 'mail_ru_cloud']),
+  "providerLabel": zod.string(),
+  "rootFolder": zod.string(),
+  "status": zod.enum(['active', 'auth_error', 'error']),
+  "lastError": zod.string().nullish(),
+  "lastSyncedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "booksCount": zod.number(),
+  "missingBooksCount": zod.number(),
+  "activeSyncJobId": zod.number().nullish(),
+  "activeSyncJobStatus": zod.enum(['queued', 'processing', 'paused', 'null']).nullish()
+})
+
+
+/**
+ * @summary Update connection root folder
+ */
+export const UpdateExternalStorageConnectionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateExternalStorageConnectionBodyRootFolderMax = 2000;
+
+
+
+export const UpdateExternalStorageConnectionBody = zod.object({
+  "rootFolder": zod.string().max(updateExternalStorageConnectionBodyRootFolderMax)
+})
+
+export const UpdateExternalStorageConnectionResponse = zod.object({
+  "id": zod.number(),
+  "provider": zod.enum(['yandex_disk', 'mail_ru_cloud']),
+  "providerLabel": zod.string(),
+  "rootFolder": zod.string(),
+  "status": zod.enum(['active', 'auth_error', 'error']),
+  "lastError": zod.string().nullish(),
+  "lastSyncedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "booksCount": zod.number(),
+  "missingBooksCount": zod.number(),
+  "activeSyncJobId": zod.number().nullish(),
+  "activeSyncJobStatus": zod.enum(['queued', 'processing', 'paused', 'null']).nullish()
+})
+
+
+/**
+ * @summary Disconnect external storage (books and progress are kept)
+ */
+export const DeleteExternalStorageConnectionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteExternalStorageConnectionResponse = zod.object({
+  "ok": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List subfolders of a path in external storage
+ */
+export const ListExternalStorageFoldersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const listExternalStorageFoldersQueryPathDefault = `/`;
+
+export const ListExternalStorageFoldersQueryParams = zod.object({
+  "path": zod.coerce.string().default(listExternalStorageFoldersQueryPathDefault)
+})
+
+export const ListExternalStorageFoldersResponse = zod.object({
+  "path": zod.string(),
+  "folders": zod.array(zod.object({
+  "name": zod.string(),
+  "path": zod.string()
+}))
+})
+
+
+/**
+ * @summary Start synchronization of external storage
+ */
+export const SyncExternalStorageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get external storage sync job status
+ */
+export const GetExternalSyncJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetExternalSyncJobResponse = zod.object({
+  "id": zod.number(),
+  "connectionId": zod.number(),
+  "status": zod.enum(['queued', 'processing', 'paused', 'cancelled', 'completed', 'failed']),
+  "progress": zod.number(),
+  "filesFound": zod.number(),
+  "filesImported": zod.number(),
+  "filesUpdated": zod.number(),
+  "filesMissing": zod.number(),
+  "filesFailed": zod.number(),
+  "errorMessage": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Pause, resume or cancel external storage sync job
+ */
+export const ControlExternalSyncJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ControlExternalSyncJobBody = zod.object({
+  "action": zod.enum(['pause', 'resume', 'cancel'])
+})
+
+export const ControlExternalSyncJobResponse = zod.object({
+  "id": zod.number(),
+  "connectionId": zod.number(),
+  "status": zod.enum(['queued', 'processing', 'paused', 'cancelled', 'completed', 'failed']),
+  "progress": zod.number(),
+  "filesFound": zod.number(),
+  "filesImported": zod.number(),
+  "filesUpdated": zod.number(),
+  "filesMissing": zod.number(),
+  "filesFailed": zod.number(),
+  "errorMessage": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Control any user's external storage sync job (system admin)
+ */
+export const AdminControlExternalSyncJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminControlExternalSyncJobBody = zod.object({
+  "action": zod.enum(['pause', 'resume', 'cancel'])
+})
+
+export const AdminControlExternalSyncJobResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['queued', 'processing', 'paused', 'cancelled', 'completed', 'failed']),
+  "progress": zod.number()
+})
+
+
+/**
+ * @summary External storage metrics (system admin)
+ */
+export const GetAdminExternalStorageStatsResponse = zod.object({
+  "connections": zod.object({
+  "total": zod.number().optional(),
+  "byProvider": zod.array(zod.object({
+  "provider": zod.string().optional(),
+  "count": zod.number().optional(),
+  "users": zod.number().optional()
+})).optional(),
+  "byStatus": zod.array(zod.object({
+  "status": zod.string().optional(),
+  "count": zod.number().optional()
+})).optional()
+}).optional(),
+  "books": zod.object({
+  "externalBooks": zod.number().optional(),
+  "missingBooks": zod.number().optional()
+}).optional(),
+  "cache": zod.object({
+  "cachedBooks": zod.number().optional(),
+  "cachedBytes": zod.number().optional(),
+  "budgetBytes": zod.number().optional()
+}).optional(),
+  "sync": zod.object({
+  "last30Days": zod.object({
+  "total": zod.number().optional(),
+  "completed": zod.number().optional(),
+  "failed": zod.number().optional(),
+  "filesFound": zod.number().optional(),
+  "filesImported": zod.number().optional(),
+  "filesUpdated": zod.number().optional(),
+  "filesMissing": zod.number().optional(),
+  "filesFailed": zod.number().optional()
+}).nullish(),
+  "recentJobs": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "provider": zod.string().optional(),
+  "ownerUsername": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "filesFound": zod.number().optional(),
+  "filesImported": zod.number().optional(),
+  "filesUpdated": zod.number().optional(),
+  "filesMissing": zod.number().optional(),
+  "filesFailed": zod.number().optional(),
+  "errorMessage": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.coerce.date().nullish()
+})).optional()
+}).optional()
 })
 
 

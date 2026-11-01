@@ -15,6 +15,8 @@ import {
   useSaveProgress,
   ReaderSettingsInputTheme,
   getGetProgressQueryKey,
+  getChapter,
+  getGetChapterQueryKey,
 } from "@workspace/api-client-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -316,6 +318,20 @@ export default function ReaderPage() {
     bookId,
     currentChapter?.id ?? 0
   );
+
+  // Префетч двух следующих глав: мгновенные переходы и устойчивость к обрывам
+  // сети (для внешних книг — до первой потери доступа к облаку).
+  useEffect(() => {
+    if (currentChapterIdx === null) return;
+    for (const offset of [1, 2]) {
+      const nextChapter = chapters[currentChapterIdx + offset];
+      if (!nextChapter) continue;
+      void qc.prefetchQuery({
+        queryKey: getGetChapterQueryKey(bookId, nextChapter.id),
+        queryFn: () => getChapter(bookId, nextChapter.id),
+      });
+    }
+  }, [currentChapterIdx, chapters, bookId, qc]);
 
   useEffect(() => {
     remoteProgressRef.current = remoteProgress?.progressPercent ?? 0;

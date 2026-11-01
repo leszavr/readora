@@ -260,3 +260,56 @@ ${longText("текст")}
   assert.doesNotMatch(parsed.chapters[0].htmlContent, /<img\b/);
   assert.doesNotMatch(parsed.chapters[0].htmlContent, /cdn\.example\.com/);
 });
+
+test("EPUB с calibre:series разбирает серию и номер", () => {
+  const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package version="3.0" unique-identifier="BookId" xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata>
+    <dc:title>Книга цикла</dc:title>
+    <dc:creator>Автор</dc:creator>
+    <dc:language>ru</dc:language>
+    <meta name="calibre:series" content="Экспансия"/>
+    <meta name="calibre:series_index" content="2.5"/>
+  </metadata>
+  <manifest>
+    <item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="c1"/>
+  </spine>
+</package>`;
+  const parsed = parseEPUB(
+    buildEpub({
+      "META-INF/container.xml": containerXml("content.opf"),
+      "content.opf": opf,
+      "c1.xhtml": `<html><body>${longText("текст")}</body></html>`,
+    }),
+  );
+  assert.equal(parsed.seriesName, "Экспансия");
+  assert.equal(parsed.seriesNumber, 2.5);
+});
+
+test("EPUB без серии возвращает null", () => {
+  const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata>
+    <dc:title>Без серии</dc:title>
+    <dc:creator>Автор</dc:creator>
+  </metadata>
+  <manifest>
+    <item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="c1"/>
+  </spine>
+</package>`;
+  const parsed = parseEPUB(
+    buildEpub({
+      "META-INF/container.xml": containerXml("content.opf"),
+      "content.opf": opf,
+      "c1.xhtml": `<html><body>${longText("текст")}</body></html>`,
+    }),
+  );
+  assert.equal(parsed.seriesName, null);
+  assert.equal(parsed.seriesNumber, null);
+});

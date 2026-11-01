@@ -33,6 +33,7 @@ import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { Switch } from "@/components/ui/switch";
 import { clearAnalyticsQueue } from "@/lib/analytics";
 import { openFeedbackPrompt } from "@/lib/feedback-prompt";
+import { ExternalStorageCard } from "@/components/external-storage/ExternalStorageCard";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
@@ -362,6 +363,8 @@ export default function ProfilePage() {
               </form>
             </CardContent>
           </Card>
+
+          <ExternalStorageCard />
 
           <Card className="border-destructive/40">
             <CardHeader>

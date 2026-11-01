@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { cyclesTable } from "./cycles";
+import { externalStorageConnectionsTable, externalStorageProviderEnum } from "./external-storage";
 
 export const bookFormatEnum = pgEnum("book_format", ["fb2", "epub", "mobi", "cbz", "txt", "md", "html"]);
 export const bookStatusEnum = pgEnum("book_status", ["active", "blocked"]);
@@ -31,6 +32,16 @@ export const booksTable = pgTable(
     hideFromPopular: boolean("hide_from_popular").notNull().default(false),
     // Подарочная копия: главы и файл берутся из канонической книги, метаданные — свои.
     contentBookId: integer("content_book_id").references((): AnyPgColumn => booksTable.id, { onDelete: "restrict" }),
+    // Внешний источник (файл в облаке владельца). Для обычных книг все поля NULL.
+    externalConnectionId: integer("external_connection_id").references((): AnyPgColumn => externalStorageConnectionsTable.id, { onDelete: "set null" }),
+    externalProvider: externalStorageProviderEnum("external_provider"),
+    externalPath: text("external_path"),
+    externalEtag: text("external_etag"),
+    externalModifiedAt: timestamp("external_modified_at", { withTimezone: true }),
+    externalMissing: boolean("external_missing").notNull().default(false),
+    // Оперативный кэш контента глав (html_content), выселяемый по LRU.
+    contentCacheBytes: integer("content_cache_bytes").notNull().default(0),
+    contentAccessedAt: timestamp("content_accessed_at", { withTimezone: true }),
   },
   (t) => [
     index("books_owner_user_id_idx").on(t.ownerUserId),
@@ -38,6 +49,9 @@ export const booksTable = pgTable(
     index("books_owner_uploaded_at_idx").on(t.ownerUserId, t.uploadedAt),
     uniqueIndex("books_owner_content_book_uidx").on(t.ownerUserId, t.contentBookId),
     index("books_content_book_id_idx").on(t.contentBookId),
+    uniqueIndex("books_external_source_uidx").on(t.externalConnectionId, t.externalPath),
+    index("books_external_provider_idx").on(t.ownerUserId, t.externalProvider),
+    index("books_content_accessed_idx").on(t.contentAccessedAt),
   ],
 );
 

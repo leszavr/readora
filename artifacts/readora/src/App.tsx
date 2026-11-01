@@ -22,6 +22,7 @@ const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const ConfirmPasswordChangePage = lazy(() => import("@/pages/ConfirmPasswordChangePage"));
 const TermsPage = lazy(() => import("@/pages/TermsPage"));
 const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
+const HelpExternalStoragePage = lazy(() => import("@/pages/HelpExternalStoragePage"));
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Switch>
         <Route path="/" component={HomePage} />
         <Route path="/about" component={AboutPage} />
+        <Route path="/help/external-storage" component={HelpExternalStoragePage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/login" component={LoginPage} />

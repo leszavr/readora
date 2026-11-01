@@ -5,6 +5,181 @@
  * Readora API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ExternalStorageConnectionProvider = typeof ExternalStorageConnectionProvider[keyof typeof ExternalStorageConnectionProvider];
+
+
+export const ExternalStorageConnectionProvider = {
+  yandex_disk: 'yandex_disk',
+  mail_ru_cloud: 'mail_ru_cloud',
+} as const;
+
+export type ExternalStorageConnectionStatus = typeof ExternalStorageConnectionStatus[keyof typeof ExternalStorageConnectionStatus];
+
+
+export const ExternalStorageConnectionStatus = {
+  active: 'active',
+  auth_error: 'auth_error',
+  error: 'error',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ExternalStorageConnectionActiveSyncJobStatus = typeof ExternalStorageConnectionActiveSyncJobStatus[keyof typeof ExternalStorageConnectionActiveSyncJobStatus] | null;
+
+
+export const ExternalStorageConnectionActiveSyncJobStatus = {
+  queued: 'queued',
+  processing: 'processing',
+  paused: 'paused',
+  null: 'null',
+} as const;
+
+export interface ExternalStorageConnection {
+  id: number;
+  provider: ExternalStorageConnectionProvider;
+  providerLabel: string;
+  rootFolder: string;
+  status: ExternalStorageConnectionStatus;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+  createdAt?: string;
+  booksCount: number;
+  missingBooksCount: number;
+  /** @nullable */
+  activeSyncJobId?: number | null;
+  /** @nullable */
+  activeSyncJobStatus?: ExternalStorageConnectionActiveSyncJobStatus;
+}
+
+export interface MailRuConnectRequest {
+  /** @maxLength 200 */
+  login: string;
+  /** @maxLength 200 */
+  appPassword: string;
+  /** @maxLength 2000 */
+  rootFolder?: string;
+}
+
+export interface ExternalStorageConnectionUpdate {
+  /** @maxLength 2000 */
+  rootFolder: string;
+}
+
+export type ExternalStorageFolderListFoldersItem = {
+  name: string;
+  path: string;
+};
+
+export interface ExternalStorageFolderList {
+  path: string;
+  folders: ExternalStorageFolderListFoldersItem[];
+}
+
+export type ExternalSyncJobStatus = typeof ExternalSyncJobStatus[keyof typeof ExternalSyncJobStatus];
+
+
+export const ExternalSyncJobStatus = {
+  queued: 'queued',
+  processing: 'processing',
+  paused: 'paused',
+  cancelled: 'cancelled',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface ExternalSyncJob {
+  id: number;
+  connectionId: number;
+  status: ExternalSyncJobStatus;
+  progress: number;
+  filesFound: number;
+  filesImported: number;
+  filesUpdated: number;
+  filesMissing: number;
+  filesFailed: number;
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt?: string;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
+export type AdminExternalStorageStatsConnectionsByProviderItem = {
+  provider?: string;
+  count?: number;
+  users?: number;
+};
+
+export type AdminExternalStorageStatsConnectionsByStatusItem = {
+  status?: string;
+  count?: number;
+};
+
+export type AdminExternalStorageStatsConnections = {
+  total?: number;
+  byProvider?: AdminExternalStorageStatsConnectionsByProviderItem[];
+  byStatus?: AdminExternalStorageStatsConnectionsByStatusItem[];
+};
+
+export type AdminExternalStorageStatsBooks = {
+  externalBooks?: number;
+  missingBooks?: number;
+};
+
+export type AdminExternalStorageStatsCache = {
+  cachedBooks?: number;
+  cachedBytes?: number;
+  budgetBytes?: number;
+};
+
+/**
+ * @nullable
+ */
+export type AdminExternalStorageStatsSyncLast30Days = {
+  total?: number;
+  completed?: number;
+  failed?: number;
+  filesFound?: number;
+  filesImported?: number;
+  filesUpdated?: number;
+  filesMissing?: number;
+  filesFailed?: number;
+} | null;
+
+export type AdminExternalStorageStatsSyncRecentJobsItem = {
+  id?: number;
+  provider?: string;
+  /** @nullable */
+  ownerUsername?: string | null;
+  status?: string;
+  filesFound?: number;
+  filesImported?: number;
+  filesUpdated?: number;
+  filesMissing?: number;
+  filesFailed?: number;
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt?: string;
+  /** @nullable */
+  completedAt?: string | null;
+};
+
+export type AdminExternalStorageStatsSync = {
+  /** @nullable */
+  last30Days?: AdminExternalStorageStatsSyncLast30Days;
+  recentJobs?: AdminExternalStorageStatsSyncRecentJobsItem[];
+};
+
+export interface AdminExternalStorageStats {
+  connections?: AdminExternalStorageStatsConnections;
+  books?: AdminExternalStorageStatsBooks;
+  cache?: AdminExternalStorageStatsCache;
+  sync?: AdminExternalStorageStatsSync;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -1000,6 +1175,8 @@ export interface AppSettings {
   allowRegistration?: boolean;
   maxFileSizeMb?: number;
   libraryStorageLimitMb?: number;
+  externalCacheBudgetMb?: number;
+  externalStorageEnabled?: boolean;
   /** @nullable */
   smtpHost?: string | null;
   /** @nullable */
@@ -1033,6 +1210,9 @@ export interface AppSettingsUpdate {
      * @maximum 102400
      */
   libraryStorageLimitMb?: number;
+  /** @minimum 1 */
+  externalCacheBudgetMb?: number;
+  externalStorageEnabled?: boolean;
   /** @nullable */
   smtpHost?: string | null;
   /** @nullable */
@@ -1103,6 +1283,29 @@ export type RevokeAllTrustedDevices200 = {
 
 export type RevokeTrustedDevice200 = {
   message?: string;
+};
+
+export type AssignBooksToCycleBody = {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  bookIds: number[];
+  /** @nullable */
+  cycleId?: number | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  cycleName?: string | null;
+};
+
+export type AssignBooksToCycle200 = {
+  updated: number;
+  /** @nullable */
+  cycleId?: number | null;
+  /** @nullable */
+  cycleName?: string | null;
 };
 
 export type ListBooksParams = {
@@ -1261,5 +1464,61 @@ status?: string;
 
 export type ClearSavedEmails200 = {
   deleted?: number;
+};
+
+export type GetExternalStorageFeatureStatus200 = {
+  enabled: boolean;
+};
+
+export type DeleteExternalStorageConnection200 = {
+  ok?: boolean;
+};
+
+export type ListExternalStorageFoldersParams = {
+path?: string;
+};
+
+export type ControlExternalSyncJobBodyAction = typeof ControlExternalSyncJobBodyAction[keyof typeof ControlExternalSyncJobBodyAction];
+
+
+export const ControlExternalSyncJobBodyAction = {
+  pause: 'pause',
+  resume: 'resume',
+  cancel: 'cancel',
+} as const;
+
+export type ControlExternalSyncJobBody = {
+  action: ControlExternalSyncJobBodyAction;
+};
+
+export type AdminControlExternalSyncJobBodyAction = typeof AdminControlExternalSyncJobBodyAction[keyof typeof AdminControlExternalSyncJobBodyAction];
+
+
+export const AdminControlExternalSyncJobBodyAction = {
+  pause: 'pause',
+  resume: 'resume',
+  cancel: 'cancel',
+} as const;
+
+export type AdminControlExternalSyncJobBody = {
+  action: AdminControlExternalSyncJobBodyAction;
+};
+
+export type AdminControlExternalSyncJob200Status = typeof AdminControlExternalSyncJob200Status[keyof typeof AdminControlExternalSyncJob200Status];
+
+
+export const AdminControlExternalSyncJob200Status = {
+  queued: 'queued',
+  processing: 'processing',
+  paused: 'paused',
+  cancelled: 'cancelled',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type AdminControlExternalSyncJob200 = {
+  id: number;
+  status: AdminControlExternalSyncJob200Status;
+  progress: number;
 };
 
