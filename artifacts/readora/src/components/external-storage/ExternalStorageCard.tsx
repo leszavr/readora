@@ -8,11 +8,16 @@ import {
   useListExternalStorageFolders,
   useSyncExternalStorage,
   useGetExternalSyncJob,
+  useGetExternalSyncJobFailures,
   useControlExternalSyncJob,
   useGetExternalStorageFeatureStatus,
+  useListExternalRelocations,
+  useResolveExternalRelocation,
   getListExternalStorageConnectionsQueryKey,
   getListExternalStorageFoldersQueryKey,
   getGetExternalSyncJobQueryKey,
+  getGetExternalSyncJobFailuresQueryKey,
+  getListExternalRelocationsQueryKey,
   type ExternalStorageConnection,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -39,13 +44,25 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Cloud, FolderOpen, HardDriveDownload, Loader2, Pause, Play, RefreshCw, Square, Trash2, ChevronRight } from "lucide-react";
+import { Cloud, FolderOpen, HardDriveDownload, Loader2, Pause, Play, RefreshCw, Square, Trash2, ChevronRight, ChevronDown, ChevronUp, AlertTriangle, CloudUpload, X } from "lucide-react";
 
 const STATUS_LABELS: Record<ExternalStorageConnection["status"], string> = {
   active: "Активно",
   auth_error: "Ошибка авторизации",
   error: "Ошибка",
 };
+
+const FAILURE_REASON_LABELS: Record<string, string> = {
+  download: "Не удалось скачать",
+  parse: "Ошибка обработки",
+  duplicate: "Дубликат",
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes <= 0) return "0 Б";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
+}
 
 function apiErrorMessage(error: unknown, fallback: string): string {
   const data = (error as { data?: { error?: string } } | null)?.data;
@@ -278,7 +295,72 @@ function FolderPickerDialog({
   );
 }
 
-function SyncControls({ connection, featureEnabled }: { connection: ExternalStorageConnection; featureEnabled: boolean }) {
+// Детализация ошибок джобы: список файлов, которые не удалось импортировать.
+function SyncJobFailures({ jobId, failedCount }: { jobId: number; failedCount: number }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, isError } = useGetExternalSyncJobFailures(jobId, {
+    query: {
+      queryKey: getGetExternalSyncJobFailuresQueryKey(jobId),
+      enabled: open,
+    },
+  });
+
+  const items = data?.items ?? [];
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-xs text-destructive underline-offset-4 hover:underline"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <AlertTriangle className="w-3 h-3" />
+        {open ? "Скрыть ошибки" : `Ошибок: ${failedCount} — показать`}
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {open && (
+        <div className="max-h-48 overflow-y-auto rounded-lg border bg-muted/30 p-2">
+          {isLoading && (
+            <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Загрузка списка ошибок...
+            </div>
+          )}
+          {isError && (
+            <p className="p-2 text-xs text-destructive">Не удалось загрузить список ошибок</p>
+          )}
+          {!isLoading && !isError && items.length === 0 && (
+            <p className="p-2 text-xs text-muted-foreground">Детали ошибок недоступны (старая синхронизация)</p>
+          )}
+          {items.map((item, i) => (
+            <div key={i} className="space-y-0.5 border-b px-2 py-1.5 last:border-b-0">
+              <p className="break-all text-xs font-medium">{item.fileName}</p>
+              <p className="break-all text-[11px] text-muted-foreground">{item.externalPath}</p>
+              <p className="text-xs text-destructive">
+                {FAILURE_REASON_LABELS[item.reason] ?? item.reason}: {item.errorMessage}
+              </p>
+            </div>
+          ))}
+          {!isLoading && !isError && items.length > 0 && items.length < failedCount && (
+            <p className="px-2 pt-1 text-[11px] text-muted-foreground">
+              Показаны первые {items.length} из {failedCount}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SyncControls({
+  connection,
+  featureEnabled,
+  onRunningChange,
+}: {
+  connection: ExternalStorageConnection;
+  featureEnabled: boolean;
+  onRunningChange?: (running: boolean) => void;
+}) {
   const qc = useQueryClient();
   // jobId переживает перезагрузку страницы: восстановление из данных подключения.
   const [jobId, setJobId] = useState<number | null>(connection.activeSyncJobId ?? null);
@@ -325,14 +407,21 @@ function SyncControls({ connection, featureEnabled }: { connection: ExternalStor
   });
 
   useEffect(() => {
-    if (job && (job.status === "completed" || job.status === "failed")) {
+    if (job && (job.status === "completed" || job.status === "failed" || job.status === "cancelled")) {
       void qc.invalidateQueries({ queryKey: getListExternalStorageConnectionsQueryKey() });
+      // Финальный список кандидатов на переезд мог появиться в последнем файле
+      void qc.invalidateQueries({ queryKey: getListExternalRelocationsQueryKey(connection.id) });
     }
-  }, [job?.status, qc, job]);
+  }, [job?.status, qc, job, connection.id]);
 
   const running = job?.status === "queued" || job?.status === "processing";
   const paused = job?.status === "paused";
   const controllable = featureEnabled && (running || paused);
+
+  // Блок локальных копий опрашивает список, пока синхронизация идёт
+  useEffect(() => {
+    onRunningChange?.(running);
+  }, [running, onRunningChange]);
 
   const statusText =
     job?.status === "completed" ? "Синхронизация завершена"
@@ -414,6 +503,9 @@ function SyncControls({ connection, featureEnabled }: { connection: ExternalStor
           {job.status === "failed" && job.errorMessage && (
             <p className="text-destructive">{job.errorMessage}</p>
           )}
+          {job.filesFailed > 0 && jobId !== null && (
+            <SyncJobFailures jobId={jobId} failedCount={job.filesFailed} />
+          )}
         </div>
       )}
 
@@ -422,9 +514,97 @@ function SyncControls({ connection, featureEnabled }: { connection: ExternalStor
   );
 }
 
+// Локальные копии книг из облака: предложение перенести книгу в облако,
+// чтобы не хранить файл на сервере (прогресс, закладки и заметки сохраняются).
+// Пока синхронизация идёт, список опрашивается: кандидаты появляются на лету.
+function RelocationsBlock({
+  connection,
+  syncRunning,
+}: {
+  connection: ExternalStorageConnection;
+  syncRunning: boolean;
+}) {
+  const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const { data, isLoading } = useListExternalRelocations(connection.id, {
+    query: {
+      queryKey: getListExternalRelocationsQueryKey(connection.id),
+      refetchInterval: syncRunning ? 1500 : false,
+    },
+  });
+
+  const { mutate: resolve } = useResolveExternalRelocation({
+    mutation: {
+      onMutate: ({ id }) => setBusyId(id),
+      onSuccess: () => {
+        setError(null);
+        void qc.invalidateQueries({ queryKey: getListExternalRelocationsQueryKey(connection.id) });
+        void qc.invalidateQueries({ queryKey: getListExternalStorageConnectionsQueryKey() });
+      },
+      onSettled: () => setBusyId(null),
+      onError: (e) => setError(apiErrorMessage(e, "Не удалось перенести книгу")),
+    },
+  });
+
+  const items = data?.items ?? [];
+  if (isLoading) return null;
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">Локальные копии книг из облака: {items.length}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Эти книги уже загружены в библиотеку вручную, и тот же файл найден в облаке. Перенесите их в
+          облако: файл удалится с сервера и освободит место, а прогресс, закладки и заметки сохранятся.
+          После переноса книга будет читаться из облака.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item.id} className="space-y-1 rounded-lg border bg-muted/30 px-3 py-2">
+            <p className="break-all text-sm font-medium">{item.bookTitle}</p>
+            <p className="text-xs text-muted-foreground">
+              {item.bookAuthor ?? "Автор неизвестен"} · {formatFileSize(item.fileSize)} · {item.fileName}
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={busyId !== null}
+                onClick={() => resolve({ id: item.id, data: { action: "migrate" } })}
+              >
+                {busyId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
+                Перенести в облако
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                disabled={busyId !== null}
+                onClick={() => resolve({ id: item.id, data: { action: "dismiss" } })}
+              >
+                <X className="w-4 h-4" />
+                Оставить как есть
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 function ConnectionCard({ connection, featureEnabled }: { connection: ExternalStorageConnection; featureEnabled: boolean }) {
   const qc = useQueryClient();
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [syncRunning, setSyncRunning] = useState(false);
 
   const { mutate: disconnect, isPending } = useDeleteExternalStorageConnection({
     mutation: {
@@ -492,7 +672,9 @@ function ConnectionCard({ connection, featureEnabled }: { connection: ExternalSt
         </div>
       </div>
 
-      <SyncControls connection={connection} featureEnabled={featureEnabled} />
+      <SyncControls connection={connection} featureEnabled={featureEnabled} onRunningChange={setSyncRunning} />
+
+      <RelocationsBlock connection={connection} syncRunning={syncRunning} />
 
       <FolderPickerDialog
         connection={connection}

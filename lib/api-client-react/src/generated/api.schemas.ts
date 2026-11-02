@@ -107,6 +107,60 @@ export interface ExternalSyncJob {
   completedAt?: string | null;
 }
 
+export type ExternalSyncJobFailureReason = typeof ExternalSyncJobFailureReason[keyof typeof ExternalSyncJobFailureReason];
+
+
+export const ExternalSyncJobFailureReason = {
+  download: 'download',
+  parse: 'parse',
+  duplicate: 'duplicate',
+} as const;
+
+export interface ExternalSyncJobFailure {
+  externalPath: string;
+  fileName: string;
+  reason: ExternalSyncJobFailureReason;
+  errorMessage: string;
+  createdAt: string;
+}
+
+export interface ExternalSyncJobFailureList {
+  items: ExternalSyncJobFailure[];
+}
+
+export interface ExternalBookRelocation {
+  id: number;
+  bookId: number;
+  bookTitle: string;
+  /** @nullable */
+  bookAuthor?: string | null;
+  fileName: string;
+  externalPath: string;
+  fileSize: number;
+  createdAt: string;
+}
+
+export interface ExternalBookRelocationList {
+  items: ExternalBookRelocation[];
+}
+
+export type ExternalBookRelocationResolvedStatus = typeof ExternalBookRelocationResolvedStatus[keyof typeof ExternalBookRelocationResolvedStatus];
+
+
+export const ExternalBookRelocationResolvedStatus = {
+  migrated: 'migrated',
+  dismissed: 'dismissed',
+} as const;
+
+export interface ExternalBookRelocationResolved {
+  id: number;
+  connectionId: number;
+  bookId: number;
+  status: ExternalBookRelocationResolvedStatus;
+  /** @nullable */
+  resolvedAt?: string | null;
+}
+
 export type AdminExternalStorageStatsConnectionsByProviderItem = {
   provider?: string;
   count?: number;
@@ -1489,6 +1543,18 @@ export const ControlExternalSyncJobBodyAction = {
 
 export type ControlExternalSyncJobBody = {
   action: ControlExternalSyncJobBodyAction;
+};
+
+export type ResolveExternalRelocationBodyAction = typeof ResolveExternalRelocationBodyAction[keyof typeof ResolveExternalRelocationBodyAction];
+
+
+export const ResolveExternalRelocationBodyAction = {
+  migrate: 'migrate',
+  dismiss: 'dismiss',
+} as const;
+
+export type ResolveExternalRelocationBody = {
+  action: ResolveExternalRelocationBodyAction;
 };
 
 export type AdminControlExternalSyncJobBodyAction = typeof AdminControlExternalSyncJobBodyAction[keyof typeof AdminControlExternalSyncJobBodyAction];

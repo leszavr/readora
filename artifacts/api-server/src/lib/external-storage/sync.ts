@@ -6,13 +6,23 @@ import {
   chaptersTable,
   cyclesTable,
   db,
+  externalBookRelocationsTable,
   externalStorageConnectionsTable,
+  externalSyncJobFailuresTable,
   externalSyncJobsTable,
   genresTable,
   usersTable,
   type ExternalStorageConnection,
+  type ExternalStorageProvider,
 } from "@workspace/db";
-import { bookFormatFromExtension, parseBook, type BookFormat } from "../parser";
+import {
+  bookFormatFromFilename,
+  extractFb2FromZip,
+  isExplicitFb2ZipFilename,
+  isZipBuffer,
+  parseBook,
+  type BookFormat,
+} from "../parser";
 import { resolveGenreIds } from "../genre-resolver";
 import { recordServerAnalyticsEvent } from "../analytics-service";
 import { storeOptimizedCover, deleteCoverIfUnreferenced } from "../cover-storage";
@@ -34,11 +44,21 @@ import { chaptersContentBytes, evictExternalContentCacheIfNeeded, upsertBookChap
 const MAX_WALK_DEPTH = 6;
 const MAX_FILES_PER_SYNC = 2000;
 const DOWNLOAD_DELAY_MS = 200;
+// Детализация ошибок пишется не более чем для этого числа файлов;
+// счётчик filesFailed в джобе всегда полный.
+const MAX_FAILURES_PER_SYNC = 500;
+const FAILURE_PATH_MAX = 2000;
+const FAILURE_NAME_MAX = 500;
+const FAILURE_MESSAGE_MAX = 500;
 // Джоба без обновлений дольше этого интервала считается зависшей (например,
 // после перезапуска сервера) и помечается failed.
 const STALE_ACTIVE_MS = 10 * 60 * 1000;
 
-type BookFile = { entry: ExternalFileEntry; format: BookFormat };
+// Синхронизация скачивает файлы из доверенного облака пользователя, файловые
+// лимиты квоты к ней не применяются (размер контролирует драйвер).
+const SYNC_PARSE_OPTIONS = { sizeLimits: { maxFileBytes: null } };
+
+type BookFile = { entry: ExternalFileEntry; format: BookFormat; explicitZip: boolean };
 
 // Управляемая остановка воркера (пауза/отмена): статус джобы уже выставлен
 // endpoint'ом управления, воркер лишь прекращает работу.
@@ -115,10 +135,10 @@ export async function collectExternalBookFiles(
         queue.push({ path: entry.path, depth: depth + 1 });
         continue;
       }
-      const format = bookFormatFromExtension(fileExtension(entry.name));
+      const format = bookFormatFromFilename(entry.name);
       if (!format) continue;
       if (files.length >= MAX_FILES_PER_SYNC) break;
-      files.push({ entry, format });
+      files.push({ entry, format, explicitZip: isExplicitFb2ZipFilename(entry.name) });
     }
   }
   return files;
@@ -167,6 +187,63 @@ async function resolveCycleFromSeries(
 
 async function updateSyncJob(jobId: number, values: Partial<typeof externalSyncJobsTable.$inferInsert>): Promise<void> {
   await db.update(externalSyncJobsTable).set(values).where(eq(externalSyncJobsTable.id, jobId));
+}
+
+// Книга с совпавшим fileHash уже есть у владельца. Для явного дубликата
+// из другого источника — ошибка; для непривязанной локальной — кандидат на
+// переезд; для книг этого провайдера — тихая (пере)привязка по пути.
+export function classifyHashDuplicate(
+  book: { externalConnectionId: number | null; externalProvider: ExternalStorageProvider | null; storageKey: string },
+  connection: { id: number; provider: ExternalStorageProvider },
+): "candidate" | "attach" | "duplicate" {
+  if (book.externalConnectionId === connection.id) return "attach";
+  if (book.externalConnectionId !== null) return "duplicate";
+  if (book.externalProvider === connection.provider) return "attach";
+  if (book.externalProvider === null && !book.storageKey.startsWith("external/")) return "candidate";
+  return "duplicate";
+}
+
+export class SyncDuplicateError extends Error {
+  constructor() {
+    super("Книга уже в библиотеке (привязана к другому источнику)");
+  }
+}
+
+function isExternalStorageKey(storageKey: string): boolean {
+  return storageKey.startsWith("external/");
+}
+
+async function findBookByFileHash(
+  ownerUserId: number,
+  fileHash: string,
+): Promise<{ id: number; externalConnectionId: number | null; externalProvider: ExternalStorageProvider | null; storageKey: string } | null> {
+  const [book] = await db
+    .select({
+      id: booksTable.id,
+      externalConnectionId: booksTable.externalConnectionId,
+      externalProvider: booksTable.externalProvider,
+      storageKey: booksTable.storageKey,
+    })
+    .from(booksTable)
+    .where(and(eq(booksTable.ownerUserId, ownerUserId), eq(booksTable.fileHash, fileHash)))
+    .limit(1);
+  return book ?? null;
+}
+
+async function recordSyncFailure(
+  jobId: number,
+  entry: ExternalFileEntry,
+  error: unknown,
+  reason: "download" | "parse" | "duplicate",
+): Promise<void> {
+  const message = error instanceof Error && error.message ? error.message : "Не удалось обработать файл";
+  await db.insert(externalSyncJobFailuresTable).values({
+    jobId,
+    externalPath: entry.path.slice(0, FAILURE_PATH_MAX),
+    fileName: entry.name.slice(0, FAILURE_NAME_MAX),
+    reason,
+    errorMessage: message.slice(0, FAILURE_MESSAGE_MAX),
+  });
 }
 
 // Применяет действие управления (пауза/возобновление/отмена) к джобе
@@ -301,11 +378,12 @@ async function syncConnection(
   let updated = 0;
   let missing = 0;
   let failed = 0;
+  let recordedFailures = 0;
   const seenPaths = new Set<string>();
 
   for (let i = 0; i < files.length; i++) {
     await assertControlled();
-    const { entry, format } = files[i];
+    const { entry, format, explicitZip } = files[i];
     seenPaths.add(entry.path);
     const existing = byPath.get(entry.path);
     if (existing && existing.externalConnectionId === connection.id && isEntryUnchanged(existing, entry)) {
@@ -322,8 +400,75 @@ async function syncConnection(
       // зависания (10 минут без обновлений) не сработал ложно.
       await updateSyncJob(jobId, { updatedAt: new Date() });
       const buffer = await downloadExternalFile(credentials, entry.path);
-      const parsed = parseBook(buffer, format, { sizeLimits: { maxFileBytes: null } });
       const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
+
+      // Дедупликация по содержимому для новых файлов: книга с тем же fileHash
+      // уже в библиотеке — не создаём копию (прогресс и заметки остаются).
+      if (!existing) {
+        const duplicate = await findBookByFileHash(connection.ownerUserId, fileHash);
+        if (duplicate) {
+          const kind = classifyHashDuplicate(duplicate, connection);
+          if (kind === "candidate") {
+            await db
+              .insert(externalBookRelocationsTable)
+              .values({
+                connectionId: connection.id,
+                ownerUserId: connection.ownerUserId,
+                bookId: duplicate.id,
+                externalPath: entry.path.slice(0, FAILURE_PATH_MAX),
+                fileName: entry.name.slice(0, FAILURE_NAME_MAX),
+                fileSize: buffer.byteLength,
+                etag: entry.etag,
+              })
+              .onConflictDoUpdate({
+                target: [externalBookRelocationsTable.connectionId, externalBookRelocationsTable.bookId],
+                set: {
+                  externalPath: entry.path.slice(0, FAILURE_PATH_MAX),
+                  fileName: entry.name.slice(0, FAILURE_NAME_MAX),
+                  fileSize: buffer.byteLength,
+                  etag: entry.etag,
+                },
+                setWhere: eq(externalBookRelocationsTable.status, "pending"),
+              });
+          } else if (kind === "attach") {
+            // Книга этого провайдера: тихая (пере)привязка к файлу по пути.
+            await db
+              .update(booksTable)
+              .set({
+                externalConnectionId: connection.id,
+                externalPath: entry.path,
+                externalEtag: entry.etag,
+                externalModifiedAt: entry.modifiedAt,
+                externalMissing: false,
+                fileSize: buffer.byteLength,
+                ...(isExternalStorageKey(duplicate.storageKey)
+                  ? { storageKey: externalStorageKey(connection.id, entry.path) }
+                  : {}),
+              })
+              .where(eq(booksTable.id, duplicate.id));
+          } else {
+            throw new SyncDuplicateError();
+          }
+          await updateSyncJob(jobId, { progress: 10 + Math.round(((i + 1) / files.length) * 90) });
+          continue;
+        }
+      }
+
+      // fb2 в zip-контейнере: разворачиваем до XML. Произвольный .zip без
+      // книги — не книга, пропускаем молча; для явных .fbz/.fb2.zip это ошибка.
+      let parseBuffer = buffer;
+      if (format === "fb2" && isZipBuffer(buffer)) {
+        const xml = extractFb2FromZip(buffer);
+        if (xml === null) {
+          if (!explicitZip) {
+            await updateSyncJob(jobId, { progress: 10 + Math.round(((i + 1) / files.length) * 90) });
+            continue;
+          }
+          throw new Error("ZIP-архив не содержит книгу FB2");
+        }
+        parseBuffer = xml;
+      }
+      const parsed = parseBook(parseBuffer, format, SYNC_PARSE_OPTIONS);
       const contentBytes = chaptersContentBytes(parsed.chapters.map((ch) => ch.htmlContent));
 
       if (existing) {
@@ -409,6 +554,11 @@ async function syncConnection(
     } catch (e) {
       if (e instanceof ExternalStorageError && e.kind === "auth") throw e;
       failed++;
+      const reason = e instanceof ExternalStorageError ? "download" : e instanceof SyncDuplicateError ? "duplicate" : "parse";
+      if (recordedFailures < MAX_FAILURES_PER_SYNC) {
+        recordedFailures++;
+        await recordSyncFailure(jobId, entry, e, reason).catch(() => undefined);
+      }
     }
     await updateSyncJob(jobId, {
       progress: 10 + Math.round(((i + 1) / files.length) * 90),

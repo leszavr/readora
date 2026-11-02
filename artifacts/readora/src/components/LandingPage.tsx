@@ -18,7 +18,7 @@ const features = [
   {
     icon: <Upload className="w-6 h-6" />,
     title: "Загрузка книг",
-    description: "Поддержка форматов FB2, EPUB, MOBI, CBZ, TXT, MD и HTML. Автоматическое извлечение метаданных, обложки и оглавления из ваших файлов.",
+    description: "Поддержка форматов FB2 (в том числе fb2.zip/fbz), EPUB, MOBI, CBZ, TXT, MD и HTML. Автоматическое извлечение метаданных, обложки и оглавления из ваших файлов.",
   },
   {
     icon: <BookOpen className="w-6 h-6" />,

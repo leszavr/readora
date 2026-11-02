@@ -35,7 +35,10 @@ const BOOK_FORMAT_EXTENSIONS = ["fb2", "epub", "mobi", "azw3", "prc", "cbz", "tx
 type UploadBookFormat = "fb2" | "epub" | "mobi" | "cbz" | "txt" | "md" | "html";
 
 function bookFormatFromName(name: string): UploadBookFormat | null {
-  const ext = name.toLowerCase().split(".").pop();
+  const lower = name.toLowerCase();
+  // fb2 в zip-контейнере: .fbz, .fb2.zip и произвольный .zip с книгой внутри
+  if (lower.endsWith(".zip") || lower.endsWith(".fbz")) return "fb2";
+  const ext = lower.split(".").pop();
   if (!ext) return null;
   if (ext === "azw3" || ext === "prc") return "mobi";
   if (ext === "markdown") return "md";
@@ -45,7 +48,7 @@ function bookFormatFromName(name: string): UploadBookFormat | null {
 
 function validateFile(file: File, quota: { maxFileSizeBytes?: number | null; availableBytes?: number | null } | undefined): string | null {
   if (!bookFormatFromName(file.name)) {
-    return "Поддерживаются форматы FB2, EPUB, MOBI, CBZ, TXT, MD и HTML";
+    return "Поддерживаются форматы FB2 (в том числе fb2.zip/fbz), EPUB, MOBI, CBZ, TXT, MD и HTML";
   }
   if (quota?.maxFileSizeBytes != null && file.size > quota.maxFileSizeBytes) {
     return `Файл слишком большой. Максимум ${formatSize(quota.maxFileSizeBytes)}`;
@@ -368,7 +371,7 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Поддерживаются форматы FB2, EPUB, MOBI, CBZ, TXT, MD и HTML{quota?.maxFileSizeBytes ? ` (до ${formatSize(quota.maxFileSizeBytes)})` : ""}. Можно загрузить несколько файлов сразу.
+            Поддерживаются форматы FB2 (в том числе fb2.zip/fbz), EPUB, MOBI, CBZ, TXT, MD и HTML{quota?.maxFileSizeBytes ? ` (до ${formatSize(quota.maxFileSizeBytes)})` : ""}. Можно загрузить несколько файлов сразу.
           </DialogDescription>
         </DialogHeader>
 
@@ -406,12 +409,12 @@ export function UploadBookDialog({ open, onClose, title = "Загрузить к
           >
             <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
             <p className="font-medium text-sm">Перетащите файлы или нажмите для выбора</p>
-            <p className="text-xs text-muted-foreground mt-1">FB2, EPUB, MOBI, CBZ, TXT, MD, HTML • Множественный выбор</p>
+            <p className="text-xs text-muted-foreground mt-1">FB2, FB2.ZIP/FBZ, EPUB, MOBI, CBZ, TXT, MD, HTML • Множественный выбор</p>
           </button>
           <input
             ref={inputRef}
             type="file"
-            accept=".fb2,.epub,.mobi,.azw3,.prc,.cbz,.txt,.md,.markdown,.html,.htm"
+            accept=".fb2,.fbz,.zip,.epub,.mobi,.azw3,.prc,.cbz,.txt,.md,.markdown,.html,.htm"
               multiple
               disabled={!canSelectFiles}
             className="hidden"

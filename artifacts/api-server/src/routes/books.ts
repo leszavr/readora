@@ -6,7 +6,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { db, booksTable, bookGenresTable, genresTable, cyclesTable, readingProgressTable, chaptersTable, bookUploadJobsTable, giftEditionsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
-import { parseBook, bookFormatFromExtension, type BookFormat, type ParseBookOptions } from "../lib/parser";
+import { parseBook, bookFormatFromFilename, isZipBuffer, type BookFormat, type ParseBookOptions } from "../lib/parser";
 import { resolveGenreIds } from "../lib/genre-resolver";
 import { ensureStorageDirs, resolveUploadPath, tempUploadsDir } from "../lib/storage";
 import { optimizeImage } from "../lib/image-optimizer";
@@ -25,7 +25,8 @@ const storage = multer.memoryStorage();
 const bookUploadFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (file.fieldname === "file") {
-      if (bookFormatFromExtension(ext)) cb(null, true);
+      // Полное имя: zip-контейнеры fb2 (.fb2.zip/.fbz/.zip) распознаются по суффиксу
+      if (bookFormatFromFilename(file.originalname)) cb(null, true);
       else cb(new Error("Неподдерживаемый формат книги"));
       return;
     }
@@ -296,7 +297,8 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     const buffer = fs.readFileSync(tempPath);
     const ext = job.format as BookFormat;
     const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
-    const storageKey = `${fileHash}.${ext}`;
+    // zip-контейнер fb2 хранится с честным расширением .zip; format книги — fb2
+    const storageKey = `${fileHash}${ext === "fb2" && isZipBuffer(buffer) ? ".zip" : `.${ext}`}`;
     const filePath = resolveUploadPath(storageKey);
 
     await updateUploadJob(jobId, { stage: "parsing", progress: 35 });
@@ -604,7 +606,7 @@ router.post("/books/upload", requireAuth, uploadBookFile, async (req, res): Prom
     return;
   }
 
-  const ext = bookFormatFromExtension(path.extname(req.file.originalname).toLowerCase());
+  const ext = bookFormatFromFilename(req.file.originalname);
   if (!ext) {
     res.status(400).json({ error: "Неподдерживаемый формат книги" });
     return;

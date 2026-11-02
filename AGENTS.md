@@ -9,7 +9,7 @@
 
 ## 1. Контекст проекта
 
-Readora — личная веб-библиотека для загрузки и чтения книг в форматах FB2 и EPUB.
+Readora — личная веб-библиотека для загрузки и чтения книг в форматах FB2 (включая fb2.zip/fbz), EPUB, MOBI, CBZ, TXT, MD и HTML.
 
 Текущий код — TypeScript-монорепозиторий на pnpm с React/Vite-фронтендом, Express API, PostgreSQL и Drizzle ORM.
 

@@ -2021,6 +2021,92 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /external-storage/connections/{id}/relocations:
+    get:
+      operationId: listExternalRelocations
+      tags: [external-storage]
+      summary: Books that can be moved to the external storage (local duplicates)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalBookRelocationList"
+        "400":
+          description: Invalid id
+        "404":
+          description: Not found
+
+  /external-storage/relocations/{id}/resolve:
+    post:
+      operationId: resolveExternalRelocation
+      tags: [external-storage]
+      summary: Move a local book to the external storage or dismiss the suggestion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [migrate, dismiss]
+              required: [action]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalBookRelocationResolved"
+        "400":
+          description: Invalid action
+        "404":
+          description: Not found
+        "409":
+          description: Already processed or conflicting state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /external-storage/sync-jobs/{id}/failures:
+    get:
+      operationId: getExternalSyncJobFailures
+      tags: [external-storage]
+      summary: Failed files details for external storage sync job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalSyncJobFailureList"
+        "400":
+          description: Invalid id
+        "404":
+          description: Not found
+
   /admin/external-storage/sync-jobs/{id}:
     patch:
       operationId: adminControlExternalSyncJob
@@ -2189,6 +2275,80 @@ components:
           type: [string, "null"]
           format: date-time
       required: [id, connectionId, status, progress, filesFound, filesImported, filesUpdated, filesMissing, filesFailed]
+
+    ExternalSyncJobFailure:
+      type: object
+      properties:
+        externalPath:
+          type: string
+        fileName:
+          type: string
+        reason:
+          type: string
+          enum: [download, parse, duplicate]
+        errorMessage:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [externalPath, fileName, reason, errorMessage, createdAt]
+
+    ExternalSyncJobFailureList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalSyncJobFailure"
+      required: [items]
+
+    ExternalBookRelocation:
+      type: object
+      properties:
+        id:
+          type: integer
+        bookId:
+          type: integer
+        bookTitle:
+          type: string
+        bookAuthor:
+          type: [string, "null"]
+        fileName:
+          type: string
+        externalPath:
+          type: string
+        fileSize:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, bookId, bookTitle, fileName, externalPath, fileSize, createdAt]
+
+    ExternalBookRelocationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalBookRelocation"
+      required: [items]
+
+    ExternalBookRelocationResolved:
+      type: object
+      properties:
+        id:
+          type: integer
+        connectionId:
+          type: integer
+        bookId:
+          type: integer
+        status:
+          type: string
+          enum: [migrated, dismissed]
+        resolvedAt:
+          type: [string, "null"]
+          format: date-time
+      required: [id, connectionId, bookId, status]
 
     AdminExternalStorageStats:
       type: object

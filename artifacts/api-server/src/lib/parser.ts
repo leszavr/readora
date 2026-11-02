@@ -12,6 +12,10 @@ const MAX_EPUB_ENTRIES = 3000;
 const MAX_EPUB_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
 const MAX_EPUB_TEXT_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_FB2_XML_BYTES = 50 * 1024 * 1024;
+// FB2 в zip-контейнере: количество записей и жёсткий потолок распакованного
+// объёма (анти-zip-бомба), не зависящий от sizeLimits квоты.
+const MAX_FB2_ZIP_ENTRIES = 100;
+const MAX_FB2_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
 const MAX_FB2_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_EPUB_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024;
 // Словари в MOBI/KF8 регулярно содержат >1500 секций (например, Merriam-Webster's
@@ -75,10 +79,32 @@ export const BOOK_FORMAT_EXTENSIONS: Record<string, BookFormat> = {
   ".markdown": "md",
   ".html": "html",
   ".htm": "html",
+  ".fbz": "fb2",
 };
 
 export function bookFormatFromExtension(ext: string): BookFormat | null {
   return BOOK_FORMAT_EXTENSIONS[ext.toLowerCase()] ?? null;
+}
+
+// FB2 в zip-контейнере (.fb2.zip / .fbz / произвольный .zip с книгой внутри):
+// формат определяется по имени файла, содержимое проверяет парсер.
+export function bookFormatFromFilename(filename: string): BookFormat | null {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".zip") || lower.endsWith(".fbz")) return "fb2";
+  const dot = lower.lastIndexOf(".");
+  if (dot === -1) return null;
+  return bookFormatFromExtension(lower.slice(dot));
+}
+
+// Явно «книжное» имя zip-контейнера: .fbz или .fb2.zip. Для таких файлов
+// отсутствие книги внутри — ошибка; произвольный .zip пропускается молча.
+export function isExplicitFb2ZipFilename(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.endsWith(".fbz") || lower.endsWith(".fb2.zip");
+}
+
+export function isZipBuffer(buffer: Buffer): boolean {
+  return buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b;
 }
 const SAFE_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const STRUCTURAL_FB2_SECTION_TITLES = new Set(["пролог", "эпилог"]);
@@ -412,13 +438,56 @@ function isUnsafeZipPath(entryName: string): boolean {
   return normalized.startsWith("../") || normalized === ".." || path.posix.isAbsolute(normalized);
 }
 
+// Разворачивает zip-контейнер с FB2 (.fb2.zip / .fbz / .zip с книгой внутри).
+// Возвращает XML-буфер книги либо null, если архив не содержит единственную
+// fb2-книгу. Лимиты и небезопасные пути бросают ошибку.
+export function extractFb2FromZip(buffer: Buffer): Buffer | null {
+  if (!isZipBuffer(buffer)) throw new Error("Файл не является ZIP-архивом");
+  const zip = new AdmZip(buffer);
+  const entries = zip.getEntries().filter((entry) => !entry.isDirectory);
+  if (entries.length === 0) return null;
+  if (entries.length > MAX_FB2_ZIP_ENTRIES) throw new Error("FB2-архив содержит слишком много файлов");
+
+  let totalUncompressed = 0;
+  for (const entry of entries) {
+    if (isUnsafeZipPath(entry.entryName)) throw new Error("FB2-архив содержит небезопасный путь файла");
+    totalUncompressed += entry.header.size;
+  }
+  if (totalUncompressed > MAX_FB2_ZIP_UNCOMPRESSED_BYTES) {
+    throw new Error("FB2-архив слишком большой после распаковки");
+  }
+
+  const candidates = entries.filter((entry) => entry.entryName.toLowerCase().endsWith(".fb2"));
+  const target =
+    candidates.length === 1
+      ? candidates[0]
+      : candidates.length === 0 && entries.length === 1
+        ? entries[0]
+        : null;
+  if (!target) return null;
+
+  const xml = target.getData();
+  if (xml.length === 0) return null;
+  const sample = detectAndConvertEncoding(xml.subarray(0, Math.min(xml.length, 4096)));
+  if (!/<(?:\w+:)?FictionBook[\s>]/i.test(sample)) return null;
+  return xml;
+}
+
+function requireFb2FromZip(buffer: Buffer): Buffer {
+  const xml = extractFb2FromZip(buffer);
+  if (xml === null) throw new Error("ZIP-архив не содержит книгу FB2");
+  return xml;
+}
+
 export function validateBookFile(buffer: Buffer, ext: BookFormat, options: ParseBookOptions = {}): void {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new Error("Файл пустой");
   if (buffer.length > resolveFileBytesLimit(options)) throw new Error("Файл слишком большой");
 
   if (ext === "fb2") {
-    if (buffer.length > resolveFileBytesLimit(options)) throw new Error("FB2 превышает допустимый размер XML");
-    const sample = detectAndConvertEncoding(buffer.subarray(0, Math.min(buffer.length, 4096)));
+    // zip-контейнер разворачивается до XML, дальнейшие проверки — по содержимому
+    const xml = isZipBuffer(buffer) ? requireFb2FromZip(buffer) : buffer;
+    if (xml.length > resolveFileBytesLimit(options)) throw new Error("FB2 превышает допустимый размер XML");
+    const sample = detectAndConvertEncoding(xml.subarray(0, Math.min(xml.length, 4096)));
     if (!/<(?:\w+:)?FictionBook[\s>]/i.test(sample)) {
       throw new Error("Некорректный FB2: не найден корневой FictionBook");
     }
@@ -473,10 +542,12 @@ export function validateBookFile(buffer: Buffer, ext: BookFormat, options: Parse
 }
 
 export function parseBook(buffer: Buffer, ext: BookFormat, options: ParseBookOptions = {}): ParsedBook {
-  validateBookFile(buffer, ext, options);
+  // zip-контейнер fb2 разворачивается один раз: и для валидации, и для парсинга
+  const content = ext === "fb2" && isZipBuffer(buffer) ? requireFb2FromZip(buffer) : buffer;
+  validateBookFile(content, ext, options);
   switch (ext) {
     case "fb2":
-      return parseFB2(buffer, options);
+      return parseFB2(content, options);
     case "epub":
       return parseEPUB(buffer, options);
     case "mobi":

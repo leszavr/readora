@@ -5,6 +5,7 @@ import {
   booksTable,
   db,
   externalStorageConnectionsTable,
+  externalSyncJobFailuresTable,
   externalSyncJobsTable,
   usersTable,
 } from "@workspace/db";
@@ -25,6 +26,11 @@ import {
   failStaleActiveSyncJobs,
   applySyncJobControl,
 } from "../lib/external-storage/sync";
+import {
+  isValidRelocationAction,
+  listPendingRelocations,
+  resolveExternalRelocation,
+} from "../lib/external-storage/relocations";
 import { isExternalStorageEnabled, externalStorageDisabledMessage } from "../lib/external-storage/feature";
 
 const router = Router();
@@ -281,6 +287,59 @@ router.post("/external-storage/connections/:id/sync", requireAuth, async (req, r
   res.status(202).json(toSyncJobResponse(job));
 });
 
+// GET /external-storage/connections/:id/relocations — книги, которые можно
+// перенести в облако (найдены локальные копии с тем же содержимым).
+router.get("/external-storage/connections/:id/relocations", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  if (!(await requireFeatureEnabled(res))) return;
+  const connectionId = Number.parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(connectionId)) { res.status(400).json({ error: "Некорректный id подключения" }); return; }
+  const connection = await getOwnedConnection(user.id, connectionId);
+  if (!connection) { res.status(404).json({ error: "Подключение не найдено" }); return; }
+
+  const items = await listPendingRelocations(user.id, connection.id);
+  res.json({
+    items: items.map((item) => ({
+      id: item.id,
+      bookId: item.bookId,
+      bookTitle: item.bookTitle,
+      bookAuthor: item.bookAuthor,
+      fileName: item.fileName,
+      externalPath: item.externalPath,
+      fileSize: item.fileSize,
+      createdAt: item.createdAt,
+    })),
+  });
+});
+
+// POST /external-storage/relocations/:id/resolve — перенести книгу в облако
+// (migrate) или отказаться (dismiss).
+router.post("/external-storage/relocations/:id/resolve", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  if (!(await requireFeatureEnabled(res))) return;
+  const relocationId = Number.parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(relocationId)) { res.status(400).json({ error: "Некорректный id" }); return; }
+
+  const { action } = (req.body ?? {}) as Record<string, unknown>;
+  if (!isValidRelocationAction(action)) {
+    res.status(400).json({ error: "Недействительное действие (migrate или dismiss)" });
+    return;
+  }
+
+  const result = await resolveExternalRelocation(relocationId, user.id, action);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json({
+    id: result.relocation.id,
+    connectionId: result.relocation.connectionId,
+    bookId: result.relocation.bookId,
+    status: result.relocation.status,
+    resolvedAt: result.relocation.resolvedAt,
+  });
+});
+
 // GET /external-storage/sync-jobs/:id — статус синхронизации
 router.get("/external-storage/sync-jobs/:id", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
@@ -293,6 +352,44 @@ router.get("/external-storage/sync-jobs/:id", requireAuth, async (req, res): Pro
     .where(and(eq(externalSyncJobsTable.id, jobId), eq(externalSyncJobsTable.ownerUserId, user.id)));
   if (!job) { res.status(404).json({ error: "Задача синхронизации не найдена" }); return; }
   res.json(toSyncJobResponse(job));
+});
+
+// GET /external-storage/sync-jobs/:id/failures — детализация ошибок синхронизации:
+// какие файлы упали и почему (первые 500 записей, счётчик filesFailed точный).
+router.get("/external-storage/sync-jobs/:id/failures", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  if (!(await requireFeatureEnabled(res))) return;
+  const jobId = Number.parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(jobId)) { res.status(400).json({ error: "Некорректный id задачи" }); return; }
+
+  const [job] = await db
+    .select({ id: externalSyncJobsTable.id })
+    .from(externalSyncJobsTable)
+    .where(and(eq(externalSyncJobsTable.id, jobId), eq(externalSyncJobsTable.ownerUserId, user.id)));
+  if (!job) { res.status(404).json({ error: "Задача синхронизации не найдена" }); return; }
+
+  const rows = await db
+    .select({
+      externalPath: externalSyncJobFailuresTable.externalPath,
+      fileName: externalSyncJobFailuresTable.fileName,
+      reason: externalSyncJobFailuresTable.reason,
+      errorMessage: externalSyncJobFailuresTable.errorMessage,
+      createdAt: externalSyncJobFailuresTable.createdAt,
+    })
+    .from(externalSyncJobFailuresTable)
+    .where(eq(externalSyncJobFailuresTable.jobId, jobId))
+    .orderBy(externalSyncJobFailuresTable.id)
+    .limit(500);
+
+  res.json({
+    items: rows.map((row) => ({
+      externalPath: row.externalPath,
+      fileName: row.fileName,
+      reason: row.reason,
+      errorMessage: row.errorMessage,
+      createdAt: row.createdAt,
+    })),
+  });
 });
 
 // PATCH /external-storage/sync-jobs/:id — пауза/возобновление/отмена синхронизации

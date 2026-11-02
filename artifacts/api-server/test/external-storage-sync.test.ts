@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 // юнит-тестов чистых функций достаточно фиктивного URL.
 process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
 
-const { fileExtension, isEntryUnchanged, externalStorageKey } = await import("../src/lib/external-storage/sync");
+const { fileExtension, isEntryUnchanged, externalStorageKey, classifyHashDuplicate } = await import("../src/lib/external-storage/sync");
 const { chaptersContentBytes } = await import("../src/lib/external-storage/content-cache");
 type ExternalFileEntry = Awaited<typeof import("../src/lib/external-storage/drivers")>["ExternalFileEntry"];
 
@@ -61,6 +61,63 @@ test("chaptersContentBytes sums utf-8 byte lengths", () => {
   assert.equal(chaptersContentBytes(["абв"]), 6);
   assert.equal(chaptersContentBytes(["a", "", "абв"]), 7);
   assert.equal(chaptersContentBytes([]), 0);
+});
+
+// ─── Классификация дублей по fileHash ────────────────────────────────────────
+
+const CONN = { id: 7, provider: "yandex_disk" as const };
+
+test("classifyHashDuplicate: локальная книга с файлом — кандидат на переезд", () => {
+  assert.equal(
+    classifyHashDuplicate({ externalConnectionId: null, externalProvider: null, storageKey: "abc123.fb2" }, CONN),
+    "candidate",
+  );
+  assert.equal(
+    classifyHashDuplicate({ externalConnectionId: null, externalProvider: null, storageKey: "abc123.zip" }, CONN),
+    "candidate",
+  );
+});
+
+test("classifyHashDuplicate: книга этого подключения — тихая перепривязка", () => {
+  assert.equal(
+    classifyHashDuplicate(
+      { externalConnectionId: 7, externalProvider: "yandex_disk", storageKey: "external/7/x" },
+      CONN,
+    ),
+    "attach",
+  );
+});
+
+test("classifyHashDuplicate: осиротевшая книга этого провайдера — тихая привязка", () => {
+  assert.equal(
+    classifyHashDuplicate(
+      { externalConnectionId: null, externalProvider: "yandex_disk", storageKey: "external/1/x" },
+      CONN,
+    ),
+    "attach",
+  );
+});
+
+test("classifyHashDuplicate: привязана к другому хранилищу или осиротела от него — дубликат", () => {
+  assert.equal(
+    classifyHashDuplicate(
+      { externalConnectionId: 8, externalProvider: "mail_ru_cloud", storageKey: "external/8/x" },
+      CONN,
+    ),
+    "duplicate",
+  );
+  assert.equal(
+    classifyHashDuplicate(
+      { externalConnectionId: null, externalProvider: "mail_ru_cloud", storageKey: "external/8/x" },
+      CONN,
+    ),
+    "duplicate",
+  );
+  // книга с внешним storageKey, но без провайдера — не локальная, не кандидат
+  assert.equal(
+    classifyHashDuplicate({ externalConnectionId: null, externalProvider: null, storageKey: "external/1/x" }, CONN),
+    "duplicate",
+  );
 });
 
 const { isValidSyncJobAction, syncJobStatusAfterAction } = await import("../src/lib/external-storage/sync");

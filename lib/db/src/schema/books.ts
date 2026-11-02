@@ -46,6 +46,7 @@ export const booksTable = pgTable(
   (t) => [
     index("books_owner_user_id_idx").on(t.ownerUserId),
     index("books_file_hash_idx").on(t.fileHash),
+    index("books_owner_file_hash_idx").on(t.ownerUserId, t.fileHash),
     index("books_owner_uploaded_at_idx").on(t.ownerUserId, t.uploadedAt),
     uniqueIndex("books_owner_content_book_uidx").on(t.ownerUserId, t.contentBookId),
     index("books_content_book_id_idx").on(t.contentBookId),

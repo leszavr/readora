@@ -1727,6 +1727,65 @@ export const ControlExternalSyncJobResponse = zod.object({
 
 
 /**
+ * @summary Books that can be moved to the external storage (local duplicates)
+ */
+export const ListExternalRelocationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListExternalRelocationsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "bookId": zod.number(),
+  "bookTitle": zod.string(),
+  "bookAuthor": zod.string().nullish(),
+  "fileName": zod.string(),
+  "externalPath": zod.string(),
+  "fileSize": zod.number(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Move a local book to the external storage or dismiss the suggestion
+ */
+export const ResolveExternalRelocationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResolveExternalRelocationBody = zod.object({
+  "action": zod.enum(['migrate', 'dismiss'])
+})
+
+export const ResolveExternalRelocationResponse = zod.object({
+  "id": zod.number(),
+  "connectionId": zod.number(),
+  "bookId": zod.number(),
+  "status": zod.enum(['migrated', 'dismissed']),
+  "resolvedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Failed files details for external storage sync job
+ */
+export const GetExternalSyncJobFailuresParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetExternalSyncJobFailuresResponse = zod.object({
+  "items": zod.array(zod.object({
+  "externalPath": zod.string(),
+  "fileName": zod.string(),
+  "reason": zod.enum(['download', 'parse', 'duplicate']),
+  "errorMessage": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Control any user's external storage sync job (system admin)
  */
 export const AdminControlExternalSyncJobParams = zod.object({

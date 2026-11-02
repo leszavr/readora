@@ -84,7 +84,7 @@ export function AboutPage() {
             <p className="text-sm font-medium text-primary mb-4">О сервисе</p>
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">Readora.ru — самостоятельная личная веб-библиотека</h1>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Readora.ru помогает хранить, организовывать и читать собственные книги в форматах FB2, EPUB, MOBI, CBZ, TXT, MD и HTML прямо в браузере.
+              Readora.ru помогает хранить, организовывать и читать собственные книги в форматах FB2 (в том числе fb2.zip/fbz), EPUB, MOBI, CBZ, TXT, MD и HTML прямо в браузере.
             </p>
           </div>
         </section>

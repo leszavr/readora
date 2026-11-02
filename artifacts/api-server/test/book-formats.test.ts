@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import AdmZip from "adm-zip";
-import { parseBook, validateBookFile } from "../src/lib/parser";
+import {
+  parseBook,
+  validateBookFile,
+  bookFormatFromFilename,
+  extractFb2FromZip,
+  isExplicitFb2ZipFilename,
+} from "../src/lib/parser";
 
 // ─── Синтетические бинарные фикстуры ─────────────────────────────────────────
 
@@ -569,6 +575,95 @@ test("CBZ без картинок отклоняется", () => {
   const zip = new AdmZip();
   zip.addFile("readme.txt", Buffer.from("empty"));
   assert.throws(() => parseBook(zip.toBuffer(), "cbz"), /не содержит изображений/);
+});
+
+// ─── Тесты FB2 в zip-контейнере (.fb2.zip / .fbz) ─────────────────────────────
+
+const FB2_XML = `<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+  <description>
+    <title-info>
+      <book-title>Книга из архива</book-title>
+      <author><first-name>Автор</first-name><last-name>Архивный</last-name></author>
+      <genre>fantasy</genre>
+    </title-info>
+  </description>
+  <body>
+    <section><title><p>Глава 1</p></title><p>Текст первой главы достаточно длинный для парсера.</p></section>
+    <section><title><p>Глава 2</p></title><p>Текст второй главы достаточно длинный для парсера.</p></section>
+  </body>
+</FictionBook>`;
+
+function fb2Zip(entries: Array<[string, Buffer]>): Buffer {
+  const zip = new AdmZip();
+  for (const [name, data] of entries) zip.addFile(name, data);
+  return zip.toBuffer();
+}
+
+test("bookFormatFromFilename: zip-контейнеры fb2 и обычные расширения", () => {
+  assert.equal(bookFormatFromFilename("book.fb2.zip"), "fb2");
+  assert.equal(bookFormatFromFilename("book.FBZ"), "fb2");
+  assert.equal(bookFormatFromFilename("archive.zip"), "fb2");
+  assert.equal(bookFormatFromFilename("book.epub"), "epub");
+  assert.equal(bookFormatFromFilename("Книга.FB2"), "fb2");
+  assert.equal(bookFormatFromFilename("noext"), null);
+  assert.equal(bookFormatFromFilename("book.doc"), null);
+});
+
+test("isExplicitFb2ZipFilename: явные книжные контейнеры .fbz и .fb2.zip", () => {
+  assert.equal(isExplicitFb2ZipFilename("book.fbz"), true);
+  assert.equal(isExplicitFb2ZipFilename("book.fb2.zip"), true);
+  assert.equal(isExplicitFb2ZipFilename("archive.zip"), false);
+  assert.equal(isExplicitFb2ZipFilename("book.fb2"), false);
+});
+
+test("fb2.zip с единственной книгой парсится как обычный FB2", () => {
+  const parsed = parseBook(fb2Zip([["Книга из архива.fb2", Buffer.from(FB2_XML, "utf8")]]), "fb2");
+  assert.equal(parsed.title, "Книга из архива");
+  assert.equal(parsed.author, "Автор Архивный");
+  assert.deepEqual(parsed.chapters.map((c) => c.title), ["Глава 1", "Глава 2"]);
+  assert.ok(parsed.chapters[0].htmlContent.includes("Текст первой главы"));
+});
+
+test("fb2.zip с файлом без расширения, но с FictionBook внутри распознаётся", () => {
+  const xml = extractFb2FromZip(fb2Zip([["book", Buffer.from(FB2_XML, "utf8")]]));
+  assert.ok(xml !== null);
+  assert.ok(xml.includes("Книга из архива"));
+});
+
+test("fb2.zip без книги возвращает null и отклоняется parseBook", () => {
+  const zip = fb2Zip([["readme.txt", Buffer.from("не книга")]]);
+  assert.equal(extractFb2FromZip(zip), null);
+  assert.throws(() => parseBook(zip, "fb2"), /не содержит книгу FB2/);
+});
+
+test("fb2.zip с несколькими книгами не разворачивается (одна книга на файл)", () => {
+  const xml = Buffer.from(FB2_XML, "utf8");
+  const zip = fb2Zip([
+    ["first.fb2", xml],
+    ["second.fb2", xml],
+  ]);
+  assert.equal(extractFb2FromZip(zip), null);
+  assert.throws(() => parseBook(zip, "fb2"), /не содержит книгу FB2/);
+});
+
+test("fb2.zip с одним не-fb2 файлом возвращает null", () => {
+  const zip = fb2Zip([["data.bin", Buffer.from("binary")]]);
+  assert.equal(extractFb2FromZip(zip), null);
+});
+
+test("fb2.zip со слишком большим числом записей отклоняется", () => {
+  const zip = new AdmZip();
+  for (let i = 0; i < 101; i++) zip.addFile(`f${i}.fb2`, Buffer.from(FB2_XML, "utf8"));
+  assert.throws(() => extractFb2FromZip(zip.toBuffer()), /слишком много файлов/);
+});
+
+test("validateBookFile разворачивает fb2.zip и валидирует XML", () => {
+  const zip = fb2Zip([["book.fb2", Buffer.from(FB2_XML, "utf8")]]);
+  validateBookFile(zip, "fb2");
+
+  const broken = fb2Zip([["book.fb2", Buffer.from("<?xml version='1.0'?><notbook/>", "utf8")]]);
+  assert.throws(() => validateBookFile(broken, "fb2"), /не содержит книгу FB2/);
 });
 
 // ─── Диспетчеризация форматов ────────────────────────────────────────────────
