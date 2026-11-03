@@ -22,6 +22,7 @@ import { requireAuth } from "../middlewares/auth";
 import { emailService } from "../lib/email-service";
 import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
+import { hashAuthToken } from "../lib/token-hash";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import { logger } from "../lib/logger";
 import { completeYandexDiskConnect } from "../lib/external-storage/yandex-connect";
@@ -122,7 +123,7 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
 
     await db.insert(emailVerificationTokensTable).values({
       userId: user.id,
-      token,
+      token: hashAuthToken(token),
       expiresAt,
     });
 
@@ -332,7 +333,7 @@ router.post(
       .where(eq(passwordChangeTokensTable.userId, user.id));
     await db.insert(passwordChangeTokensTable).values({
       userId: user.id,
-      token,
+      token: hashAuthToken(token),
       newPasswordHash: passwordHash,
       expiresAt,
     });
@@ -347,7 +348,7 @@ router.post(
     if (!sent) {
       await db
         .delete(passwordChangeTokensTable)
-        .where(eq(passwordChangeTokensTable.token, token));
+        .where(eq(passwordChangeTokensTable.token, hashAuthToken(token)));
       res
         .status(503)
         .json({ error: "Не удалось отправить письмо подтверждения" });
@@ -462,7 +463,7 @@ router.get(
       .from(passwordChangeTokensTable)
       .where(
         and(
-          eq(passwordChangeTokensTable.token, token),
+          eq(passwordChangeTokensTable.token, hashAuthToken(token)),
           gt(passwordChangeTokensTable.expiresAt, new Date()),
         ),
       );
@@ -483,6 +484,14 @@ router.get(
       .delete(passwordChangeTokensTable)
       .where(eq(passwordChangeTokensTable.userId, changeToken.userId));
 
+    // Смена пароля аннулирует все сессии и «запомнить меня»-токены:
+    // украденная сессия не должна переживать смену пароля жертвой.
+    await db
+      .delete(userSessionsTable)
+      .where(sql`${userSessionsTable.sess}->>'userId' = ${String(changeToken.userId)}`);
+    const { revokeAllUserRememberTokens } = await import("../lib/remember-token-service");
+    await revokeAllUserRememberTokens(changeToken.userId);
+
     res.json({ message: "Пароль успешно изменен" });
   },
 );
@@ -496,7 +505,7 @@ router.get("/auth/verify/:token", async (req, res): Promise<void> => {
     .from(emailVerificationTokensTable)
     .where(
       and(
-        eq(emailVerificationTokensTable.token, token),
+        eq(emailVerificationTokensTable.token, hashAuthToken(token)),
         gt(emailVerificationTokensTable.expiresAt, new Date()),
       ),
     );
@@ -568,7 +577,7 @@ router.post(
 
       await db.insert(emailVerificationTokensTable).values({
         userId: user.id,
-        token,
+        token: hashAuthToken(token),
         expiresAt,
       });
 
@@ -639,7 +648,7 @@ router.post(
 
     await db.insert(passwordResetTokensTable).values({
       userId: user.id,
-      token,
+      token: hashAuthToken(token),
       expiresAt,
     });
 
@@ -683,7 +692,7 @@ router.post(
       .from(passwordResetTokensTable)
       .where(
         and(
-          eq(passwordResetTokensTable.token, token),
+          eq(passwordResetTokensTable.token, hashAuthToken(token)),
           gt(passwordResetTokensTable.expiresAt, new Date()),
         ),
       );
@@ -705,6 +714,14 @@ router.post(
     await db
       .delete(passwordResetTokensTable)
       .where(eq(passwordResetTokensTable.userId, resetToken.userId));
+
+    // Сброс пароля аннулирует все сессии и «запомнить меня»-токены:
+    // украденная сессия не должна переживать сброс пароля.
+    await db
+      .delete(userSessionsTable)
+      .where(sql`${userSessionsTable.sess}->>'userId' = ${String(resetToken.userId)}`);
+    const { revokeAllUserRememberTokens } = await import("../lib/remember-token-service");
+    await revokeAllUserRememberTokens(resetToken.userId);
 
     res.json({ message: "Пароль успешно обновлен" });
   },

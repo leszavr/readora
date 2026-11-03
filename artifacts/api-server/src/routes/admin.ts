@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import fs from "node:fs";
@@ -25,9 +25,11 @@ import {
   feedbackResponsesTable,
   externalStorageConnectionsTable,
   externalSyncJobsTable,
+  userSessionsTable,
 } from "@workspace/db";
 import { requireAdmin, requireSystemAdmin } from "../middlewares/auth";
 import { formatUser } from "./auth";
+import { z } from "zod/v4";
 import { FEEDBACK_PAIN_POINTS } from "./feedback";
 import {
   usersWithCompletedUploadsSql,
@@ -621,7 +623,7 @@ router.get("/admin/analytics/users", requireSystemAdmin, async (req, res): Promi
 });
 
 // GET /admin/users
-router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
+router.get("/admin/users", requireSystemAdmin, async (req, res): Promise<void> => {
   const { search, role, status } = req.query as Record<string, string>;
   const users = await db
     .select()
@@ -651,21 +653,41 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
   res.json(withCounts);
 });
 
+// Управление пользователями (создание, роли, пароли, блокировка) доступно
+// только системному администратору: moderator не может повысить себя,
+// создать бэкдор-аккаунт или сменить пароль любому пользователю.
+const adminUserCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(8).max(1024),
+  username: z.string().trim().min(2).max(80),
+  role: z.enum(["user", "moderator", "admin"]).optional().default("user"),
+});
+
+const adminUserUpdateSchema = z
+  .object({
+    username: z.string().trim().min(2).max(80).optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
+    role: z.enum(["user", "moderator", "admin"]).optional(),
+    status: z.enum(["active", "blocked"]).optional(),
+  })
+  .strict();
+
 // POST /admin/users
-router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
-  const { email, password, username, role } = req.body ?? {};
-  if (!email || !password || !username) {
-    res.status(400).json({ error: "Все поля обязательны" });
+router.post("/admin/users", requireSystemAdmin, async (req, res): Promise<void> => {
+  const parsed = adminUserCreateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Проверьте email, имя, пароль (от 8 символов) и роль" });
     return;
   }
-  const passwordHash = await bcrypt.hash(password, 10);
+  const { email, password, username, role } = parsed.data;
+  const passwordHash = await bcrypt.hash(password, 12);
   const [user] = await db
     .insert(usersTable)
     .values({
       email,
       username,
       passwordHash,
-      role: role ?? "user",
+      role,
       emailVerified: true,
       emailVerifiedAt: new Date(),
       analyticsOptIn: true,
@@ -681,7 +703,7 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
 // GET /admin/users/:id
 router.get(
   "/admin/users/:id",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
     const [user] = await db
@@ -703,10 +725,31 @@ router.get(
 // PATCH /admin/users/:id
 router.patch(
   "/admin/users/:id",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
-    const { username, email, role, status } = req.body ?? {};
+    const parsed = adminUserUpdateSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Некорректные поля пользователя" });
+      return;
+    }
+    const { username, email, role, status } = parsed.data;
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+    // Запрещаем фактическое изменение собственных роли/статуса — защита от
+    // само-блокировки и потери единственного администратора. Отправка
+    // неизменённых значений (фронт всегда шлёт role) — не нарушение.
+    const selfChange = id === (req as Request & { user: { id: number } }).user.id;
+    if (selfChange && ((role !== undefined && role !== existing.role) || (status !== undefined && status !== existing.status))) {
+      res.status(400).json({ error: "Нельзя изменять собственные роль или статус" });
+      return;
+    }
     const updates: Partial<typeof usersTable.$inferSelect> = {};
     if (username != null) updates.username = username;
     if (email != null) updates.email = email;
@@ -731,7 +774,7 @@ router.patch(
 // POST /admin/users/:id/verify-email - Force email verification by admin
 router.post(
   "/admin/users/:id/verify-email",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
     const [user] = await db
@@ -766,7 +809,7 @@ router.post(
 // POST /admin/users/:id/password
 router.post(
   "/admin/users/:id/password",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id) || id <= 0) {
@@ -803,6 +846,15 @@ router.post(
       .set({ passwordHash, updatedAt: new Date() })
       .where(eq(usersTable.id, id));
 
+    // Принудительный сброс — типичный сценарий компрометации аккаунта:
+    // сессии и «запомнить меня»-токены пользователя аннулируем, чтобы
+    // украденная сессия не пережила сброс пароля.
+    await db
+      .delete(userSessionsTable)
+      .where(sql`${userSessionsTable.sess}->>'userId' = ${String(id)}`);
+    const { revokeAllUserRememberTokens } = await import("../lib/remember-token-service");
+    await revokeAllUserRememberTokens(id);
+
     res.json({ message: "Пароль пользователя обновлен" });
   },
 );
@@ -810,9 +862,13 @@ router.post(
 // DELETE /admin/users/:id
 router.delete(
   "/admin/users/:id",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
+    if (id === (req as Request & { user: { id: number } }).user.id) {
+      res.status(400).json({ error: "Нельзя удалить собственный аккаунт" });
+      return;
+    }
     if (await userOwnsGiftSourcesInUse(id)) {
       res.status(409).json({ error: "У пользователя есть книги, выданные как подарочные издания. Сначала передайте или снимите их с публикации." });
       return;
@@ -825,9 +881,13 @@ router.delete(
 // POST /admin/users/:id/toggle-block
 router.post(
   "/admin/users/:id/toggle-block",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
+    if (id === (req as Request & { user: { id: number } }).user.id) {
+      res.status(400).json({ error: "Нельзя заблокировать собственный аккаунт" });
+      return;
+    }
     const [user] = await db
       .select()
       .from(usersTable)
@@ -919,10 +979,11 @@ router.get(
   },
 );
 
-// GET /admin/books/:id/download — скачать исходный файл книги (для проверки парсинга)
+// GET /admin/books/:id/download — скачать исходный файл книги (для проверки парсинга).
+// Только системный администратор: файлы приватных библиотек пользователей.
 router.get(
   "/admin/books/:id/download",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = Number.parseInt(String(req.params.id), 10);
     const [book] = await db.select().from(booksTable).where(eq(booksTable.id, id));
@@ -1055,6 +1116,30 @@ router.post(
 
 // GET /admin/settings
 const SENSITIVE_KEYS = new Set(["smtp_password", "smtpPassword"]);
+const SETTING_KEYS = new Set([
+  "siteName",
+  "allowRegistration",
+  "maxFileSizeMb",
+  "libraryStorageLimitMb",
+  "externalCacheBudgetMb",
+  "externalStorageEnabled",
+  "maintenanceMode",
+  "maintenanceReason",
+  "maintenanceEta",
+  "maintenanceMessage",
+  "smtp_host",
+  "smtp_port",
+  "smtp_user",
+  "smtp_password",
+  "smtpPassword",
+  "smtp_from",
+  "smtp_secure",
+  "smtp_enabled",
+  "app_base_url",
+  "feedbackEmail",
+  "feedback_email",
+  "emailSaveToFiles",
+]);
 
 router.get(
   "/admin/settings",
@@ -1102,7 +1187,7 @@ function normalizeSettingValue(value: unknown): string | null {
 
 router.patch(
   "/admin/settings",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const updates = req.body ?? {};
     const maxFileSizeMb = updates.maxFileSizeMb === undefined
@@ -1143,6 +1228,9 @@ router.patch(
     let smtpTouched = false;
 
     for (const [key, value] of Object.entries(updates)) {
+      // Записываем только известные ключи: произвольные ключи в app_settings
+      // могут менять поведение сервисов (emailService и др.).
+      if (!SETTING_KEYS.has(key)) continue;
       const strVal = normalizeSettingValue(value);
       // Пароли: не затирать пустым значением (фронт не получает пароль при GET)
       if (SENSITIVE_KEYS.has(key) && (strVal === null || strVal.length === 0))
@@ -1215,7 +1303,7 @@ router.get("/public/registration-status", async (_req, res): Promise<void> => {
 // POST /admin/smtp/test — отправить тестовое письмо текущими настройками из БД
 router.post(
   "/admin/smtp/test",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     let to = "";
     if (typeof req.body?.to === "string") {
@@ -1358,7 +1446,7 @@ router.delete(
 // GET /admin/saved-emails - список сохранённых писем
 router.get(
   "/admin/saved-emails",
-  requireAdmin,
+  requireSystemAdmin,
   async (_req, res): Promise<void> => {
     const emails = await emailService.getSavedEmails();
     res.json(emails);
@@ -1368,7 +1456,7 @@ router.get(
 // GET /admin/saved-emails/:id - просмотр конкретного письма
 router.get(
   "/admin/saved-emails/:id",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = String(req.params.id);
     const email = await emailService.getSavedEmail(id);
@@ -1385,7 +1473,7 @@ router.get(
 // DELETE /admin/saved-emails/:id - удалить конкретное письмо
 router.delete(
   "/admin/saved-emails/:id",
-  requireAdmin,
+  requireSystemAdmin,
   async (req, res): Promise<void> => {
     const id = String(req.params.id);
     const deleted = await emailService.deleteSavedEmail(id);
@@ -1402,7 +1490,7 @@ router.delete(
 // DELETE /admin/saved-emails - очистить все письма
 router.delete(
   "/admin/saved-emails",
-  requireAdmin,
+  requireSystemAdmin,
   async (_req, res): Promise<void> => {
     const count = await emailService.clearSavedEmails();
     res.json({ deleted: count });

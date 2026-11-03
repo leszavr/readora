@@ -21,6 +21,11 @@ const router = Router();
 
 ensureStorageDirs();
 
+// Лимит обложки при PATCH /books/:id: multipart-загрузка не подпадает под
+// лимит express.json, а без ограничения любой пользователь мог занять
+// память процесса файлом произвольного размера.
+const MAX_COVER_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 const storage = multer.memoryStorage();
 const bookUploadFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -42,7 +47,9 @@ const bookUploadFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
 
     cb(new Error("Неподдерживаемый тип файла"));
   };
-const upload = multer({ storage, fileFilter: bookUploadFileFilter });
+// Экземпляр используется только для cover-загрузки в PATCH /books/:id
+// (загрузка книг идёт через uploadBookFile с квотными лимитами).
+const upload = multer({ storage, fileFilter: bookUploadFileFilter, limits: { fileSize: MAX_COVER_UPLOAD_BYTES } });
 
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
 
@@ -126,6 +133,12 @@ function coerceText(value: unknown): string | undefined {
   return undefined;
 }
 
+// Пользовательские текстовые поля книг ограничиваем по длине.
+function boundedText(value: unknown, max: number): string | undefined {
+  const text = coerceText(value);
+  return text === undefined ? undefined : text.slice(0, max);
+}
+
 function parseNullableInt(value: unknown): number | null | undefined {
   if (value === null || value === "null" || value === "") return null;
   return parseOptionalNumber(value);
@@ -177,10 +190,10 @@ async function applyBookUpdates(params: {
   const { book, body, file } = params;
   const updates: Partial<typeof booksTable.$inferSelect> = {};
 
-  const title = coerceText(body.title);
-  const author = coerceText(body.author);
-  const description = coerceText(body.description);
-  const language = coerceText(body.language);
+  const title = boundedText(body.title, 500);
+  const author = boundedText(body.author, 300);
+  const description = boundedText(body.description, 5000);
+  const language = boundedText(body.language, 20);
 
   if (title !== undefined) updates.title = title;
   if (body.author !== undefined) updates.author = author ?? null;

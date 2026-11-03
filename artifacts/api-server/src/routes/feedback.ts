@@ -9,17 +9,34 @@ import {
   usersTable,
 } from "@workspace/db";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { emailService } from "../lib/email-service";
+import { emailService, escapeHtml } from "../lib/email-service";
 import { requireAuth } from "../middlewares/auth";
+import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 
 const router: IRouter = Router();
 
 const feedbackSchema = z.object({
-  name: z.string().optional(),
+  name: z.string().trim().max(100).optional(),
   email: z.string().email("Некорректный email адрес"),
-  subject: z.string().optional(),
-  message: z.string().min(1, "Сообщение не может быть пустым"),
+  subject: z.string().trim().max(200).optional(),
+  message: z.string().min(1, "Сообщение не может быть пустым").max(5000),
+});
+
+// Публичные роуты: ограничиваем частоту, иначе письмо-флудинг и спам-записи.
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много обращений. Попробуйте позже" },
+});
+const surveyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много ответов. Попробуйте позже" },
 });
 
 // Формулировки вариантов зафиксированы требованиями к опросу.
@@ -93,7 +110,7 @@ function createSurveySchema(isAuthenticated: boolean) {
 }
 
 // POST /api/feedback - публичный endpoint для отправки обратной связи
-router.post("/feedback", async (req, res): Promise<void> => {
+router.post("/feedback", feedbackLimiter, async (req, res): Promise<void> => {
   try {
     const validated = feedbackSchema.parse(req.body);
 
@@ -131,7 +148,7 @@ ${validated.message}
 Отправлено: ${new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}
     `.trim();
 
-    // Отправляем email
+    // Отправляем email (значения экранируем: они попадают в HTML письма)
     await emailService.sendEmail({
       to: feedbackEmail,
       subject: emailSubject,
@@ -139,11 +156,11 @@ ${validated.message}
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Новое сообщение через форму обратной связи</h2>
-          ${validated.name ? `<p><strong>От:</strong> ${validated.name}</p>` : ""}
-          <p><strong>Email:</strong> ${validated.email}</p>
-          ${validated.subject ? `<p><strong>Тема:</strong> ${validated.subject}</p>` : ""}
+          ${validated.name ? `<p><strong>От:</strong> ${escapeHtml(validated.name)}</p>` : ""}
+          <p><strong>Email:</strong> ${escapeHtml(validated.email)}</p>
+          ${validated.subject ? `<p><strong>Тема:</strong> ${escapeHtml(validated.subject)}</p>` : ""}
           <div style="margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-left: 4px solid #007bff;">
-            <p style="margin: 0; white-space: pre-wrap;">${validated.message}</p>
+            <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(validated.message)}</p>
           </div>
           <p style="margin-top: 20px; color: #666; font-size: 12px;">
             Отправлено: ${new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}
@@ -256,7 +273,7 @@ router.get("/feedback/survey/eligibility", requireAuth, async (req, res): Promis
 });
 
 // POST /api/feedback/survey - публичный endpoint опроса оценки сайта.
-router.post("/feedback/survey", async (req, res): Promise<void> => {
+router.post("/feedback/survey", surveyLimiter, async (req, res): Promise<void> => {
   const userId = req.session.userId ?? null;
 
   try {

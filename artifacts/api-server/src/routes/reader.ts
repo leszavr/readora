@@ -168,7 +168,9 @@ router.put("/books/:id/progress", requireAuth, async (req, res): Promise<void> =
     ? currentChapterId
     : null;
   const normalizedCurrentPosition = typeof currentPosition === "string"
-    ? currentPosition
+    // Позиция — сериализованный маркер чтения; ограничиваем длину, чтобы
+    // авторисейв прогресса не раздувал БД произвольными данными.
+    ? currentPosition.slice(0, 8000)
     : null;
   const normalizedProgressPercent = typeof progressPercent === "number" && Number.isFinite(progressPercent)
     ? progressPercent

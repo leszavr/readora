@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import AdmZip from "adm-zip";
+import * as cheerio from "cheerio";
 import {
   parseBook,
   validateBookFile,
@@ -575,6 +576,26 @@ test("CBZ без картинок отклоняется", () => {
   const zip = new AdmZip();
   zip.addFile("readme.txt", Buffer.from("empty"));
   assert.throws(() => parseBook(zip.toBuffer(), "cbz"), /не содержит изображений/);
+});
+
+test("CBZ: имя файла с кавычками не инъектирует атрибуты в htmlContent", () => {
+  const zip = new AdmZip();
+  zip.addFile(
+    'page" onerror="alert(1)" data-x=".gif',
+    Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
+  );
+  zip.addFile("normal.gif", Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"));
+  const parsed = parseBook(zip.toBuffer(), "cbz");
+
+  const html = parsed.chapters[0].htmlContent;
+  const $ = cheerio.load(`<div>${html}</div>`);
+  assert.equal($("img").length, 2);
+  assert.equal($("img[onerror]").length, 0, "onerror не должен становиться атрибутом img");
+  assert.equal(
+    $("img").last().attr("alt"),
+    'Страница page" onerror="alert(1)" data-x=".gif',
+    "имя файла экранируется и остаётся текстом внутри alt",
+  );
 });
 
 // ─── Тесты FB2 в zip-контейнере (.fb2.zip / .fbz) ─────────────────────────────

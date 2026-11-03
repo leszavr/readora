@@ -1784,7 +1784,10 @@ function parseCBZ(buffer: Buffer, options: ParseBookOptions = {}): ParsedBook {
       const mime = CBZ_IMAGE_MIME_BY_EXT[path.posix.extname(entry.entryName).toLowerCase()];
       const data = zip.readFile(entry);
       if (!data || data.length === 0) continue;
-      images.push(`<img src="data:${mime};base64,${data.toString("base64")}" alt="Страница ${entry.entryName}" class="cbz-page">`);
+      // entryName — пользовательские данные из архива: экранируем, иначе
+      // имя файла с кавычками инъектирует атрибуты/разметку в htmlContent
+      // (CBZ-главы не проходят через sanitize()).
+      images.push(`<img src="data:${mime};base64,${data.toString("base64")}" alt="Страница ${escapeHtml(entry.entryName)}" class="cbz-page">`);
     }
     if (images.length === 0) continue;
     const pageNumber = start + 1;

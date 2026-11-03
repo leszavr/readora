@@ -21,6 +21,7 @@ export default function AdminSettings() {
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [externalStorage, setExternalStorage] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -41,7 +42,11 @@ export default function AdminSettings() {
     mutation: {
       onSuccess: () => {
         setSaved(true);
+        setSaveError(null);
         setTimeout(() => setSaved(false), 3000);
+      },
+      onError: (error: unknown) => {
+        setSaveError(error instanceof Error && error.message ? error.message : "Не удалось сохранить настройки");
       },
     },
   });
@@ -203,6 +208,7 @@ export default function AdminSettings() {
       </Card>
 
       {saved && <p className="text-sm text-green-600">Настройки сохранены</p>}
+      {saveError && <p className="text-sm text-destructive">{saveError}</p>}
 
       <Button type="submit" disabled={isPending || libraryStorageLimit < maxSize} className="gap-2">
         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

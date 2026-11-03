@@ -37,6 +37,7 @@ export default function AdminUsers() {
   const [editPassword, setEditPassword] = useState("");
   const [editPasswordVisible, setEditPasswordVisible] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Create form
   const [newEmail, setNewEmail] = useState("");
@@ -54,7 +55,12 @@ export default function AdminUsers() {
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
 
   const { mutate: createUser, isPending: creating } = useCreateAdminUser({
-    mutation: { onSuccess: () => { invalidate(); setCreateOpen(false); setNewEmail(""); setNewUsername(""); setNewPassword(""); setNewRole("user"); } },
+    mutation: {
+      onSuccess: () => { invalidate(); setCreateOpen(false); setNewEmail(""); setNewUsername(""); setNewPassword(""); setNewRole("user"); setCreateError(null); },
+      onError: (error: unknown) => {
+        setCreateError(error instanceof Error && error.message ? error.message : "Не удалось создать пользователя");
+      },
+    },
   });
 
   const { mutateAsync: updateUser, isPending: updating } = useUpdateAdminUser({
@@ -247,7 +253,7 @@ export default function AdminUsers() {
           <form onSubmit={(e) => { e.preventDefault(); createUser({ data: { email: newEmail, username: newUsername, password: newPassword, role: newRole } }); }} className="space-y-4">
             <div className="space-y-2"><Label>Имя</Label><Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} required /></div>
             <div className="space-y-2"><Label>Email</Label><Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required /></div>
-            <div className="space-y-2"><Label>Пароль</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} /></div>
+            <div className="space-y-2"><Label>Пароль</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} /></div>
             <div className="space-y-2">
               <Label>Роль</Label>
                 <Select value={newRole} onValueChange={(value) => setNewRole(value as AdminUserCreateRole)}>
@@ -260,9 +266,10 @@ export default function AdminUsers() {
               </Select>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Отмена</Button>
-              <Button type="submit" disabled={creating}>{creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}Создать</Button>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Отмена</Button>
+              <Button type="submit" disabled={creating}>{creating ? "Создание..." : "Создать"}</Button>
             </DialogFooter>
+            {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
           </form>
         </DialogContent>
       </Dialog>

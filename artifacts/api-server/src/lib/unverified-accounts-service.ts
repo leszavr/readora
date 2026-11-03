@@ -14,6 +14,7 @@ import {
 import { emailService } from "./email-service";
 import { deleteStoredFilesIfUnreferenced } from "./book-deletion-service";
 import { resolveUploadPath } from "./storage";
+import { hashAuthToken } from "./token-hash";
 import { logger } from "./logger";
 
 const REMINDER_AFTER_DAYS = 30;
@@ -76,7 +77,7 @@ async function sendVerificationReminders(): Promise<number> {
           .where(eq(emailVerificationTokensTable.userId, user.id));
         await tx.insert(emailVerificationTokensTable).values({
           userId: user.id,
-          token,
+          token: hashAuthToken(token),
           expiresAt,
         });
       });

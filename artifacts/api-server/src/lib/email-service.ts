@@ -46,6 +46,27 @@ function extractErrorCode(error: unknown): string | undefined {
   return typeof candidate === "string" ? candidate : undefined;
 }
 
+// Пользовательские строки (username и т.п.) интерполируются в HTML-шаблоны
+// писем — экранируем, иначе возможна HTML-инъекция в письмо.
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+}
+
 function extractErrorResponse(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return undefined;
   const candidate = (error as { response?: unknown }).response;
@@ -273,7 +294,7 @@ class EmailService {
     const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
     const verifyUrl = `${normalizedBaseUrl}/verify/${token}`;
     const html = await this.loadTemplate("email-verification", {
-      username,
+      username: escapeHtml(username),
       verifyUrl,
       logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
     });
@@ -290,7 +311,7 @@ class EmailService {
     const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
     const verifyUrl = `${normalizedBaseUrl}/verify/${token}`;
     const html = await this.loadTemplate("email-verification-reminder", {
-      username,
+      username: escapeHtml(username),
       verifyUrl,
       logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
     });
@@ -307,7 +328,7 @@ class EmailService {
     const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
     const resetUrl = `${normalizedBaseUrl}/reset-password/${token}`;
     const html = await this.loadTemplate("password-reset", {
-      username,
+      username: escapeHtml(username),
       resetUrl,
       logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
     });
@@ -324,7 +345,7 @@ class EmailService {
     const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
     const confirmUrl = `${normalizedBaseUrl}/confirm-password-change/${token}`;
     const html = await this.loadTemplate("password-change-confirmation", {
-      username,
+      username: escapeHtml(username),
       confirmUrl,
       logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
     });
@@ -372,8 +393,12 @@ class EmailService {
       return html;
     } catch (error) {
       console.error(`[EmailService] Failed to load template ${templateName}:`, error);
-      // Fallback to plain text
-      return `<html><body><pre>${JSON.stringify(vars, null, 2)}</pre></body></html>`;
+      // Fallback to plain text (экранируем <, >, & — vars содержат пользовательские строки)
+      const json = JSON.stringify(vars, null, 2)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<html><body><pre>${json}</pre></body></html>`;
     }
   }
 

@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { asc, eq, sql } from "drizzle-orm";
 import { db, booksTable, giftEditionsTable, type usersTable } from "@workspace/db";
-import { requireAdmin, requireAuth } from "../middlewares/auth";
+import { requireAdmin, requireAuth, requireSystemAdmin } from "../middlewares/auth";
 import { countAvailableGiftEditions, grantGiftEditions, resolveGiftSourceBook } from "../lib/gift-editions-service";
 
 const router = Router();
@@ -56,12 +56,15 @@ router.post("/gift-editions/claim", requireAuth, async (req, res): Promise<void>
 });
 
 // --- Администратор ---
+// Управление изданиями (публикация чужих книг, снятие с публикации) — только
+// системный администратор: moderator не может раскрыть приватную книгу
+// пользователя всем пользователям.
 
 router.get("/admin/gift-editions", requireAdmin, async (_req, res): Promise<void> => {
   res.json(await listEditions());
 });
 
-router.post("/admin/gift-editions", requireAdmin, async (req, res): Promise<void> => {
+router.post("/admin/gift-editions", requireSystemAdmin, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const bookId = parseId(req.body?.bookId);
   const sortOrder = parseSortOrder(req.body?.sortOrder);
@@ -85,7 +88,7 @@ router.post("/admin/gift-editions", requireAdmin, async (req, res): Promise<void
   res.status(201).json((await listEditions()).find((item) => item.id === edition.id));
 });
 
-router.patch("/admin/gift-editions/:id", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/admin/gift-editions/:id", requireSystemAdmin, async (req, res): Promise<void> => {
   const id = parseId(req.params.id);
   if (!id) { res.status(400).json({ error: "Некорректный идентификатор" }); return; }
 
@@ -103,7 +106,7 @@ router.patch("/admin/gift-editions/:id", requireAdmin, async (req, res): Promise
 });
 
 // Убирает книгу из списка выдачи. Уже выданные копии и каноническая книга остаются.
-router.delete("/admin/gift-editions/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/admin/gift-editions/:id", requireSystemAdmin, async (req, res): Promise<void> => {
   const id = parseId(req.params.id);
   if (!id) { res.status(400).json({ error: "Некорректный идентификатор" }); return; }
   const [edition] = await db.delete(giftEditionsTable).where(eq(giftEditionsTable.id, id)).returning();

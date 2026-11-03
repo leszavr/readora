@@ -1,6 +1,8 @@
 import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
+// token хранит sha256-хэш (hex) исходного значения из письма:
+// при утечке дампа БД токены нельзя применить (миграция 0030).
 export const emailVerificationTokensTable = pgTable("email_verification_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
