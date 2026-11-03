@@ -19,14 +19,22 @@ import { isExternalStorageEnabled, externalStorageDisabledMessage } from "./feat
 
 const CACHE_BUDGET_SETTING_KEY = "externalCacheBudgetMb";
 const DEFAULT_CACHE_BUDGET_MB = 2048;
+const PER_USER_CACHE_BUDGET_SETTING_KEY = "externalCachePerUserBudgetMb";
+const DEFAULT_PER_USER_CACHE_BUDGET_MB = 1024;
 const ACCESSED_AT_REFRESH_MS = 60 * 60 * 1000;
 
-// Единственное место задания лимита — настройка externalCacheBudgetMb в
-// админке: без верхнего предела, чтобы при переезде на больший диск не было
-// бутылочного горлышка. Некорректное значение — откат к дефолту.
+// Единственное место задания лимитов — настройки externalCacheBudgetMb и
+// externalCachePerUserBudgetMb в админке: без верхнего предела, чтобы при
+// переезде на больший диск не было бутылочного горлышка. Некорректное
+// значение — откат к дефолту.
 function parseBudgetMb(value: string | null | undefined): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_CACHE_BUDGET_MB;
+}
+
+function parsePerUserBudgetMb(value: string | null | undefined): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PER_USER_CACHE_BUDGET_MB;
 }
 
 export async function getExternalCacheBudgetBytes(): Promise<number> {
@@ -35,6 +43,14 @@ export async function getExternalCacheBudgetBytes(): Promise<number> {
     .from(appSettingsTable)
     .where(eq(appSettingsTable.key, CACHE_BUDGET_SETTING_KEY));
   return parseBudgetMb(row?.value) * 1024 * 1024;
+}
+
+async function getPerUserCacheBudgetBytes(ownerUserId: number): Promise<number> {
+  const [row] = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, PER_USER_CACHE_BUDGET_SETTING_KEY));
+  return parsePerUserBudgetMb(row?.value) * 1024 * 1024;
 }
 
 export function chaptersContentBytes(htmlContents: string[]): number {
@@ -84,6 +100,9 @@ async function restoreBookContent(book: Book): Promise<number> {
 
   const { credentials } = await loadConnectionCredentials(connection);
   const buffer = await downloadExternalFile(credentials, book.externalPath ?? "/");
+  // Без файловых лимитов парсера: книга уже прошла парсинг при импорте до
+  // введения лимитов синхронизации — повторный отказ сделал бы её нечитаемой.
+  // Размер скачивания при этом ограничен драйвером (DOWNLOAD_MAX_BYTES).
   const parsed = parseBook(buffer, book.format as BookFormat, { sizeLimits: { maxFileBytes: null } });
   await upsertBookChapters(book.id, parsed.chapters);
   return chaptersContentBytes(parsed.chapters.map((ch) => ch.htmlContent));
@@ -134,26 +153,64 @@ export async function ensureBookContentCached(bookId: number): Promise<void> {
     .set({ contentCacheBytes: contentBytes, contentAccessedAt: new Date(), externalMissing: false })
     .where(eq(booksTable.id, book.id));
 
-  await evictExternalContentCacheIfNeeded().catch(() => undefined);
+  await evictExternalContentCacheIfNeeded(book.ownerUserId).catch(() => undefined);
 }
 
-// Выселение контента внешних книг по LRU до глобального бюджета.
-export async function evictExternalContentCacheIfNeeded(): Promise<void> {
+// Выселение контента внешних книг по LRU: глобально до общего бюджета
+// (externalCacheBudgetMb) и, для указанного владельца, до его персонального
+// бюджета (externalCachePerUserBudgetMb) — иначе один пользователь с тысячей
+// больших книг занял бы весь кэш и вымывал контент остальных.
+export async function evictExternalContentCacheIfNeeded(ownerUserId?: number): Promise<void> {
   const budgetBytes = await getExternalCacheBudgetBytes();
   const [totalRow] = await db
     .select({ total: sql<number>`coalesce(sum(${booksTable.contentCacheBytes}), 0)::bigint` })
     .from(booksTable)
     .where(and(isNotNull(booksTable.externalProvider), sql`${booksTable.contentCacheBytes} > 0`));
   let total = Number(totalRow?.total ?? 0);
-  if (total <= budgetBytes) return;
+  if (total > budgetBytes) {
+    const candidates = await db
+      .select({ id: booksTable.id, bytes: booksTable.contentCacheBytes })
+      .from(booksTable)
+      .where(and(isNotNull(booksTable.externalProvider), sql`${booksTable.contentCacheBytes} > 0`))
+      .orderBy(asc(booksTable.contentAccessedAt));
+    total = await evictCandidates(candidates, total, budgetBytes);
+  }
 
-  const candidates = await db
+  if (ownerUserId === undefined) return;
+  const perUserBudgetBytes = await getPerUserCacheBudgetBytes(ownerUserId);
+  const [userRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${booksTable.contentCacheBytes}), 0)::bigint` })
+    .from(booksTable)
+    .where(and(
+      eq(booksTable.ownerUserId, ownerUserId),
+      isNotNull(booksTable.externalProvider),
+      sql`${booksTable.contentCacheBytes} > 0`,
+    ));
+  let userTotal = Number(userRow?.total ?? 0);
+  if (userTotal <= perUserBudgetBytes) return;
+
+  const userCandidates = await db
     .select({ id: booksTable.id, bytes: booksTable.contentCacheBytes })
     .from(booksTable)
-    .where(and(isNotNull(booksTable.externalProvider), sql`${booksTable.contentCacheBytes} > 0`))
+    .where(and(
+      eq(booksTable.ownerUserId, ownerUserId),
+      isNotNull(booksTable.externalProvider),
+      sql`${booksTable.contentCacheBytes} > 0`,
+    ))
     .orderBy(asc(booksTable.contentAccessedAt));
+  await evictCandidates(userCandidates, userTotal, perUserBudgetBytes);
+}
 
-  for (const candidate of candidates) {
+async function evictCandidates(
+  candidates: { id: number; bytes: number }[],
+  totalBytes: number,
+  budgetBytes: number,
+): Promise<number> {
+  let total = totalBytes;
+  // Самую свежую книгу (последнюю по contentAccessedAt) не выселяем: если она
+  // одна превышает бюджет, выселение сразу после восстановления устроило бы
+  // цикл «скачать — выселить — скачать».
+  for (const candidate of candidates.slice(0, -1)) {
     if (total <= budgetBytes) break;
     await db
       .update(chaptersTable)
@@ -165,4 +222,5 @@ export async function evictExternalContentCacheIfNeeded(): Promise<void> {
       .where(eq(booksTable.id, candidate.id));
     total -= candidate.bytes;
   }
+  return total;
 }

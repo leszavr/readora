@@ -54,9 +54,15 @@ const FAILURE_MESSAGE_MAX = 500;
 // после перезапуска сервера) и помечается failed.
 const STALE_ACTIVE_MS = 10 * 60 * 1000;
 
-// Синхронизация скачивает файлы из доверенного облака пользователя, файловые
-// лимиты квоты к ней не применяются (размер контролирует драйвер).
-const SYNC_PARSE_OPTIONS = { sizeLimits: { maxFileBytes: null } };
+// Синхронизация скачивает файлы из доверенного облака пользователя, поэтому
+// файловые лимиты квоты (maxFileSizeMb) к ней не применяются. Но размер одного
+// файла всё равно ограничен: парсинг гигантской книги раздувает heap и валит
+// весь сервер (OOM + core dump). Значение совпадает с базовым лимитом парсера.
+const MAX_SYNC_FILE_BYTES = 50 * 1024 * 1024;
+// Проверка бюджета кэша во время синхронизации: между проверками должно
+// накопиться столько нового контента, иначе каждый файл давал бы лишние
+// запросы к БД.
+const CACHE_EVICTION_CHECK_BYTES = 64 * 1024 * 1024;
 
 type BookFile = { entry: ExternalFileEntry; format: BookFormat; explicitZip: boolean };
 
@@ -317,7 +323,7 @@ export async function runExternalSyncJob(jobId: number): Promise<void> {
       .set({ lastSyncedAt: new Date() })
       .where(eq(externalStorageConnectionsTable.id, connection.id));
     await updateSyncJob(jobId, { status: "completed", progress: 100, completedAt: new Date() });
-    await evictExternalContentCacheIfNeeded().catch(() => undefined);
+    await evictExternalContentCacheIfNeeded(job.ownerUserId).catch(() => undefined);
   } catch (e) {
     if (e instanceof SyncControlledStop) {
       // Пауза/отмена: статус уже выставлен, фиксируем накопленные счётчики.
@@ -379,6 +385,7 @@ async function syncConnection(
   let missing = 0;
   let failed = 0;
   let recordedFailures = 0;
+  let pendingCacheBytes = 0;
   const seenPaths = new Set<string>();
 
   for (let i = 0; i < files.length; i++) {
@@ -399,6 +406,11 @@ async function syncConnection(
       // Touch джобы перед потенциально долгим скачиванием, чтобы контроль
       // зависания (10 минут без обновлений) не сработал ложно.
       await updateSyncJob(jobId, { updatedAt: new Date() });
+      // Слишком большой файл не скачиваем вовсе: буфер целиком попадает в
+      // память, а парсинг такого файла валит процесс по OOM.
+      if (entry.size > MAX_SYNC_FILE_BYTES) {
+        throw new Error(`Файл превышает лимит синхронизации (${Math.round(MAX_SYNC_FILE_BYTES / 1024 / 1024)} МБ)`);
+      }
       const buffer = await downloadExternalFile(credentials, entry.path);
       const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
 
@@ -468,7 +480,11 @@ async function syncConnection(
         }
         parseBuffer = xml;
       }
-      const parsed = parseBook(parseBuffer, format, SYNC_PARSE_OPTIONS);
+      // Парсинг с базовыми лимитами парсера (50 МБ на файл/XML, лимиты
+      // распаковки и записей): без них один большой файл раздувает heap
+      // процесса до OOM. Дефолтные лимиты, а не квота пользователя, —
+      // файлы остаются в облаке владельца и квоту не расходуют.
+      const parsed = parseBook(parseBuffer, format);
       const contentBytes = chaptersContentBytes(parsed.chapters.map((ch) => ch.htmlContent));
 
       if (existing) {
@@ -550,6 +566,15 @@ async function syncConnection(
             properties: { format, source: "external_sync" },
           }).catch(() => undefined);
         }
+      }
+
+      // Кэш контента проверяем не раз в файл, а по накоплению: длинная
+      // синхронизация без промежуточных выселений раздувает chapters
+      // на гигабайты, а при падении джобы выселение вообще не случится.
+      pendingCacheBytes += contentBytes;
+      if (pendingCacheBytes >= CACHE_EVICTION_CHECK_BYTES) {
+        pendingCacheBytes = 0;
+        await evictExternalContentCacheIfNeeded(connection.ownerUserId).catch(() => undefined);
       }
     } catch (e) {
       if (e instanceof ExternalStorageError && e.kind === "auth") throw e;

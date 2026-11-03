@@ -3716,6 +3716,8 @@ components:
           type: integer
         externalCacheBudgetMb:
           type: integer
+        externalCachePerUserBudgetMb:
+          type: integer
         externalStorageEnabled:
           type: boolean
         smtpHost:
@@ -3755,6 +3757,9 @@ components:
           minimum: 1
           maximum: 102400
         externalCacheBudgetMb:
+          type: integer
+          minimum: 1
+        externalCachePerUserBudgetMb:
           type: integer
           minimum: 1
         externalStorageEnabled:

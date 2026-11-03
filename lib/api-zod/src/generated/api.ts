@@ -1433,6 +1433,7 @@ export const GetAppSettingsResponse = zod.object({
   "maxFileSizeMb": zod.number().optional(),
   "libraryStorageLimitMb": zod.number().optional(),
   "externalCacheBudgetMb": zod.number().optional(),
+  "externalCachePerUserBudgetMb": zod.number().optional(),
   "externalStorageEnabled": zod.boolean().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
@@ -1457,12 +1458,14 @@ export const updateAppSettingsBodyLibraryStorageLimitMbMax = 102400;
 
 
 
+
 export const UpdateAppSettingsBody = zod.object({
   "siteName": zod.string().optional(),
   "allowRegistration": zod.boolean().optional(),
   "maxFileSizeMb": zod.number().min(1).max(updateAppSettingsBodyMaxFileSizeMbMax).optional(),
   "libraryStorageLimitMb": zod.number().min(1).max(updateAppSettingsBodyLibraryStorageLimitMbMax).optional(),
   "externalCacheBudgetMb": zod.number().min(1).optional(),
+  "externalCachePerUserBudgetMb": zod.number().min(1).optional(),
   "externalStorageEnabled": zod.boolean().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),
@@ -1483,6 +1486,7 @@ export const UpdateAppSettingsResponse = zod.object({
   "maxFileSizeMb": zod.number().optional(),
   "libraryStorageLimitMb": zod.number().optional(),
   "externalCacheBudgetMb": zod.number().optional(),
+  "externalCachePerUserBudgetMb": zod.number().optional(),
   "externalStorageEnabled": zod.boolean().optional(),
   "smtpHost": zod.string().nullish(),
   "smtpPort": zod.number().nullish(),

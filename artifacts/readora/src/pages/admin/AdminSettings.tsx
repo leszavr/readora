@@ -15,6 +15,7 @@ export default function AdminSettings() {
   const [maxSize, setMaxSize] = useState(50);
   const [libraryStorageLimit, setLibraryStorageLimit] = useState(1024);
   const [externalCacheBudget, setExternalCacheBudget] = useState(2048);
+  const [externalCachePerUserBudget, setExternalCachePerUserBudget] = useState(1024);
   const [maintenance, setMaintenance] = useState(false);
   const [maintenanceReason, setMaintenanceReason] = useState("");
   const [maintenanceEta, setMaintenanceEta] = useState("");
@@ -30,6 +31,7 @@ export default function AdminSettings() {
       setMaxSize(settings.maxFileSizeMb ?? 50);
       setLibraryStorageLimit(settings.libraryStorageLimitMb ?? 1024);
       setExternalCacheBudget(settings.externalCacheBudgetMb ?? 2048);
+      setExternalCachePerUserBudget(settings.externalCachePerUserBudgetMb ?? 1024);
       setMaintenance(settings.maintenanceMode ?? false);
       setMaintenanceReason(settings.maintenanceReason ?? "");
       setMaintenanceEta(settings.maintenanceEta ?? "");
@@ -61,6 +63,7 @@ export default function AdminSettings() {
         maxFileSizeMb: maxSize,
         libraryStorageLimitMb: libraryStorageLimit,
         externalCacheBudgetMb: externalCacheBudget,
+        externalCachePerUserBudgetMb: externalCachePerUserBudget,
         externalStorageEnabled: externalStorage,
         maintenanceMode: maintenance,
         maintenanceReason: maintenanceReason || null,
@@ -123,6 +126,20 @@ export default function AdminSettings() {
               Суммарный размер кэша контента глав книг из внешних хранилищ на сервере. При превышении
               наименее недавно читаемые книги выгружаются из кэша. Верхнего предела нет — ориентируйтесь
               на объём диска сервера.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Бюджет кэша на пользователя (МБ)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={externalCachePerUserBudget}
+              onChange={(e) => setExternalCachePerUserBudget(Number.parseInt(e.target.value, 10) || 1024)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Лимит кэша контента внешних книг для одного пользователя: синхронизация с сотнями
+              больших книг не займёт весь кэш и не вытеснит контент остальных. Превышение
+              выгружается по LRU у самого пользователя.
             </p>
           </div>
           <div className="flex items-center justify-between py-2">

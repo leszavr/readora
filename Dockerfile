@@ -68,4 +68,7 @@ USER nodejs
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "node ./lib/db/scripts/migrate-unified.mjs apply && exec node --enable-source-maps ./dist/index.mjs"]
+# ulimit -c 0 отключает core dump: при падении процесса (например, OOM при
+# парсинге) дамп размером в гигабайты писался в writable-слой контейнера
+# и заполнял диск сервера.
+CMD ["sh", "-c", "ulimit -c 0 && node ./lib/db/scripts/migrate-unified.mjs apply && exec node --enable-source-maps ./dist/index.mjs"]

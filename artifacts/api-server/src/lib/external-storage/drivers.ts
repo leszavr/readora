@@ -113,6 +113,22 @@ async function listYandexFolder(credentials: YandexDiskCredentials, folderPath: 
   return items.map(yandexEntry);
 }
 
+// Читает тело ответа как буфер с проверкой размера: content-length — до
+// скачивания (гигантский файл не грузится в память целиком), фактический
+// размер — как страховка от отсутствующего/лгущего заголовка.
+// Экспортировано для юнит-тестов.
+export async function readDownloadBody(res: Response): Promise<Buffer> {
+  const contentLength = Number(res.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > DOWNLOAD_MAX_BYTES) {
+    throw new ExternalStorageError("invalid_response", "Файл внешнего хранилища превышает допустимый размер");
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.byteLength > DOWNLOAD_MAX_BYTES) {
+    throw new ExternalStorageError("invalid_response", "Файл внешнего хранилища превышает допустимый размер");
+  }
+  return buffer;
+}
+
 async function downloadYandexFile(credentials: YandexDiskCredentials, filePath: string): Promise<Buffer> {
   const link = (await yandexRequest(`/resources/download?path=${encodeURIComponent(filePath)}`, credentials)) as {
     href?: string;
@@ -120,7 +136,7 @@ async function downloadYandexFile(credentials: YandexDiskCredentials, filePath: 
   if (!link.href) throw new ExternalStorageError("invalid_response", "Яндекс.Диск: пустая ссылка на скачивание");
   const res = await fetchWithTimeout(link.href, {});
   if (!res.ok) throw errorFromStatus(res.status, "Яндекс.Диск", "download");
-  return Buffer.from(await res.arrayBuffer());
+  return readDownloadBody(res);
 }
 
 // --- Облако Mail.ru (WebDAV) ---
@@ -205,11 +221,7 @@ async function downloadMailRuFile(credentials: MailRuCloudCredentials, filePath:
     headers: { Authorization: davBasicAuth(credentials) },
   });
   if (!res.ok) throw errorFromStatus(res.status, "Облако Mail.ru", "download");
-  const buffer = Buffer.from(await res.arrayBuffer());
-  if (buffer.byteLength > DOWNLOAD_MAX_BYTES) {
-    throw new ExternalStorageError("invalid_response", "Файл внешнего хранилища превышает допустимый размер");
-  }
-  return buffer;
+  return readDownloadBody(res);
 }
 
 // --- Единый интерфейс ---

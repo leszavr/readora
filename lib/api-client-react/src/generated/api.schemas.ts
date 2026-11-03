@@ -1248,6 +1248,7 @@ export interface AppSettings {
   maxFileSizeMb?: number;
   libraryStorageLimitMb?: number;
   externalCacheBudgetMb?: number;
+  externalCachePerUserBudgetMb?: number;
   externalStorageEnabled?: boolean;
   /** @nullable */
   smtpHost?: string | null;
@@ -1284,6 +1285,8 @@ export interface AppSettingsUpdate {
   libraryStorageLimitMb?: number;
   /** @minimum 1 */
   externalCacheBudgetMb?: number;
+  /** @minimum 1 */
+  externalCachePerUserBudgetMb?: number;
   externalStorageEnabled?: boolean;
   /** @nullable */
   smtpHost?: string | null;

@@ -57,6 +57,7 @@ const PWA_INSTALL_ACCEPTED_KEY = "pwa_install_accepted_count";
 // Бюджет кэша внешних хранилищ не имеет верхнего предела: единственное место
 // задания лимита — значение настройки в админке.
 const DEFAULT_EXTERNAL_CACHE_BUDGET_MB = 2048;
+const DEFAULT_EXTERNAL_PER_USER_CACHE_BUDGET_MB = 1024;
 
 // GET /admin/system-metrics
 router.get(
@@ -1122,6 +1123,7 @@ const SETTING_KEYS = new Set([
   "maxFileSizeMb",
   "libraryStorageLimitMb",
   "externalCacheBudgetMb",
+  "externalCachePerUserBudgetMb",
   "externalStorageEnabled",
   "maintenanceMode",
   "maintenanceReason",
@@ -1160,6 +1162,7 @@ router.get(
       maxFileSizeMb: validateQuotaSetting(map.maxFileSizeMb ? Number(map.maxFileSizeMb) : undefined, quotaSettingBounds.maxBookFileSizeMb) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB,
       libraryStorageLimitMb: validateQuotaSetting(map.libraryStorageLimitMb ? Number(map.libraryStorageLimitMb) : undefined, quotaSettingBounds.libraryStorageMb) ?? DEFAULT_LIBRARY_STORAGE_MB,
       externalCacheBudgetMb: validateQuotaSetting(map.externalCacheBudgetMb ? Number(map.externalCacheBudgetMb) : undefined) ?? DEFAULT_EXTERNAL_CACHE_BUDGET_MB,
+      externalCachePerUserBudgetMb: validateQuotaSetting(map.externalCachePerUserBudgetMb ? Number(map.externalCachePerUserBudgetMb) : undefined) ?? DEFAULT_EXTERNAL_PER_USER_CACHE_BUDGET_MB,
       externalStorageEnabled: map.externalStorageEnabled !== "false",
       smtpHost: map.smtpHost ?? null,
       smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
@@ -1199,10 +1202,14 @@ router.patch(
     const externalCacheBudgetMb = updates.externalCacheBudgetMb === undefined
       ? undefined
       : validateQuotaSetting(updates.externalCacheBudgetMb);
+    const externalCachePerUserBudgetMb = updates.externalCachePerUserBudgetMb === undefined
+      ? undefined
+      : validateQuotaSetting(updates.externalCachePerUserBudgetMb);
     if (
       (updates.maxFileSizeMb !== undefined && maxFileSizeMb === null) ||
       (updates.libraryStorageLimitMb !== undefined && libraryStorageLimitMb === null) ||
-      (updates.externalCacheBudgetMb !== undefined && externalCacheBudgetMb === null)
+      (updates.externalCacheBudgetMb !== undefined && externalCacheBudgetMb === null) ||
+      (updates.externalCachePerUserBudgetMb !== undefined && externalCachePerUserBudgetMb === null)
     ) {
       res.status(400).json({ error: "Лимиты должны быть целыми положительными числами в допустимом диапазоне" });
       return;
@@ -1275,6 +1282,7 @@ router.patch(
       maxFileSizeMb: validateQuotaSetting(map.maxFileSizeMb ? Number(map.maxFileSizeMb) : undefined, quotaSettingBounds.maxBookFileSizeMb) ?? DEFAULT_MAX_BOOK_FILE_SIZE_MB,
       libraryStorageLimitMb: validateQuotaSetting(map.libraryStorageLimitMb ? Number(map.libraryStorageLimitMb) : undefined, quotaSettingBounds.libraryStorageMb) ?? DEFAULT_LIBRARY_STORAGE_MB,
       externalCacheBudgetMb: validateQuotaSetting(map.externalCacheBudgetMb ? Number(map.externalCacheBudgetMb) : undefined) ?? DEFAULT_EXTERNAL_CACHE_BUDGET_MB,
+      externalCachePerUserBudgetMb: validateQuotaSetting(map.externalCachePerUserBudgetMb ? Number(map.externalCachePerUserBudgetMb) : undefined) ?? DEFAULT_EXTERNAL_PER_USER_CACHE_BUDGET_MB,
       externalStorageEnabled: map.externalStorageEnabled !== "false",
       smtpHost: map.smtpHost ?? null,
       smtpPort: map.smtpPort ? Number.parseInt(map.smtpPort, 10) : null,
