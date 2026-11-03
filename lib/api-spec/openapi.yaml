@@ -2899,6 +2899,10 @@ components:
           type: ["string", "null"]
         cycleNumber:
           type: ["number", "null"]
+        externalProvider:
+          type: ["string", "null"]
+          enum: [yandex_disk, mail_ru_cloud, "null"]
+          description: External cloud storage the book file lives in (null for server-stored books)
         fileSize:
           type: integer
         wordCount:

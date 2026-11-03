@@ -543,6 +543,19 @@ export const BookStatus = {
 } as const;
 
 /**
+ * External cloud storage the book file lives in (null for server-stored books)
+ * @nullable
+ */
+export type BookExternalProvider = typeof BookExternalProvider[keyof typeof BookExternalProvider] | null;
+
+
+export const BookExternalProvider = {
+  yandex_disk: 'yandex_disk',
+  mail_ru_cloud: 'mail_ru_cloud',
+  null: 'null',
+} as const;
+
+/**
  * @nullable
  */
 export type BookReadingStatus = typeof BookReadingStatus[keyof typeof BookReadingStatus] | null;
@@ -575,6 +588,11 @@ export interface Book {
   cycleName?: string | null;
   /** @nullable */
   cycleNumber?: number | null;
+  /**
+     * External cloud storage the book file lives in (null for server-stored books)
+     * @nullable
+     */
+  externalProvider?: BookExternalProvider;
   fileSize?: number;
   /** @nullable */
   wordCount?: number | null;

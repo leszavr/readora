@@ -269,6 +269,7 @@ async function getBookWithDetails(bookId: number, userId: number, giftEditionBoo
     cycleId: book.cycleId ?? null,
     cycleName: cycle?.name ?? book.cycleName ?? null,
     cycleNumber: book.cycleNumber ?? null,
+    externalProvider: book.externalProvider ?? null,
     fileSize: book.fileSize,
     wordCount: null as number | null,
     chapterCount,
