@@ -1,7 +1,7 @@
-import { useGetAdminExternalStorageStats, useAdminControlExternalSyncJob, getGetAdminExternalStorageStatsQueryKey } from "@workspace/api-client-react";
+import { useGetAdminExternalStorageStats, useAdminControlExternalSyncJob, useAdminResetExternalStorageCache, getGetAdminExternalStorageStatsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Cloud, Database, Loader2, Pause, Play, RefreshCw, Square } from "lucide-react";
+import { Cloud, Database, Loader2, Pause, Play, RefreshCw, Shrink, Square } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -94,6 +94,37 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ГБ`;
   if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} МБ`;
   return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+}
+
+// Иконка «Сжать» на карточке кэша: полный сброс контента внешних книг.
+// Контент докачивается из облаков владельцев при следующем открытии книги.
+function ShrinkCacheButton() {
+  const qc = useQueryClient();
+  const { mutate: reset, isPending } = useAdminResetExternalStorageCache({
+    mutation: {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getGetAdminExternalStorageStatsQueryKey() });
+      },
+    },
+  });
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-7 w-7 p-0"
+      title="Сжать кэш — выгрузить контент всех внешних книг (докачается из облака при чтении)"
+      disabled={isPending}
+      onClick={() => {
+        if (confirm("Выгрузить контент всех внешних книг из кэша? При следующем открытии книги будут докачаны из облаков пользователей.")) {
+          reset();
+        }
+      }}
+    >
+      {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shrink className="h-3.5 w-3.5" />}
+    </Button>
+  );
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -203,7 +234,10 @@ export default function AdminExternalStorage() {
 
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground mb-2">Кэш контента</p>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm text-muted-foreground">Кэш контента</p>
+              <ShrinkCacheButton />
+            </div>
             <p className="text-2xl font-bold">{formatBytes(cache.cachedBytes)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {cache.cachedBooks} книг · бюджет {formatBytes(cache.budgetBytes)}

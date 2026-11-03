@@ -40,7 +40,7 @@ import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
 import { resolveUploadPath } from "../lib/storage";
 import { downloadExternalBookFile } from "../lib/external-storage/content-cache";
-import { getExternalCacheBudgetBytes } from "../lib/external-storage/content-cache";
+import { getExternalCacheBudgetBytes, resetExternalContentCache } from "../lib/external-storage/content-cache";
 import { applySyncJobControl } from "../lib/external-storage/sync";
 import { GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
@@ -1852,6 +1852,18 @@ router.patch(
       status: result.job.status,
       progress: Math.round(result.job.progress),
     });
+  },
+);
+
+// POST /admin/external-storage/cache/reset — полный сброс кэша контента
+// внешних книг («Сжать» в админке): контент выгружается, метаданные/скелет
+// глав/прогресс не трогаются, при открытии книги докачивается из облака.
+router.post(
+  "/admin/external-storage/cache/reset",
+  requireSystemAdmin,
+  async (_req, res): Promise<void> => {
+    const result = await resetExternalContentCache();
+    res.json(result);
   },
 );
 

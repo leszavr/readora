@@ -1864,3 +1864,13 @@ export const GetAdminExternalStorageStatsResponse = zod.object({
 })
 
 
+/**
+ * Clears chapter HTML content of all external books; content is re-fetched from owners' clouds on next open.
+ * @summary Flush all external books content cache (system admin)
+ */
+export const AdminResetExternalStorageCacheResponse = zod.object({
+  "booksCleared": zod.number(),
+  "bytesFreed": zod.number()
+})
+
+

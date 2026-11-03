@@ -1609,3 +1609,8 @@ export type AdminControlExternalSyncJob200 = {
   progress: number;
 };
 
+export type AdminResetExternalStorageCache200 = {
+  booksCleared: number;
+  bytesFreed: number;
+};
+

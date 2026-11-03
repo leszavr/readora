@@ -26,6 +26,7 @@ import type {
   AdminControlExternalSyncJob200,
   AdminControlExternalSyncJobBody,
   AdminExternalStorageStats,
+  AdminResetExternalStorageCache200,
   AdminStats,
   AdminUser,
   AdminUserCreate,
@@ -7051,4 +7052,75 @@ export function useGetAdminExternalStorageStats<TData = Awaited<ReturnType<typeo
 
 
 
+
+export const getAdminResetExternalStorageCacheUrl = () => {
+
+
+
+
+  return `/api/admin/external-storage/cache/reset`
+}
+
+/**
+ * Clears chapter HTML content of all external books; content is re-fetched from owners' clouds on next open.
+ * @summary Flush all external books content cache (system admin)
+ */
+export const adminResetExternalStorageCache = async ( options?: RequestInit): Promise<AdminResetExternalStorageCache200> => {
+
+  return customFetch<AdminResetExternalStorageCache200>(getAdminResetExternalStorageCacheUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminResetExternalStorageCacheMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetExternalStorageCache>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminResetExternalStorageCache>>, TError,void, TContext> => {
+
+const mutationKey = ['adminResetExternalStorageCache'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminResetExternalStorageCache>>, void> = () => {
+
+
+          return  adminResetExternalStorageCache(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminResetExternalStorageCacheMutationResult = NonNullable<Awaited<ReturnType<typeof adminResetExternalStorageCache>>>
+
+    export type AdminResetExternalStorageCacheMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Flush all external books content cache (system admin)
+ */
+export const useAdminResetExternalStorageCache = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetExternalStorageCache>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminResetExternalStorageCache>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getAdminResetExternalStorageCacheMutationOptions(options));
+    }
 

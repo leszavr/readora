@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   appSettingsTable,
   booksTable,
@@ -45,7 +45,7 @@ export async function getExternalCacheBudgetBytes(): Promise<number> {
   return parseBudgetMb(row?.value) * 1024 * 1024;
 }
 
-async function getPerUserCacheBudgetBytes(ownerUserId: number): Promise<number> {
+async function getPerUserCacheBudgetBytes(): Promise<number> {
   const [row] = await db
     .select({ value: appSettingsTable.value })
     .from(appSettingsTable)
@@ -157,9 +157,10 @@ export async function ensureBookContentCached(bookId: number): Promise<void> {
 }
 
 // Выселение контента внешних книг по LRU: глобально до общего бюджета
-// (externalCacheBudgetMb) и, для указанного владельца, до его персонального
-// бюджета (externalCachePerUserBudgetMb) — иначе один пользователь с тысячей
-// больших книг занял бы весь кэш и вымывал контент остальных.
+// (externalCacheBudgetMb) и до персонального бюджета каждого пользователя
+// (externalCachePerUserBudgetMb) — иначе один пользователь с тысячей больших
+// книг занял бы весь кэш и вымывал контент остальных. Периодическое
+// обслуживание вызывает без ownerUserId и применяет оба бюджета ко всем.
 export async function evictExternalContentCacheIfNeeded(ownerUserId?: number): Promise<void> {
   const budgetBytes = await getExternalCacheBudgetBytes();
   const [totalRow] = await db
@@ -176,8 +177,28 @@ export async function evictExternalContentCacheIfNeeded(ownerUserId?: number): P
     total = await evictCandidates(candidates, total, budgetBytes);
   }
 
-  if (ownerUserId === undefined) return;
-  const perUserBudgetBytes = await getPerUserCacheBudgetBytes(ownerUserId);
+  if (ownerUserId !== undefined) {
+    await evictUserCacheOverBudget(ownerUserId);
+    return;
+  }
+
+  // Периодический вызов без владельца: применяем персональный бюджет ко всем
+  // пользователям — превышение выселяется даже если владелец неактивен.
+  const perUserBudgetBytes = await getPerUserCacheBudgetBytes();
+  const overBudgetOwners = await db
+    .select({ ownerUserId: booksTable.ownerUserId })
+    .from(booksTable)
+    .where(and(isNotNull(booksTable.externalProvider), sql`${booksTable.contentCacheBytes} > 0`))
+    .groupBy(booksTable.ownerUserId)
+    .having(sql`sum(${booksTable.contentCacheBytes}) > ${perUserBudgetBytes}`);
+  for (const { ownerUserId: owner } of overBudgetOwners) {
+    await evictUserCacheOverBudget(owner);
+  }
+}
+
+// Выселение LRU-контента одного пользователя до его персонального бюджета.
+async function evictUserCacheOverBudget(ownerUserId: number): Promise<void> {
+  const perUserBudgetBytes = await getPerUserCacheBudgetBytes();
   const [userRow] = await db
     .select({ total: sql<number>`coalesce(sum(${booksTable.contentCacheBytes}), 0)::bigint` })
     .from(booksTable)
@@ -186,7 +207,7 @@ export async function evictExternalContentCacheIfNeeded(ownerUserId?: number): P
       isNotNull(booksTable.externalProvider),
       sql`${booksTable.contentCacheBytes} > 0`,
     ));
-  let userTotal = Number(userRow?.total ?? 0);
+  const userTotal = Number(userRow?.total ?? 0);
   if (userTotal <= perUserBudgetBytes) return;
 
   const userCandidates = await db
@@ -199,6 +220,34 @@ export async function evictExternalContentCacheIfNeeded(ownerUserId?: number): P
     ))
     .orderBy(asc(booksTable.contentAccessedAt));
   await evictCandidates(userCandidates, userTotal, perUserBudgetBytes);
+}
+
+// Полный сброс кэша контента (админская операция «Сжать»): контент всех
+// внешних книг выгружается, при следующем открытии книги докачиваются из
+// облаков владельцев. Скелет глав, заметки, закладки и прогресс не трогаются.
+export async function resetExternalContentCache(): Promise<{ booksCleared: number; bytesFreed: number }> {
+  return db.transaction(async (tx) => {
+    const cached = await tx
+      .select({ id: booksTable.id, bytes: booksTable.contentCacheBytes })
+      .from(booksTable)
+      .where(and(isNotNull(booksTable.externalProvider), sql`${booksTable.contentCacheBytes} > 0`));
+    if (cached.length === 0) return { booksCleared: 0, bytesFreed: 0 };
+
+    const bookIds = cached.map((row) => row.id);
+    await tx
+      .update(chaptersTable)
+      .set({ htmlContent: "" })
+      .where(inArray(chaptersTable.bookId, bookIds));
+    await tx
+      .update(booksTable)
+      .set({ contentCacheBytes: 0 })
+      .where(inArray(booksTable.id, bookIds));
+
+    return {
+      booksCleared: cached.length,
+      bytesFreed: cached.reduce((sum, row) => sum + row.bytes, 0),
+    };
+  });
 }
 
 async function evictCandidates(

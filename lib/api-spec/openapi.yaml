@@ -2169,6 +2169,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminExternalStorageStats"
 
+  /admin/external-storage/cache/reset:
+    post:
+      operationId: adminResetExternalStorageCache
+      tags: [admin]
+      summary: Flush all external books content cache (system admin)
+      description: Clears chapter HTML content of all external books; content is re-fetched from owners' clouds on next open.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booksCleared:
+                    type: integer
+                  bytesFreed:
+                    type: integer
+                required: [booksCleared, bytesFreed]
+
 components:
   schemas:
     ExternalStorageConnection:
