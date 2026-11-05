@@ -17,9 +17,13 @@ import { customFetch } from "@workspace/api-client-react";
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
+  // Поверх полноэкранных оверлеев (например, экрана «аккаунт удаляется»):
+  // контент поднимается на z-[70], внутренний оверлей остаётся под ним,
+  // поэтому фон-блюр не затемняется и не меняется.
+  elevated?: boolean;
 }
 
-export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
+export function FeedbackModal({ isOpen, onClose, elevated }: FeedbackModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -76,7 +80,13 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className={
+          elevated
+            ? "z-[70] sm:max-w-[500px] max-h-[90vh] overflow-y-auto"
+            : "sm:max-w-[500px] max-h-[90vh] overflow-y-auto"
+        }
+      >
         <DialogHeader>
           <DialogTitle>Обратная связь</DialogTitle>
           <DialogDescription>

@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
-import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
+import { Eye, EyeOff, Loader2, CheckCircle, Mail, AlertTriangle } from "lucide-react";
 import { EmailVerificationModal } from "@/components/EmailVerificationModal";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { VkIdOAuthList } from "@/components/VkIdOAuthList";
+import { DeletionPendingScreen } from "@/components/DeletionPendingScreen";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -32,15 +33,36 @@ export default function LoginPage() {
   const [showEmailVerificationModal, setShowEmailVerificationModal] =
     useState(false);
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
+  // Аккаунт в процессе удаления: вход заблокирован, показываем
+  // полноэкранный экран с датой очистки и контактами поддержки.
+  const [deletionPendingUntil, setDeletionPendingUntil] = useState<string | null>(null);
 
   // Check for success messages in URL
   const params = new URLSearchParams(window.location.search);
   const justRegistered = params.get("registered") === "true";
   const emailVerified = params.get("verified") === "true";
+  const deletionScheduled = params.get("deletion") === "scheduled";
+  const deletionPendingParam = params.get("deletion") === "pending";
 
   useEffect(() => {
     if (isAuthenticated) navigate("/library");
   }, [isAuthenticated]);
+
+  // OAuth-вход привёл на /login?deletion=pending&until=...: показываем
+  // экран блокировки сразу (сессия не создавалась).
+  useEffect(() => {
+    if (!deletionPendingParam) return;
+    const until = params.get("until");
+    if (until) {
+      const parsed = new Date(until);
+      if (!Number.isNaN(parsed.getTime())) {
+        setDeletionPendingUntil(parsed.toISOString());
+        return;
+      }
+    }
+    setDeletionPendingUntil(new Date().toISOString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     mutate: doLogin,
@@ -57,7 +79,15 @@ export default function LoginPage() {
         const errorData = err.data as {
           error?: string;
           userId?: number;
+          code?: string;
+          scheduledFor?: string;
         } | null;
+
+        if (errorData?.code === "ACCOUNT_PENDING_DELETION") {
+          setDeletionPendingUntil(errorData.scheduledFor ?? new Date().toISOString());
+          return;
+        }
+
         const errorMsg = errorData?.error ?? "";
 
         if (
@@ -125,6 +155,16 @@ export default function LoginPage() {
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
                   Email успешно подтверждён! Теперь вы можете войти в систему.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {deletionScheduled && (
+              <Alert className="mb-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Аккаунт запланирован к удалению. Вход в него заблокирован —
+                  для восстановления напишите в поддержку.
                 </AlertDescription>
               </Alert>
             )}
@@ -244,6 +284,10 @@ export default function LoginPage() {
         }}
         userId={pendingUserId}
       />
+
+      {deletionPendingUntil && (
+        <DeletionPendingScreen scheduledFor={deletionPendingUntil} />
+      )}
     </div>
   );
 }

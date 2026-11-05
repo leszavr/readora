@@ -358,6 +358,30 @@ class EmailService {
     });
   }
 
+  async sendAccountDeletionScheduled(
+    email: string,
+    username: string,
+    deletionDate: string,
+    graceDays: number,
+    baseUrl: string,
+  ): Promise<boolean> {
+    const normalizedBaseUrl = await this.resolvePublicBaseUrl(baseUrl);
+    const loginUrl = `${normalizedBaseUrl}/login`;
+    const html = await this.loadTemplate("account-deletion-scheduled", {
+      username: escapeHtml(username),
+      deletionDate,
+      loginUrl,
+      logoUrl: `${normalizedBaseUrl}/readora-wordmark.webp`,
+    });
+
+    return this.sendEmail({
+      to: email,
+      subject: "Аккаунт запланирован к удалению — Readora",
+      html,
+      text: `Здравствуйте, ${username}!\n\nВы запросили удаление аккаунта Readora. Аккаунт и все данные будут удалены ${deletionDate}.\n\nДо этой даты аккаунт можно восстановить: напишите в поддержку через форму обратной связи на сайте, указав email аккаунта.\n\nЕсли вы не запрашивали удаление, свяжитесь с поддержкой как можно скорее.`,
+    });
+  }
+
   private async loadTemplate(templateName: string, vars: Record<string, string>): Promise<string> {
     try {
       const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -22,6 +22,9 @@ export const usersTable = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  // Дата окончательной очистки аккаунта (модель GitHub): не NULL = аккаунт
+  // помечен на удаление, вход заблокирован, восстановление — через администрацию.
+  scheduledDeletionAt: timestamp("scheduled_deletion_at", { withTimezone: true }),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });

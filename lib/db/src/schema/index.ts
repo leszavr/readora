@@ -20,4 +20,5 @@ export * from "./gift_editions";
 export * from "./feedback_responses";
 export * from "./feedback_prompt_states";
 export * from "./unverified_account_cleanup";
+export * from "./account_deletion";
 export * from "./external-storage";

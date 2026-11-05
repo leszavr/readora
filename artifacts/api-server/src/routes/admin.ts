@@ -43,6 +43,7 @@ import { downloadExternalBookFile } from "../lib/external-storage/content-cache"
 import { getExternalCacheBudgetBytes, resetExternalContentCache } from "../lib/external-storage/content-cache";
 import { applySyncJobControl } from "../lib/external-storage/sync";
 import { GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
+import { restoreAccountDeletion, purgeUserAccount } from "../lib/account-deletion-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import {
@@ -639,7 +640,14 @@ router.get("/admin/users", requireSystemAdmin, async (req, res): Promise<void> =
         u.username.toLowerCase().includes(search.toLowerCase()),
     );
   if (role) result = result.filter((u) => u.role === role);
-  if (status) result = result.filter((u) => u.status === status);
+  // Фильтр статуса: 'pending_deletion' — аккаунты, помеченные на удаление
+  // (вкладка «Удаленные»); active/blocked исключают помеченные, чтобы
+  // buckets не пересекались.
+  if (status === "pending_deletion") {
+    result = result.filter((u) => u.scheduledDeletionAt !== null);
+  } else if (status) {
+    result = result.filter((u) => u.status === status && u.scheduledDeletionAt === null);
+  }
 
   const withCounts = await Promise.all(
     result.map(async (u) => {
@@ -751,6 +759,12 @@ router.patch(
       res.status(400).json({ error: "Нельзя изменять собственные роль или статус" });
       return;
     }
+    // Аккаунт в процессе удаления: смена статуса «мимо» механизма удаления
+    // оставила бы рассинхрон с scheduled_deletion_at. Сначала восстановите.
+    if (existing.scheduledDeletionAt && status !== undefined) {
+      res.status(409).json({ error: "Аккаунт помечен на удаление. Восстановите его или удалите окончательно." });
+      return;
+    }
     const updates: Partial<typeof usersTable.$inferSelect> = {};
     if (username != null) updates.username = username;
     if (email != null) updates.email = email;
@@ -860,7 +874,8 @@ router.post(
   },
 );
 
-// DELETE /admin/users/:id
+// DELETE /admin/users/:id — полное удаление аккаунта с очисткой файлов
+// (раньше удалялась только строка БД, файлы оставались осиротевшими).
 router.delete(
   "/admin/users/:id",
   requireSystemAdmin,
@@ -870,11 +885,69 @@ router.delete(
       res.status(400).json({ error: "Нельзя удалить собственный аккаунт" });
       return;
     }
-    if (await userOwnsGiftSourcesInUse(id)) {
-      res.status(409).json({ error: "У пользователя есть книги, выданные как подарочные издания. Сначала передайте или снимите их с публикации." });
+
+    const result = await purgeUserAccount(id, "admin");
+    if (result === "not_found") {
+      res.status(404).json({ error: "Пользователь не найден" });
       return;
     }
-    await db.delete(usersTable).where(eq(usersTable.id, id));
+    if (result === "gift_sources_in_use") {
+      res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE });
+      return;
+    }
+    if (result === "not_scheduled") {
+      res.status(409).json({ error: "Пользователь изменён параллельным действием. Повторите." });
+      return;
+    }
+    res.sendStatus(204);
+  },
+);
+
+// POST /admin/users/:id/restore — восстановить аккаунт, помеченный на
+// удаление (единственный путь отмены для пользователя).
+router.post(
+  "/admin/users/:id/restore",
+  requireSystemAdmin,
+  async (req, res): Promise<void> => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const restored = await restoreAccountDeletion(id);
+    if (!restored) {
+      res.status(409).json({ error: "Аккаунт не помечен на удаление" });
+      return;
+    }
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(booksTable)
+      .where(eq(booksTable.ownerUserId, id));
+    res.json({ ...formatUser(restored), bookCount: count });
+  },
+);
+
+// POST /admin/users/:id/purge — окончательное удаление помеченного аккаунта
+// без ожидания конца grace period (файлы и каскад данных — как у планировщика).
+router.post(
+  "/admin/users/:id/purge",
+  requireSystemAdmin,
+  async (req, res): Promise<void> => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (id === (req as Request & { user: { id: number } }).user.id) {
+      res.status(400).json({ error: "Нельзя удалить собственный аккаунт" });
+      return;
+    }
+
+    const result = await purgeUserAccount(id, "admin", { strictScheduled: true });
+    if (result === "not_found") {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+    if (result === "not_scheduled") {
+      res.status(409).json({ error: "Аккаунт не помечен на удаление" });
+      return;
+    }
+    if (result === "gift_sources_in_use") {
+      res.status(409).json({ error: GIFT_SOURCE_IN_USE_MESSAGE });
+      return;
+    }
     res.sendStatus(204);
   },
 );
@@ -895,6 +968,12 @@ router.post(
       .where(eq(usersTable.id, id));
     if (!user) {
       res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+    // Блокировка несовместима с ожиданием удаления: восстановите или
+    // удалите окончательно.
+    if (user.scheduledDeletionAt) {
+      res.status(409).json({ error: "Аккаунт помечен на удаление. Восстановите его или удалите окончательно." });
       return;
     }
     const newStatus = user.status === "active" ? "blocked" : "active";

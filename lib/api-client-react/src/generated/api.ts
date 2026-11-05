@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountDeletionPreview,
+  AccountDeletionResult,
   AdminAnalytics,
   AdminAnalyticsUsers,
   AdminBook,
@@ -90,6 +92,7 @@ import type {
   ListAdminUsersParams,
   ListBooksParams,
   ListExternalStorageFoldersParams,
+  Login403,
   LoginInput,
   MailRuConnectRequest,
   MaintenanceStatus,
@@ -298,7 +301,7 @@ export const login = async (loginInput: LoginInput, options?: RequestInit): Prom
 
 
 
-export const getLoginMutationOptions = <TError = ErrorType<ErrorResponse>,
+export const getLoginMutationOptions = <TError = ErrorType<ErrorResponse | Login403>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext> => {
 
@@ -327,12 +330,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type LoginMutationResult = NonNullable<Awaited<ReturnType<typeof login>>>
     export type LoginMutationBody = BodyType<LoginInput>
-    export type LoginMutationError = ErrorType<ErrorResponse>
+    export type LoginMutationError = ErrorType<ErrorResponse | Login403>
 
     /**
  * @summary Login
  */
-export const useLogin = <TError = ErrorType<ErrorResponse>,
+export const useLogin = <TError = ErrorType<ErrorResponse | Login403>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof login>>,
@@ -561,6 +564,84 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
 
 
 
+export const getGetAccountDeletionPreviewUrl = () => {
+
+
+
+
+  return `/api/auth/me/delete/preview`
+}
+
+/**
+ * Генерирует одноразовый 8-значный код подтверждения удаления, который показывается во втором окне диалога и вводится вручную. Код действителен 10 минут.
+ * @summary Get a confirmation code for account deletion (GitHub-style)
+ */
+export const getAccountDeletionPreview = async ( options?: RequestInit): Promise<AccountDeletionPreview> => {
+
+  return customFetch<AccountDeletionPreview>(getGetAccountDeletionPreviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountDeletionPreviewQueryKey = () => {
+    return [
+    `/api/auth/me/delete/preview`
+    ] as const;
+    }
+
+
+export const getGetAccountDeletionPreviewQueryOptions = <TData = Awaited<ReturnType<typeof getAccountDeletionPreview>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountDeletionPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountDeletionPreviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountDeletionPreview>>> = ({ signal }) => getAccountDeletionPreview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountDeletionPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountDeletionPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountDeletionPreview>>>
+export type GetAccountDeletionPreviewQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get a confirmation code for account deletion (GitHub-style)
+ */
+
+export function useGetAccountDeletionPreview<TData = Awaited<ReturnType<typeof getAccountDeletionPreview>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountDeletionPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountDeletionPreviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getDeleteAccountUrl = () => {
 
 
@@ -570,11 +651,12 @@ export const getDeleteAccountUrl = () => {
 }
 
 /**
- * @summary Permanently delete the current user account and its data
+ * Помечает аккаунт на удаление через grace period; фактическая очистка выполняется планировщиком. Подтверждение — 8-значный код из preview; повторная аутентификация не требуется (действующая сессия достаточна, способ авторизации не важен). Все сессии пользователя аннулируются.
+ * @summary Schedule the current user account for deletion (grace period)
  */
-export const deleteAccount = async (deleteAccountInput: DeleteAccountInput, options?: RequestInit): Promise<void> => {
+export const deleteAccount = async (deleteAccountInput: DeleteAccountInput, options?: RequestInit): Promise<AccountDeletionResult> => {
 
-  return customFetch<void>(getDeleteAccountUrl(),
+  return customFetch<AccountDeletionResult>(getDeleteAccountUrl(),
   {
     ...options,
     method: 'POST',
@@ -619,7 +701,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteAccountMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Permanently delete the current user account and its data
+ * @summary Schedule the current user account for deletion (grace period)
  */
 export const useDeleteAccount = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccount>>, TError,{data: BodyType<DeleteAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -4229,6 +4311,148 @@ export const useVerifyUserEmail = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getVerifyUserEmailMutationOptions(options));
+    }
+
+export const getRestoreAdminUserUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/users/${id}/restore`
+}
+
+/**
+ * Единственный путь отмены удаления: аккаунт возвращается к обычной жизни (scheduled_deletion_at сбрасывается).
+ * @summary Restore a user scheduled for deletion (admin)
+ */
+export const restoreAdminUser = async (id: number, options?: RequestInit): Promise<AdminUser> => {
+
+  return customFetch<AdminUser>(getRestoreAdminUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRestoreAdminUserMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreAdminUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreAdminUser>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restoreAdminUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreAdminUser>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreAdminUser(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreAdminUserMutationResult = NonNullable<Awaited<ReturnType<typeof restoreAdminUser>>>
+
+    export type RestoreAdminUserMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Restore a user scheduled for deletion (admin)
+ */
+export const useRestoreAdminUser = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreAdminUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreAdminUser>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestoreAdminUserMutationOptions(options));
+    }
+
+export const getPurgeAdminUserUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/users/${id}/purge`
+}
+
+/**
+ * Окончательное удаление помеченного аккаунта без ожидания конца grace period: каскад данных БД и файлы из хранилища.
+ * @summary Permanently delete a user scheduled for deletion (admin)
+ */
+export const purgeAdminUser = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPurgeAdminUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPurgeAdminUserMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof purgeAdminUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof purgeAdminUser>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['purgeAdminUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof purgeAdminUser>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  purgeAdminUser(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PurgeAdminUserMutationResult = NonNullable<Awaited<ReturnType<typeof purgeAdminUser>>>
+
+    export type PurgeAdminUserMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Permanently delete a user scheduled for deletion (admin)
+ */
+export const usePurgeAdminUser = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof purgeAdminUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof purgeAdminUser>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getPurgeAdminUserMutationOptions(options));
     }
 
 export const getListAdminBooksUrl = (params?: ListAdminBooksParams,) => {

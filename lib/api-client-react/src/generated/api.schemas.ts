@@ -396,6 +396,11 @@ export interface User {
   /** @nullable */
   avatar?: string | null;
   analyticsOptIn: boolean;
+  /**
+     * Дата окончательной очистки (не NULL = аккаунт помечен на удаление)
+     * @nullable
+     */
+  scheduledDeletionAt?: string | null;
   createdAt: string;
   /** @nullable */
   lastLoginAt?: string | null;
@@ -644,16 +649,22 @@ export interface BulkDeleteResult {
   deleted: number;
 }
 
-export type DeleteAccountInputConfirmation = typeof DeleteAccountInputConfirmation[keyof typeof DeleteAccountInputConfirmation];
-
-
-export const DeleteAccountInputConfirmation = {
-  УДАЛИТЬ: 'УДАЛИТЬ',
-} as const;
-
 export interface DeleteAccountInput {
-  currentPassword: string;
-  confirmation: DeleteAccountInputConfirmation;
+  /** 8-значный код из GET /auth/me/delete/preview */
+  code: string;
+}
+
+export interface AccountDeletionPreview {
+  /** Одноразовый 8-значный код подтверждения (действителен 10 минут) */
+  code: string;
+  graceDays: number;
+  /** Email аккаунта — показывается в диалоге подтверждения */
+  email?: string;
+}
+
+export interface AccountDeletionResult {
+  scheduledFor: string;
+  graceDays: number;
 }
 
 export interface PublicBook {
@@ -927,6 +938,11 @@ export interface AdminUser {
   /** @nullable */
   avatar?: string | null;
   bookCount?: number;
+  /**
+     * Дата окончательной очистки (не NULL = аккаунт помечен на удаление)
+     * @nullable
+     */
+  scheduledDeletionAt?: string | null;
   createdAt: string;
   /** @nullable */
   lastLoginAt?: string | null;
@@ -1342,6 +1358,18 @@ export interface SavedEmailFull {
   date: string;
   timestamp: number;
 }
+
+export type Login403Code = typeof Login403Code[keyof typeof Login403Code];
+
+
+export const Login403Code = {
+  ACCOUNT_PENDING_DELETION: 'ACCOUNT_PENDING_DELETION',
+} as const;
+
+export type Login403 = ErrorResponse & {
+  code?: Login403Code;
+  scheduledFor?: string;
+};
 
 export type ResendVerificationBody = {
   userId: number;

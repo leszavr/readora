@@ -1,6 +1,7 @@
 import app from "./app";
 import { startAnalyticsRollupScheduler } from "./lib/analytics-rollup-scheduler";
 import { startUnverifiedAccountsScheduler } from "./lib/unverified-accounts-scheduler";
+import { startAccountDeletionScheduler } from "./lib/account-deletion-scheduler";
 import { startExternalStorageMaintenance } from "./lib/external-storage/external-storage-maintenance";
 import { logger } from "./lib/logger";
 
@@ -27,5 +28,6 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startAnalyticsRollupScheduler();
   startUnverifiedAccountsScheduler();
+  startAccountDeletionScheduler();
   startExternalStorageMaintenance();
 });

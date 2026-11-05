@@ -6,6 +6,8 @@ import {
   useDeleteAdminUser,
   useToggleBlockUser,
   useVerifyUserEmail,
+  useRestoreAdminUser,
+  usePurgeAdminUser,
   AdminUserCreateRole,
   AdminUserUpdateRole,
   getListAdminUsersQueryKey,
@@ -21,7 +23,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle, RotateCcw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
@@ -32,6 +34,7 @@ export default function AdminUsers() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<null | { id: number; username: string; email: string; role: AdminUserUpdateRole }>(null);
   const [editPassword, setEditPassword] = useState("");
@@ -48,9 +51,10 @@ export default function AdminUsers() {
   const { data: users = [], isLoading } = useListAdminUsers({
     search: search || undefined,
     role: roleFilter === "all" ? undefined : roleFilter,
+    status: statusFilter === "all" ? undefined : statusFilter,
   });
 
-  const pagination = useAdminListPagination(users, "readora.admin.users.pageSize", `${search}|${roleFilter}`);
+  const pagination = useAdminListPagination(users, "readora.admin.users.pageSize", `${search}|${roleFilter}|${statusFilter}`);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
 
@@ -76,6 +80,14 @@ export default function AdminUsers() {
   });
 
   const { mutate: verifyEmail } = useVerifyUserEmail({
+    mutation: { onSuccess: invalidate },
+  });
+
+  const { mutate: restoreUser, isPending: restoring } = useRestoreAdminUser({
+    mutation: { onSuccess: invalidate },
+  });
+
+  const { mutate: purgeUser, isPending: purging } = usePurgeAdminUser({
     mutation: { onSuccess: invalidate },
   });
 
@@ -134,6 +146,17 @@ export default function AdminUsers() {
               <SelectItem value="user">Пользователь</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Статус" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все статусы</SelectItem>
+              <SelectItem value="active">Активен</SelectItem>
+              <SelectItem value="blocked">Заблокирован</SelectItem>
+              <SelectItem value="pending_deletion">Удаленные</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button size="sm" className="gap-2 w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
           <Plus className="w-4 h-4" /> Добавить
@@ -166,6 +189,7 @@ export default function AdminUsers() {
                 pagination.visibleItems.map((u: {
                   id: number; username: string; email: string; role: string;
                   status: string; emailVerified: boolean; bookCount?: number; createdAt: string;
+                  scheduledDeletionAt?: string | null;
                 }) => (
                   <TableRow key={u.id}>
                     <TableCell>
@@ -178,12 +202,21 @@ export default function AdminUsers() {
                       <Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={u.status === "active" ? "default" : "destructive"}
-                        className="text-xs"
-                      >
-                        {STATUS_LABELS[u.status] ?? u.status}
-                      </Badge>
+                      {u.scheduledDeletionAt ? (
+                        <div className="space-y-1">
+                          <Badge variant="destructive" className="text-xs">На удалении</Badge>
+                          <p className="text-xs text-muted-foreground">
+                            очистка {new Date(u.scheduledDeletionAt).toLocaleDateString("ru-RU")}
+                          </p>
+                        </div>
+                      ) : (
+                        <Badge
+                          variant={u.status === "active" ? "default" : "destructive"}
+                          className="text-xs"
+                        >
+                          {STATUS_LABELS[u.status] ?? u.status}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {u.emailVerified ? (
@@ -217,22 +250,43 @@ export default function AdminUsers() {
                           }}>
                             <Pencil className="w-4 h-4" /> Изменить
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: u.id })}>
-                            {u.status === "active"
-                              ? <><Ban className="w-4 h-4" /> Заблокировать</>
-                              : <><Unlock className="w-4 h-4" /> Разблокировать</>}
-                          </DropdownMenuItem>
-                          {!u.emailVerified && (
-                            <DropdownMenuItem className="gap-2" onClick={() => verifyEmail({ id: u.id })}>
-                              <CheckCircle className="w-4 h-4" /> Подтвердить email
-                            </DropdownMenuItem>
+                          {u.scheduledDeletionAt ? (
+                            <>
+                              <DropdownMenuItem className="gap-2" disabled={restoring} onClick={() => restoreUser({ id: u.id })}>
+                                <RotateCcw className="w-4 h-4" /> Восстановить
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2 text-destructive focus:text-destructive"
+                                disabled={purging}
+                                onClick={() => {
+                                  if (confirm(`Окончательно удалить пользователя ${u.username} вместе с книгами и файлами? Это действие необратимо.`)) {
+                                    purgeUser({ id: u.id });
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" /> Удалить окончательно
+                              </DropdownMenuItem>
+                            </>
+                          ) : (
+                            <>
+                              <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: u.id })}>
+                                {u.status === "active"
+                                  ? <><Ban className="w-4 h-4" /> Заблокировать</>
+                                  : <><Unlock className="w-4 h-4" /> Разблокировать</>}
+                              </DropdownMenuItem>
+                              {!u.emailVerified && (
+                                <DropdownMenuItem className="gap-2" onClick={() => verifyEmail({ id: u.id })}>
+                                  <CheckCircle className="w-4 h-4" /> Подтвердить email
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
+                                if (confirm(`Удалить пользователя ${u.username}?`)) deleteUser({ id: u.id });
+                              }}>
+                                <Trash2 className="w-4 h-4" /> Удалить
+                              </DropdownMenuItem>
+                            </>
                           )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
-                            if (confirm(`Удалить пользователя ${u.username}?`)) deleteUser({ id: u.id });
-                          }}>
-                            <Trash2 className="w-4 h-4" /> Удалить
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

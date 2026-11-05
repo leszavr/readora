@@ -104,11 +104,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Login is unavailable during maintenance
+          description: Login unavailable (maintenance or account pending deletion)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                allOf:
+                  - $ref: "#/components/schemas/ErrorResponse"
+                  - type: object
+                    properties:
+                      code:
+                        type: string
+                        enum: [ACCOUNT_PENDING_DELETION]
+                      scheduledFor:
+                        type: string
+                        format: date-time
 
   /auth/logout:
     post:
@@ -164,11 +173,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me/delete/preview:
+    get:
+      operationId: getAccountDeletionPreview
+      tags: [auth]
+      summary: Get a confirmation code for account deletion (GitHub-style)
+      description: >-
+        Генерирует одноразовый 8-значный код подтверждения удаления,
+        который показывается во втором окне диалога и вводится вручную.
+        Код действителен 10 минут.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionPreview"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/me/delete:
     post:
       operationId: deleteAccount
       tags: [auth]
-      summary: Permanently delete the current user account and its data
+      summary: Schedule the current user account for deletion (grace period)
+      description: >-
+        Помечает аккаунт на удаление через grace period; фактическая очистка
+        выполняется планировщиком. Подтверждение — 8-значный код из preview;
+        повторная аутентификация не требуется (действующая сессия достаточна,
+        способ авторизации не важен). Все сессии пользователя аннулируются.
       requestBody:
         required: true
         content:
@@ -176,10 +213,14 @@ paths:
             schema:
               $ref: "#/components/schemas/DeleteAccountInput"
       responses:
-        "204":
-          description: Account deleted
+        "200":
+          description: Account scheduled for deletion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionResult"
         "400":
-          description: Invalid confirmation or password
+          description: Invalid or expired confirmation code
           content:
             application/json:
               schema:
@@ -191,7 +232,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Account cannot be deleted
+          description: Account cannot be deleted (admin)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Gift editions in use
           content:
             application/json:
               schema:
@@ -1305,6 +1352,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}/restore:
+    post:
+      operationId: restoreAdminUser
+      tags: [admin]
+      summary: Restore a user scheduled for deletion (admin)
+      description: >-
+        Единственный путь отмены удаления: аккаунт возвращается к обычной
+        жизни (scheduled_deletion_at сбрасывается).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: User is not scheduled for deletion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/{id}/purge:
+    post:
+      operationId: purgeAdminUser
+      tags: [admin]
+      summary: Permanently delete a user scheduled for deletion (admin)
+      description: >-
+        Окончательное удаление помеченного аккаунта без ожидания конца
+        grace period: каскад данных БД и файлы из хранилища.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User purged
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: User is not scheduled for deletion or gift editions in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /admin/books:
     get:
@@ -2734,6 +2845,10 @@ components:
           type: ["string", "null"]
         analyticsOptIn:
           type: boolean
+        scheduledDeletionAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Дата окончательной очистки (не NULL = аккаунт помечен на удаление)
         createdAt:
           type: string
           format: date-time
@@ -3004,13 +3119,34 @@ components:
 
     DeleteAccountInput:
       type: object
-      required: [currentPassword, confirmation]
+      required: [code]
       properties:
-        currentPassword:
+        code:
           type: string
-        confirmation:
+          description: 8-значный код из GET /auth/me/delete/preview
+
+    AccountDeletionPreview:
+      type: object
+      required: [code, graceDays]
+      properties:
+        code:
           type: string
-          enum: [УДАЛИТЬ]
+          description: Одноразовый 8-значный код подтверждения (действителен 10 минут)
+        graceDays:
+          type: integer
+        email:
+          type: string
+          description: Email аккаунта — показывается в диалоге подтверждения
+
+    AccountDeletionResult:
+      type: object
+      required: [scheduledFor, graceDays]
+      properties:
+        scheduledFor:
+          type: string
+          format: date-time
+        graceDays:
+          type: integer
 
     PublicBook:
       type: object
@@ -3593,6 +3729,10 @@ components:
           type: ["string", "null"]
         bookCount:
           type: integer
+        scheduledDeletionAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Дата окончательной очистки (не NULL = аккаунт помечен на удаление)
         createdAt:
           type: string
           format: date-time

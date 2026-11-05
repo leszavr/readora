@@ -4,8 +4,6 @@ import bcrypt from "bcryptjs";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import {
   db,
   usersTable,
@@ -13,15 +11,11 @@ import {
   passwordResetTokensTable,
   passwordChangeTokensTable,
   appSettingsTable,
-  booksTable,
-  bookUploadJobsTable,
   userSessionsTable,
   MAINTENANCE_MODE_KEY,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { emailService } from "../lib/email-service";
-import { deleteStoredFilesIfUnreferenced } from "../lib/book-deletion-service";
-import { resolveUploadPath } from "../lib/storage";
 import { hashAuthToken } from "../lib/token-hash";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import { logger } from "../lib/logger";
@@ -33,6 +27,10 @@ import {
   createVkPkceChallenge,
   readVkCallbackParams,
 } from "../lib/vk-oauth";
+import {
+  DELETION_GRACE_DAYS,
+  scheduleAccountDeletion,
+} from "../lib/account-deletion-service";
 import type { Request } from "express";
 
 const router = Router();
@@ -185,6 +183,17 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     res.status(401).json({ error: "Неверный email или пароль" });
+    return;
+  }
+
+  // Аккаунт в процессе удаления: вход блокируется, сессия не создаётся.
+  // Фронтенд по коду показывает экран с датой очистки и контактами поддержки.
+  if (user.scheduledDeletionAt) {
+    res.status(403).json({
+      error: "Аккаунт находится в процессе удаления",
+      code: "ACCOUNT_PENDING_DELETION",
+      scheduledFor: user.scheduledDeletionAt.toISOString(),
+    });
     return;
   }
 
@@ -359,6 +368,43 @@ router.post(
   },
 );
 
+// --- Удаление аккаунта (модель GitHub) ---
+//
+// Подтверждение личности не требуется: действует сессия пользователя,
+// а защита от случайного удаления — сгенерированный 8-значный код, который
+// показывается во втором окне и вводится вручную (анти-«мышечная память»).
+// Способ авторизации (пароль / VK ID / Яндекс ID) не влияет на флоу.
+// Удаление отложено на grace period, вход блокируется, восстановление —
+// через администрацию (форма обратной связи / email поддержки).
+
+// TTL кода подтверждения удаления, выданного preview-эндпоинтом.
+const DELETION_CODE_TTL_MS = 10 * 60 * 1000;
+
+function generateDeletionCode(): string {
+  return String(crypto.randomInt(0, 100_000_000)).padStart(8, "0");
+}
+
+// GET /auth/me/delete/preview — код для второго окна подтверждения.
+router.get(
+  "/auth/me/delete/preview",
+  requireAuth,
+  authLimiter,
+  async (req, res): Promise<void> => {
+    const user = (req as Request & { user: typeof usersTable.$inferSelect })
+      .user;
+
+    const code = generateDeletionCode();
+    req.session.deletionCode = code;
+    req.session.deletionCodeIssuedAt = Date.now();
+
+    res.json({
+      code,
+      graceDays: DELETION_GRACE_DAYS,
+      email: user.email,
+    });
+  },
+);
+
 router.post(
   "/auth/me/delete",
   requireAuth,
@@ -367,14 +413,11 @@ router.post(
     const user = (req as Request & { user: typeof usersTable.$inferSelect })
       .user;
     const schema = z.object({
-      currentPassword: z.string().min(1).max(1024),
-      confirmation: z.literal("УДАЛИТЬ"),
+      code: z.string().trim().regex(/^\d{8}$/),
     });
     const parsed = schema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({
-        error: 'Введите текущий пароль и фразу «УДАЛИТЬ»',
-      });
+      res.status(400).json({ error: "Введите 8-значный код подтверждения" });
       return;
     }
 
@@ -386,17 +429,18 @@ router.post(
       return;
     }
 
-    if (!user.passwordHash) {
-      res.status(400).json({ error: "Пароль не задан для этой учётной записи" });
-      return;
-    }
-
-    const valid = await bcrypt.compare(
-      parsed.data.currentPassword,
-      user.passwordHash,
-    );
-    if (!valid) {
-      res.status(400).json({ error: "Текущий пароль неверный" });
+    // Код сверяется с выданным preview-эндпоинтом и живёт ограниченное время.
+    const expectedCode = req.session.deletionCode;
+    const issuedAt = req.session.deletionCodeIssuedAt;
+    const codeValid =
+      expectedCode !== undefined &&
+      issuedAt !== undefined &&
+      Date.now() - issuedAt <= DELETION_CODE_TTL_MS &&
+      expectedCode === parsed.data.code;
+    if (!codeValid) {
+      res.status(400).json({
+        error: "Код неверен или устарел. Откройте подтверждение заново.",
+      });
       return;
     }
 
@@ -405,47 +449,19 @@ router.post(
       return;
     }
 
-    const [books, uploadJobs] = await Promise.all([
-      db.select().from(booksTable).where(eq(booksTable.ownerUserId, user.id)),
-      db
-        .select()
-        .from(bookUploadJobsTable)
-        .where(eq(bookUploadJobsTable.ownerUserId, user.id)),
-    ]);
+    const { scheduledFor } = await scheduleAccountDeletion(user, "user");
 
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(userSessionsTable)
-        .where(sql`${userSessionsTable.sess}->>'userId' = ${String(user.id)}`);
-      await tx.delete(usersTable).where(eq(usersTable.id, user.id));
-    });
-
+    // scheduleAccountDeletion аннулировал все сессии в БД; завершаем текущую.
     await new Promise<void>((resolve) => {
       req.session.destroy(() => resolve());
     });
     res.clearCookie("readora.sid");
     res.clearCookie("readora.remember");
 
-    for (const book of books) {
-      try {
-        await deleteStoredFilesIfUnreferenced(book);
-      } catch {
-        console.error("Failed to delete an account book file");
-      }
-    }
-
-    for (const job of uploadJobs) {
-      try {
-        fs.rmSync(
-          resolveUploadPath(path.join("tmp", job.tempStorageKey)),
-          { force: true },
-        );
-      } catch {
-        console.error("Failed to delete an account temporary upload");
-      }
-    }
-
-    res.sendStatus(204);
+    res.json({
+      scheduledFor: scheduledFor.toISOString(),
+      graceDays: DELETION_GRACE_DAYS,
+    });
   },
 );
 
@@ -963,6 +979,16 @@ router.get("/auth/yandex/callback", async (req, res): Promise<void> => {
     return;
   }
 
+  // Аккаунт в процессе удаления: сессию не создаём, ведём на экран
+  // блокировки с датой окончательной очистки (как и при входе по паролю).
+  if (user.scheduledDeletionAt) {
+    const appOrigin = (process.env.APP_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
+    res.redirect(
+      `${appOrigin}/login?deletion=pending&until=${encodeURIComponent(user.scheduledDeletionAt.toISOString())}`,
+    );
+    return;
+  }
+
   await db
     .update(usersTable)
     .set({ lastLoginAt: new Date() })
@@ -1211,6 +1237,16 @@ router.get("/auth/vk/callback", async (req, res): Promise<void> => {
     return;
   }
 
+  // Аккаунт в процессе удаления: сессию не создаём, ведём на экран
+  // блокировки с датой окончательной очистки (как и при входе по паролю).
+  if (user.scheduledDeletionAt) {
+    const appOrigin = (process.env.APP_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
+    res.redirect(
+      `${appOrigin}/login?deletion=pending&until=${encodeURIComponent(user.scheduledDeletionAt.toISOString())}`,
+    );
+    return;
+  }
+
   await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
   await regenerateSession(req);
   req.session.userId = user.id;
@@ -1229,6 +1265,7 @@ function formatUser(u: typeof usersTable.$inferSelect) {
     avatar: u.avatar ?? null,
     emailVerified: u.emailVerified,
     analyticsOptIn: u.analyticsOptIn,
+    scheduledDeletionAt: u.scheduledDeletionAt ?? null,
     createdAt: u.createdAt,
     lastLoginAt: u.lastLoginAt ?? null,
   };

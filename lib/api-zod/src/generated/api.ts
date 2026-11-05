@@ -53,6 +53,7 @@ export const LoginResponse = zod.object({
   "status": zod.enum(['active', 'blocked']),
   "avatar": zod.string().nullish(),
   "analyticsOptIn": zod.boolean(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 }),
@@ -83,17 +84,34 @@ export const GetMeResponse = zod.object({
   "status": zod.enum(['active', 'blocked']),
   "avatar": zod.string().nullish(),
   "analyticsOptIn": zod.boolean(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
 
 
 /**
- * @summary Permanently delete the current user account and its data
+ * Генерирует одноразовый 8-значный код подтверждения удаления, который показывается во втором окне диалога и вводится вручную. Код действителен 10 минут.
+ * @summary Get a confirmation code for account deletion (GitHub-style)
+ */
+export const GetAccountDeletionPreviewResponse = zod.object({
+  "code": zod.string().describe('Одноразовый 8-значный код подтверждения (действителен 10 минут)'),
+  "graceDays": zod.number(),
+  "email": zod.string().optional().describe('Email аккаунта — показывается в диалоге подтверждения')
+})
+
+
+/**
+ * Помечает аккаунт на удаление через grace period; фактическая очистка выполняется планировщиком. Подтверждение — 8-значный код из preview; повторная аутентификация не требуется (действующая сессия достаточна, способ авторизации не важен). Все сессии пользователя аннулируются.
+ * @summary Schedule the current user account for deletion (grace period)
  */
 export const DeleteAccountBody = zod.object({
-  "currentPassword": zod.string(),
-  "confirmation": zod.enum(['УДАЛИТЬ'])
+  "code": zod.string().describe('8-значный код из GET \/auth\/me\/delete\/preview')
+})
+
+export const DeleteAccountResponse = zod.object({
+  "scheduledFor": zod.coerce.date(),
+  "graceDays": zod.number()
 })
 
 
@@ -114,6 +132,7 @@ export const UpdateProfileResponse = zod.object({
   "status": zod.enum(['active', 'blocked']),
   "avatar": zod.string().nullish(),
   "analyticsOptIn": zod.boolean(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
@@ -754,6 +773,7 @@ export const GetAdminStatsResponse = zod.object({
   "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 }))
@@ -1025,6 +1045,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
@@ -1058,6 +1079,7 @@ export const GetAdminUserResponse = zod.object({
   "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
@@ -1086,6 +1108,7 @@ export const UpdateAdminUserResponse = zod.object({
   "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
@@ -1115,6 +1138,7 @@ export const ToggleBlockUserResponse = zod.object({
   "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
 })
@@ -1136,8 +1160,41 @@ export const VerifyUserEmailResponse = zod.object({
   "emailVerified": zod.boolean(),
   "avatar": zod.string().nullish(),
   "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * Единственный путь отмены удаления: аккаунт возвращается к обычной жизни (scheduled_deletion_at сбрасывается).
+ * @summary Restore a user scheduled for deletion (admin)
+ */
+export const RestoreAdminUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestoreAdminUserResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "username": zod.string(),
+  "role": zod.enum(['user', 'moderator', 'admin']),
+  "status": zod.enum(['active', 'blocked']),
+  "emailVerified": zod.boolean(),
+  "avatar": zod.string().nullish(),
+  "bookCount": zod.number().optional(),
+  "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
+  "createdAt": zod.coerce.date(),
+  "lastLoginAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * Окончательное удаление помеченного аккаунта без ожидания конца grace period: каскад данных БД и файлы из хранилища.
+ * @summary Permanently delete a user scheduled for deletion (admin)
+ */
+export const PurgeAdminUserParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

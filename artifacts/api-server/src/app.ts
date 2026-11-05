@@ -25,6 +25,10 @@ declare module "express-session" {
     yandexDiskConnectState?: string;
     vkOAuthState?: string;
     vkOAuthCodeVerifier?: string;
+    // Одноразовый код подтверждения удаления аккаунта (модель GitHub):
+    // выдаётся preview-эндпоинтом, погашается вводом в POST /auth/me/delete.
+    deletionCode?: string;
+    deletionCodeIssuedAt?: number;
   }
 }
 

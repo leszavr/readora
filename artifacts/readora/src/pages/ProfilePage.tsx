@@ -55,9 +55,10 @@ export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteStep, setDeleteStep] = useState<"closed" | "info" | "confirm">("closed");
+  const [deleteCode, setDeleteCode] = useState<string | null>(null);
+  const [deleteCodeInput, setDeleteCodeInput] = useState("");
+  const [deleteCodePending, setDeleteCodePending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -128,18 +129,43 @@ export default function ProfilePage() {
     }
   }
 
-  function handleDeleteDialogOpenChange(open: boolean) {
+  function closeDeleteDialogs() {
     if (deletePending) return;
-    setDeleteDialogOpen(open);
-    if (!open) {
-      setDeletePassword("");
-      setDeleteConfirmation("");
-      setDeleteError(null);
+    setDeleteStep("closed");
+    setDeleteCode(null);
+    setDeleteCodeInput("");
+    setDeleteError(null);
+  }
+
+  // Второе окно (модель GitHub): предупреждение + свежий 8-значный код.
+  async function openDeleteConfirm() {
+    setDeleteStep("confirm");
+    setDeleteCode(null);
+    setDeleteCodeInput("");
+    setDeleteError(null);
+    setDeleteCodePending(true);
+    try {
+      const res = await fetch("/api/auth/me/delete/preview", {
+        credentials: "include",
+      });
+      const data = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
+      if (!res.ok || !data.code) {
+        setDeleteError(data.error ?? "Не удалось открыть подтверждение удаления");
+        setDeleteStep("info");
+        return;
+      }
+      setDeleteCode(data.code);
+    } catch {
+      setDeleteError("Не удалось открыть подтверждение удаления");
+      setDeleteStep("info");
+    } finally {
+      setDeleteCodePending(false);
     }
   }
 
   async function handleDeleteAccount(e: React.FormEvent) {
     e.preventDefault();
+    if (!deleteCode || deleteCodeInput !== deleteCode) return;
     setDeleteError(null);
     setDeletePending(true);
 
@@ -147,10 +173,8 @@ export default function ProfilePage() {
       const res = await fetch("/api/auth/me/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentPassword: deletePassword,
-          confirmation: deleteConfirmation,
-        }),
+        credentials: "include",
+        body: JSON.stringify({ code: deleteCodeInput }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
 
@@ -159,8 +183,9 @@ export default function ProfilePage() {
         return;
       }
 
+      // Сессия аннулирована сервером: выходим на страницу входа с уведомлением.
       qc.clear();
-      globalThis.location.assign("/");
+      globalThis.location.assign("/login?deletion=scheduled");
     } catch {
       setDeleteError("Не удалось удалить учётную запись");
     } finally {
@@ -378,62 +403,109 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Будут безвозвратно удалены профиль, книги, прогресс чтения и доступ на всех устройствах. Это действие нельзя отменить.
+                    Аккаунт будет окончательно удалён вместе с библиотекой через 30 дней.
+                    До этого момента его можно восстановить, обратившись в поддержку.
                   </p>
-                  <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
+                  <AlertDialog open={deleteStep !== "closed"} onOpenChange={(open) => (open ? undefined : closeDeleteDialogs())}>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" className="gap-2">
+                      <Button variant="destructive" className="gap-2" onClick={() => setDeleteStep("info")}>
                         <Trash2 className="w-4 h-4" />
                         Удалить учётную запись
                       </Button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <form onSubmit={handleDeleteAccount} className="space-y-4">
+
+                    {deleteStep === "info" && (
+                      <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Удалить учётную запись?</AlertDialogTitle>
+                          <AlertDialogTitle>Что произойдёт при удалении аккаунта</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Все ваши книги и данные чтения будут удалены без возможности восстановления.
+                            Аккаунт будет помечен на удаление и окончательно очищен через 30 дней.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <div className="space-y-2">
-                          <Label htmlFor="delete-account-password">Текущий пароль</Label>
-                          <Input
-                            id="delete-account-password"
-                            type="password"
-                            value={deletePassword}
-                            onChange={(e) => setDeletePassword(e.target.value)}
-                            autoComplete="current-password"
-                            disabled={deletePending}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="delete-account-confirmation">Введите «УДАЛИТЬ»</Label>
-                          <Input
-                            id="delete-account-confirmation"
-                            value={deleteConfirmation}
-                            onChange={(e) => setDeleteConfirmation(e.target.value)}
-                            autoComplete="off"
-                            disabled={deletePending}
-                            required
-                          />
-                        </div>
-                        {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+                        <ul className="list-disc pl-5 space-y-1.5 text-sm text-muted-foreground">
+                          <li>Профиль, email и настройки читалки</li>
+                          <li>Все книги и загруженные файлы из вашей библиотеки</li>
+                          <li>Прогресс чтения, закладки и заметки</li>
+                          <li>Доступ на всех устройствах — вы выйдете из системы</li>
+                        </ul>
+                        <p className="text-sm">
+                          До даты удаления аккаунт можно восстановить, написав в поддержку
+                          через форму обратной связи или по email техподдержки.
+                          После удаления данные восстановить невозможно.
+                        </p>
                         <AlertDialogFooter>
-                          <AlertDialogCancel type="button" disabled={deletePending}>
+                          <AlertDialogCancel type="button" onClick={closeDeleteDialogs}>
                             Отмена
                           </AlertDialogCancel>
                           <Button
-                            type="submit"
+                            type="button"
                             variant="destructive"
-                            disabled={deletePending || !deletePassword || deleteConfirmation !== "УДАЛИТЬ"}
+                            className="gap-2"
+                            onClick={() => void openDeleteConfirm()}
                           >
-                            {deletePending && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
-                            Удалить навсегда
+                            <Trash2 className="w-4 h-4" />
+                            Удалить
                           </Button>
                         </AlertDialogFooter>
-                      </form>
-                    </AlertDialogContent>
+                      </AlertDialogContent>
+                    )}
+
+                    {deleteStep === "confirm" && (
+                      <AlertDialogContent>
+                        <form onSubmit={handleDeleteAccount} className="space-y-4">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Подтвердите удаление аккаунта</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Аккаунт <strong>{user?.email}</strong> будет окончательно удалён через 30 дней.
+                              До этого момента его можно восстановить, написав в поддержку
+                              (форма обратной связи или email техподдержки). Все сессии будут завершены.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <div className="space-y-2">
+                            <Label htmlFor="delete-account-code">Код подтверждения</Label>
+                            {deleteCodePending ? (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Генерация кода…
+                              </div>
+                            ) : deleteCode ? (
+                              <>
+                                <p className="font-mono text-lg font-bold tracking-[0.3em] select-all">
+                                  {deleteCode}
+                                </p>
+                                <Input
+                                  id="delete-account-code"
+                                  inputMode="numeric"
+                                  pattern="\d{8}"
+                                  maxLength={8}
+                                  placeholder="Введите код"
+                                  value={deleteCodeInput}
+                                  onChange={(e) => setDeleteCodeInput(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                  autoComplete="one-time-code"
+                                  disabled={deletePending}
+                                  required
+                                  className="font-mono tracking-[0.3em]"
+                                />
+                              </>
+                            ) : null}
+                          </div>
+                          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+                          <AlertDialogFooter>
+                            <AlertDialogCancel type="button" onClick={closeDeleteDialogs} disabled={deletePending}>
+                              Отмена
+                            </AlertDialogCancel>
+                            <Button
+                              type="submit"
+                              variant="destructive"
+                              disabled={deletePending || deleteCodeInput !== deleteCode}
+                            >
+                              {deletePending && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+                              Удалить
+                            </Button>
+                          </AlertDialogFooter>
+                        </form>
+                      </AlertDialogContent>
+                    )}
                   </AlertDialog>
                 </>
               )}
