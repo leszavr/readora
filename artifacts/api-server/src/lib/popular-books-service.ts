@@ -1,5 +1,5 @@
-import { and, asc, eq } from "drizzle-orm";
-import { db, landingBooksTable } from "@workspace/db";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { db, booksTable, giftEditionsTable } from "@workspace/db";
 
 export type PopularBook = {
   title: string;
@@ -18,18 +18,29 @@ function normalizeLimit(limit: unknown): number {
   return Math.min(Math.max(Math.trunc(parsed), 1), 12);
 }
 
+// Публичный лендинг показывает только опубликованные подарочные издания
+// с загруженной вручную обложкой (которая не нарушает авторских прав).
 async function loadPopularBooks(): Promise<PopularBook[]> {
-  const books = await db
-    .select()
-    .from(landingBooksTable)
-    .where(eq(landingBooksTable.isPublished, true))
-    .orderBy(asc(landingBooksTable.sortOrder), asc(landingBooksTable.id));
+  const rows = await db
+    .select({
+      title: booksTable.title,
+      author: booksTable.author,
+      description: booksTable.description,
+      coverPath: booksTable.coverPath,
+      bookId: booksTable.id,
+      coverVersion: booksTable.updatedAt,
+    })
+    .from(giftEditionsTable)
+    .innerJoin(booksTable, eq(giftEditionsTable.bookId, booksTable.id))
+    .where(and(eq(giftEditionsTable.isPublished, true), isNotNull(booksTable.coverPath)))
+    .orderBy(desc(giftEditionsTable.createdAt), desc(giftEditionsTable.id))
+    .limit(12);
 
-  return books.map((book) => ({
+  return rows.map((book) => ({
     title: book.title,
     author: book.author,
     description: book.description,
-    coverUrl: `/api/public/landing-book-covers/${book.id}?v=${book.updatedAt.getTime()}`,
+    coverUrl: `/api/public/gift-book-covers/${book.bookId}?v=${book.coverVersion.getTime()}`,
   }));
 }
 

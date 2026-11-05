@@ -137,8 +137,8 @@ export function LandingPage({
           <section className="bg-muted/30 border-y border-border py-16 md:py-20">
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-12">
-                <h2 className="text-2xl md:text-3xl font-bold mb-3">Readora рекомендует</h2>
-                <p className="text-muted-foreground">Книги, которые стоит прочитать</p>
+                <h2 className="text-2xl md:text-3xl font-bold mb-3">Классика в подарок</h2>
+                <p className="text-muted-foreground">Шедевры мировой литературы уже ждут в вашей библиотеке</p>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {popularBooks.map((book) => (

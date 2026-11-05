@@ -1,8 +1,11 @@
 import { Router, type Request } from "express";
-import { asc, eq, sql } from "drizzle-orm";
+import fs from "node:fs";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, booksTable, giftEditionsTable, type usersTable } from "@workspace/db";
 import { requireAdmin, requireAuth, requireSystemAdmin } from "../middlewares/auth";
 import { countAvailableGiftEditions, grantGiftEditions, resolveGiftSourceBook } from "../lib/gift-editions-service";
+import { invalidatePopularBooksCache } from "../lib/popular-books-service";
+import { resolveUploadPath } from "../lib/storage";
 
 const router = Router();
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
@@ -28,7 +31,7 @@ async function listEditions() {
     .select({ edition: giftEditionsTable, book: booksTable, copiesCount })
     .from(giftEditionsTable)
     .innerJoin(booksTable, eq(giftEditionsTable.bookId, booksTable.id))
-    .orderBy(asc(giftEditionsTable.sortOrder), asc(giftEditionsTable.id));
+    .orderBy(desc(giftEditionsTable.createdAt), desc(giftEditionsTable.id));
 
   return rows.map(({ edition, book, copiesCount }) => ({
     id: edition.id,
@@ -53,6 +56,29 @@ router.get("/gift-editions/available", requireAuth, async (req, res): Promise<vo
 
 router.post("/gift-editions/claim", requireAuth, async (req, res): Promise<void> => {
   res.json({ added: await grantGiftEditions((req as AuthReq).user.id) });
+});
+
+// --- Публичное ---
+
+// Обложка опубликованного подарочного издания для лендинга. Приватные
+// книги без обложки сюда не попадают: requirePublishedCover проверяет издание.
+router.get("/public/gift-book-covers/:bookId", async (req, res): Promise<void> => {
+  const bookId = parseId(req.params.bookId);
+  if (!bookId) { res.sendStatus(404); return; }
+
+  const [row] = await db
+    .select({ coverPath: booksTable.coverPath })
+    .from(giftEditionsTable)
+    .innerJoin(booksTable, eq(giftEditionsTable.bookId, booksTable.id))
+    .where(and(eq(giftEditionsTable.bookId, bookId), eq(giftEditionsTable.isPublished, true)));
+  if (!row?.coverPath) { res.sendStatus(404); return; }
+
+  const coverFilePath = resolveUploadPath(row.coverPath);
+  if (!fs.existsSync(coverFilePath)) { res.sendStatus(404); return; }
+
+  res.setHeader("Content-Type", "image/webp");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  fs.createReadStream(coverFilePath).pipe(res);
 });
 
 // --- Администратор ---
@@ -85,6 +111,7 @@ router.post("/admin/gift-editions", requireSystemAdmin, async (req, res): Promis
     .returning();
   if (!edition) { res.status(409).json({ error: "Книга уже добавлена в подарочные издания" }); return; }
 
+  invalidatePopularBooksCache();
   res.status(201).json((await listEditions()).find((item) => item.id === edition.id));
 });
 
@@ -102,6 +129,7 @@ router.patch("/admin/gift-editions/:id", requireSystemAdmin, async (req, res): P
   const [edition] = await db.update(giftEditionsTable).set(updates).where(eq(giftEditionsTable.id, id)).returning();
   if (!edition) { res.status(404).json({ error: "Подарочное издание не найдено" }); return; }
 
+  invalidatePopularBooksCache();
   res.json((await listEditions()).find((item) => item.id === edition.id));
 });
 
@@ -111,6 +139,7 @@ router.delete("/admin/gift-editions/:id", requireSystemAdmin, async (req, res): 
   if (!id) { res.status(400).json({ error: "Некорректный идентификатор" }); return; }
   const [edition] = await db.delete(giftEditionsTable).where(eq(giftEditionsTable.id, id)).returning();
   if (!edition) { res.status(404).json({ error: "Подарочное издание не найдено" }); return; }
+  invalidatePopularBooksCache();
   res.sendStatus(204);
 });
 

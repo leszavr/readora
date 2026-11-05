@@ -15,6 +15,7 @@ import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-d
 import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
 import { getContentBookId, GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside } from "../lib/gift-editions-service";
+import { invalidatePopularBooksCache } from "../lib/popular-books-service";
 import type { Request } from "express";
 
 const router = Router();
@@ -719,6 +720,7 @@ router.patch("/books/:id", requireAuth, upload.single("cover"), async (req, res)
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
 
   await applyBookUpdates({ book, body: (req.body ?? {}) as Record<string, unknown>, file: req.file ?? undefined });
+  invalidatePopularBooksCache();
 
   const result = await getBookWithDetails(id, user.id);
   res.json(result);
