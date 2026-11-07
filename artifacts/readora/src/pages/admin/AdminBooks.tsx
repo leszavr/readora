@@ -6,8 +6,11 @@ import {
   useToggleBlockBook,
   useCreateGiftEdition,
   useDeleteGiftEdition,
+  useListAdminBookDuplicates,
+  useDeduplicateAdminBooks,
   getListAdminBooksQueryKey,
   getListGiftEditionsQueryKey,
+  getListAdminBookDuplicatesQueryKey,
 } from "@workspace/api-client-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -29,7 +32,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download } from "lucide-react";
+import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download, CopyX, ChevronDown, ChevronRight, Check, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
@@ -40,8 +44,16 @@ export default function AdminBooks() {
   const [search, setSearch] = useState("");
   const [selectedBookIds, setSelectedBookIds] = useState<Set<number>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [keepOverrides, setKeepOverrides] = useState<Record<string, number>>({});
+  const [mergingGroup, setMergingGroup] = useState<string | null>(null);
 
   const { data: books = [], isLoading } = useListAdminBooks({ search: search || undefined });
+  const { data: duplicatesData, isLoading: duplicatesLoading, refetch: refetchDuplicates } = useListAdminBookDuplicates({
+    query: { queryKey: getListAdminBookDuplicatesQueryKey(), retry: false },
+  });
+  const deduplicateMutation = useDeduplicateAdminBooks();
+  const duplicateGroups = duplicatesData?.groups ?? [];
   const pagination = useAdminListPagination(books, "readora.admin.books.pageSize", search);
   const visibleBooks = pagination.visibleItems;
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminBooksQueryKey() });
@@ -121,6 +133,33 @@ export default function AdminBooks() {
     return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
   };
 
+  const mergeGroup = async (group: (typeof duplicateGroups)[number]) => {
+    const keepId = keepOverrides[`${group.ownerId}/${group.fileHash}`] ?? group.keepId;
+    const removeIds = group.candidates.filter((c) => c.id !== keepId).map((c) => c.id);
+    if (removeIds.length === 0) return;
+    setMergingGroup(`${group.ownerId}/${group.fileHash}`);
+    try {
+      await deduplicateMutation.mutateAsync({
+        data: { keepId, removeIds },
+      });
+      toast({
+        title: "Дубликаты объединены",
+        description: `«${group.title}»: оставлена книга #${keepId}, прогресс, закладки и заметки перенесены.`,
+      });
+      await Promise.all([
+        refetchDuplicates(),
+        qc.invalidateQueries({ queryKey: getListAdminBooksQueryKey() }),
+      ]);
+    } catch (error) {
+      const message = error && typeof error === "object" && "message" in error && typeof error.message === "string"
+        ? error.message
+        : "Не удалось объединить дубликаты";
+      toast({ title: "Ошибка объединения", description: message, variant: "destructive" });
+    } finally {
+      setMergingGroup(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -133,6 +172,105 @@ export default function AdminBooks() {
             <Trash2 className="w-4 h-4" />
             Удалить ({selectedBookIds.size})
           </Button>
+        )}
+      </div>
+
+      <div className="border rounded-xl bg-card overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setDuplicatesOpen((v) => !v)}
+            className="flex flex-1 items-center gap-2 text-left hover:opacity-80"
+            aria-expanded={duplicatesOpen}
+          >
+            {duplicatesOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <CopyX className="w-4 h-4 text-destructive" />
+            <span className="text-sm font-medium">Дубликаты книг</span>
+            {duplicatesLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+            ) : (
+              <Badge variant={duplicateGroups.length > 0 ? "destructive" : "secondary"} className="text-xs">
+                {duplicateGroups.length}
+              </Badge>
+            )}
+          </button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 text-muted-foreground"
+            disabled={duplicatesLoading}
+            onClick={() => void refetchDuplicates()}
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", duplicatesLoading && "animate-spin")} />
+            Проверить
+          </Button>
+        </div>
+        {duplicatesOpen && (
+          <div className="space-y-3 border-t px-4 py-4">
+            <p className="text-xs text-muted-foreground">
+              Группы книг с одинаковым файлом у одного владельца. При объединении прогресс
+              чтения, закладки и заметки переносятся на сохраняемую книгу.
+            </p>
+            {duplicatesLoading ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : duplicateGroups.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">Дубликаты не найдены</p>
+            ) : (
+              duplicateGroups.map((group) => {
+                  const key = `${group.ownerId}/${group.fileHash}`;
+                  const keepId = keepOverrides[key] ?? group.keepId;
+                  return (
+                    <div key={key} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium">{group.title}</p>
+                        {group.author && <p className="text-xs text-muted-foreground">{group.author}</p>}
+                        <Badge variant="outline" className="text-xs">{group.ownerUsername ?? `user #${group.ownerId}`}</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="ml-auto gap-1.5"
+                          disabled={mergingGroup === key}
+                          onClick={() => void mergeGroup(group)}
+                        >
+                          {mergingGroup === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CopyX className="w-3.5 h-3.5" />}
+                          Объединить ({group.candidates.length - 1} дубл.)
+                        </Button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {group.candidates.map((c) => (
+                          <label
+                            key={c.id}
+                            className="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+                          >
+                            <input
+                              type="radio"
+                              name={key}
+                              checked={keepId === c.id}
+                              onChange={() => setKeepOverrides((prev) => ({ ...prev, [key]: c.id }))}
+                              className="h-4 w-4 accent-[hsl(var(--primary))]"
+                            />
+                            <span className="font-mono text-xs text-muted-foreground">#{c.id}</span>
+                            <span className="text-xs text-muted-foreground">
+                              загружена {new Date(c.uploadedAt).toLocaleDateString("ru-RU")}
+                            </span>
+                            <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                              {c.readingStatus && (
+                                <Badge variant="secondary" className="text-[11px]">
+                                  {c.readingStatus === "finished" ? "Прочитана" : c.readingStatus === "reading" ? `Читается ${Math.round(c.progressPercent ?? 0)}%` : "Не читана"}
+                                </Badge>
+                              )}
+                              {c.bookmarkCount > 0 && <Badge variant="outline" className="text-[11px]">🔖 {c.bookmarkCount}</Badge>}
+                              {c.noteCount > 0 && <Badge variant="outline" className="text-[11px]">📝 {c.noteCount}</Badge>}
+                              {keepId === c.id && <Check className="w-4 h-4 text-primary" />}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+              })
+            )}
+          </div>
         )}
       </div>
 

@@ -1028,6 +1028,196 @@ export const DeleteAdminFeedbackItemResponse = zod.object({
 
 
 /**
+ * @summary Active announcements for the authenticated user
+ */
+export const GetAnnouncementsResponse = zod.object({
+  "unreadCount": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['announcement', 'release']),
+  "severity": zod.enum(['info', 'warning']),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "publishedAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Full platform changelog (all release entries, archived included)
+ */
+export const GetAnnouncementsChangelogResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "severity": zod.enum(['info', 'warning']),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "publishedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Mark an announcement as read for the current user
+ */
+export const MarkAnnouncementReadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkAnnouncementReadResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
+ * @summary Announcement history with search, kind filter and sorting (admins only)
+ */
+export const listAdminAnnouncementsQueryKindDefault = `all`;
+export const listAdminAnnouncementsQuerySortDefault = `newest`;
+
+export const ListAdminAnnouncementsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "kind": zod.enum(['all', 'announcement', 'release']).default(listAdminAnnouncementsQueryKindDefault),
+  "sort": zod.enum(['newest', 'oldest', 'title']).default(listAdminAnnouncementsQuerySortDefault)
+})
+
+export const ListAdminAnnouncementsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['announcement', 'release']),
+  "severity": zod.enum(['info', 'warning']),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "publishedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create an announcement or changelog release entry (admins only)
+ */
+export const createAdminAnnouncementBodyKindDefault = `announcement`;
+export const createAdminAnnouncementBodySeverityDefault = `info`;
+export const createAdminAnnouncementBodyColorDefault = `blue`;
+export const createAdminAnnouncementBodyTitleMax = 200;
+
+export const createAdminAnnouncementBodyBodyMax = 5000;
+
+
+
+export const CreateAdminAnnouncementBody = zod.object({
+  "kind": zod.enum(['announcement', 'release']).default(createAdminAnnouncementBodyKindDefault),
+  "severity": zod.enum(['info', 'warning']).default(createAdminAnnouncementBodySeverityDefault),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']).default(createAdminAnnouncementBodyColorDefault),
+  "title": zod.string().min(1).max(createAdminAnnouncementBodyTitleMax),
+  "body": zod.string().min(1).max(createAdminAnnouncementBodyBodyMax)
+})
+
+
+/**
+ * @summary Delete announcements in bulk (admins only)
+ */
+export const deleteAdminAnnouncementsBulkBodyIdsMax = 500;
+
+
+
+export const DeleteAdminAnnouncementsBulkBody = zod.object({
+  "ids": zod.array(zod.number()).min(1).max(deleteAdminAnnouncementsBulkBodyIdsMax)
+})
+
+export const DeleteAdminAnnouncementsBulkResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
+ * @summary Update an announcement (admins only)
+ */
+export const UpdateAdminAnnouncementParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateAdminAnnouncementBodyKindDefault = `announcement`;
+export const updateAdminAnnouncementBodySeverityDefault = `info`;
+export const updateAdminAnnouncementBodyColorDefault = `blue`;
+export const updateAdminAnnouncementBodyTitleMax = 200;
+
+export const updateAdminAnnouncementBodyBodyMax = 5000;
+
+
+
+export const UpdateAdminAnnouncementBody = zod.object({
+  "kind": zod.enum(['announcement', 'release']).default(updateAdminAnnouncementBodyKindDefault),
+  "severity": zod.enum(['info', 'warning']).default(updateAdminAnnouncementBodySeverityDefault),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']).default(updateAdminAnnouncementBodyColorDefault),
+  "title": zod.string().min(1).max(updateAdminAnnouncementBodyTitleMax),
+  "body": zod.string().min(1).max(updateAdminAnnouncementBodyBodyMax)
+})
+
+export const UpdateAdminAnnouncementResponse = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['announcement', 'release']),
+  "severity": zod.enum(['info', 'warning']),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "publishedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a single announcement (admins only)
+ */
+export const DeleteAdminAnnouncementParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAdminAnnouncementResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
+ * @summary Archive or restore an announcement (admins only)
+ */
+export const ToggleAdminAnnouncementArchiveParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ToggleAdminAnnouncementArchiveResponse = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['announcement', 'release']),
+  "severity": zod.enum(['info', 'warning']),
+  "color": zod.enum(['yellow', 'green', 'blue', 'pink', 'purple']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "publishedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Count users who read the announcement (admins only)
+ */
+export const GetAdminAnnouncementReadersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAdminAnnouncementReadersResponse = zod.object({
+  "readers": zod.number()
+})
+
+
+/**
  * @summary List all users (admin)
  */
 export const ListAdminUsersQueryParams = zod.object({
@@ -1220,6 +1410,51 @@ export const ListAdminBooksResponseItem = zod.object({
   "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
 })
 export const ListAdminBooksResponse = zod.array(ListAdminBooksResponseItem)
+
+
+/**
+ * @summary Find duplicate book groups (same owner and file hash)
+ */
+export const ListAdminBookDuplicatesResponse = zod.object({
+  "groups": zod.array(zod.object({
+  "ownerId": zod.number(),
+  "ownerUsername": zod.string().nullable(),
+  "fileHash": zod.string(),
+  "title": zod.string(),
+  "author": zod.string().nullable(),
+  "keepId": zod.number().describe('Книга, которую рекомендуется оставить (самая актуальная)'),
+  "candidates": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "author": zod.string().nullable(),
+  "uploadedAt": zod.coerce.date(),
+  "hasProgress": zod.boolean(),
+  "progressPercent": zod.number().nullable(),
+  "readingStatus": zod.union([zod.literal('not_started'),zod.literal('reading'),zod.literal('finished'),zod.literal(null)]).nullable(),
+  "lastReadAt": zod.coerce.date().nullable(),
+  "bookmarkCount": zod.number(),
+  "noteCount": zod.number()
+}))
+}))
+})
+
+
+/**
+ * @summary Merge a duplicate group keeping user progress, bookmarks and notes
+ */
+export const deduplicateAdminBooksBodyRemoveIdsMax = 100;
+
+
+
+export const DeduplicateAdminBooksBody = zod.object({
+  "keepId": zod.number(),
+  "removeIds": zod.array(zod.number()).min(1).max(deduplicateAdminBooksBodyRemoveIdsMax)
+})
+
+export const DeduplicateAdminBooksResponse = zod.object({
+  "keptBookId": zod.number(),
+  "removedBookIds": zod.array(zod.number())
+})
 
 
 /**

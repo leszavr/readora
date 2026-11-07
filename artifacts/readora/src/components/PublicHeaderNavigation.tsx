@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
+import { AnnouncementBell } from "@/components/AnnouncementBell";
 
 export function PublicHeaderNavigation({
   registrationStatus,
@@ -61,6 +62,7 @@ export function PublicHeaderNavigation({
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
+        <AnnouncementBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full" aria-label="Открыть меню профиля">

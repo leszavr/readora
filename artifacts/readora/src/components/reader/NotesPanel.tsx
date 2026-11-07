@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { NoteDto } from "@/hooks/use-notes";
-import { NoteEditor, NoteText, noteColorClass } from "./NoteEditor";
+import { NoteEditor, NoteText, noteColorClass } from "@/components/NoteEditor";
 
 interface Props {
   notes: NoteDto[];

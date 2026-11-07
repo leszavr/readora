@@ -336,6 +336,249 @@ export interface FeedbackDeleteResult {
   deleted: number;
 }
 
+export interface SuccessResponse {
+  success: boolean;
+}
+
+export type AnnouncementInputKind = typeof AnnouncementInputKind[keyof typeof AnnouncementInputKind];
+
+
+export const AnnouncementInputKind = {
+  announcement: 'announcement',
+  release: 'release',
+} as const;
+
+export type AnnouncementInputSeverity = typeof AnnouncementInputSeverity[keyof typeof AnnouncementInputSeverity];
+
+
+export const AnnouncementInputSeverity = {
+  info: 'info',
+  warning: 'warning',
+} as const;
+
+export type AnnouncementInputColor = typeof AnnouncementInputColor[keyof typeof AnnouncementInputColor];
+
+
+export const AnnouncementInputColor = {
+  yellow: 'yellow',
+  green: 'green',
+  blue: 'blue',
+  pink: 'pink',
+  purple: 'purple',
+} as const;
+
+export interface AnnouncementInput {
+  kind?: AnnouncementInputKind;
+  severity?: AnnouncementInputSeverity;
+  color?: AnnouncementInputColor;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  body: string;
+}
+
+export interface AnnouncementBulkDeleteInput {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  ids: number[];
+}
+
+export interface AnnouncementDeleteResult {
+  deleted: number;
+}
+
+export interface AnnouncementReadersResult {
+  readers: number;
+}
+
+/**
+ * @nullable
+ */
+export type BookDuplicateCandidateReadingStatus = typeof BookDuplicateCandidateReadingStatus[keyof typeof BookDuplicateCandidateReadingStatus] | null;
+
+
+export const BookDuplicateCandidateReadingStatus = {
+  not_started: 'not_started',
+  reading: 'reading',
+  finished: 'finished',
+} as const;
+
+export interface BookDuplicateCandidate {
+  id: number;
+  title: string;
+  /** @nullable */
+  author: string | null;
+  uploadedAt: string;
+  hasProgress: boolean;
+  /** @nullable */
+  progressPercent: number | null;
+  /** @nullable */
+  readingStatus: BookDuplicateCandidateReadingStatus;
+  /** @nullable */
+  lastReadAt: string | null;
+  bookmarkCount: number;
+  noteCount: number;
+}
+
+export interface BookDuplicateGroup {
+  ownerId: number;
+  /** @nullable */
+  ownerUsername: string | null;
+  fileHash: string;
+  title: string;
+  /** @nullable */
+  author: string | null;
+  /** Книга, которую рекомендуется оставить (самая актуальная) */
+  keepId: number;
+  candidates: BookDuplicateCandidate[];
+}
+
+export interface BookDuplicatesResponse {
+  groups: BookDuplicateGroup[];
+}
+
+export interface BookDeduplicateInput {
+  keepId: number;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  removeIds: number[];
+}
+
+export interface BookDeduplicateResult {
+  keptBookId: number;
+  removedBookIds: number[];
+}
+
+export type AnnouncementItemKind = typeof AnnouncementItemKind[keyof typeof AnnouncementItemKind];
+
+
+export const AnnouncementItemKind = {
+  announcement: 'announcement',
+  release: 'release',
+} as const;
+
+export type AnnouncementItemSeverity = typeof AnnouncementItemSeverity[keyof typeof AnnouncementItemSeverity];
+
+
+export const AnnouncementItemSeverity = {
+  info: 'info',
+  warning: 'warning',
+} as const;
+
+export type AnnouncementItemColor = typeof AnnouncementItemColor[keyof typeof AnnouncementItemColor];
+
+
+export const AnnouncementItemColor = {
+  yellow: 'yellow',
+  green: 'green',
+  blue: 'blue',
+  pink: 'pink',
+  purple: 'purple',
+} as const;
+
+export interface AnnouncementItem {
+  id: number;
+  kind: AnnouncementItemKind;
+  severity: AnnouncementItemSeverity;
+  color: AnnouncementItemColor;
+  title: string;
+  body: string;
+  publishedAt: string;
+  /** @nullable */
+  readAt: string | null;
+}
+
+export type ChangelogItemSeverity = typeof ChangelogItemSeverity[keyof typeof ChangelogItemSeverity];
+
+
+export const ChangelogItemSeverity = {
+  info: 'info',
+  warning: 'warning',
+} as const;
+
+export type ChangelogItemColor = typeof ChangelogItemColor[keyof typeof ChangelogItemColor];
+
+
+export const ChangelogItemColor = {
+  yellow: 'yellow',
+  green: 'green',
+  blue: 'blue',
+  pink: 'pink',
+  purple: 'purple',
+} as const;
+
+export interface ChangelogItem {
+  id: number;
+  severity: ChangelogItemSeverity;
+  color: ChangelogItemColor;
+  title: string;
+  body: string;
+  publishedAt: string;
+}
+
+export interface ChangelogResponse {
+  items: ChangelogItem[];
+}
+
+export interface AnnouncementsResponse {
+  unreadCount: number;
+  items: AnnouncementItem[];
+}
+
+export type AdminAnnouncementKind = typeof AdminAnnouncementKind[keyof typeof AdminAnnouncementKind];
+
+
+export const AdminAnnouncementKind = {
+  announcement: 'announcement',
+  release: 'release',
+} as const;
+
+export type AdminAnnouncementSeverity = typeof AdminAnnouncementSeverity[keyof typeof AdminAnnouncementSeverity];
+
+
+export const AdminAnnouncementSeverity = {
+  info: 'info',
+  warning: 'warning',
+} as const;
+
+export type AdminAnnouncementColor = typeof AdminAnnouncementColor[keyof typeof AdminAnnouncementColor];
+
+
+export const AdminAnnouncementColor = {
+  yellow: 'yellow',
+  green: 'green',
+  blue: 'blue',
+  pink: 'pink',
+  purple: 'purple',
+} as const;
+
+export interface AdminAnnouncement {
+  id: number;
+  kind: AdminAnnouncementKind;
+  severity: AdminAnnouncementSeverity;
+  color: AdminAnnouncementColor;
+  title: string;
+  body: string;
+  publishedAt: string;
+  /** @nullable */
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminAnnouncementsResponse {
+  items: AdminAnnouncement[];
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -1551,6 +1794,30 @@ export const DeleteAdminFeedbackRating = {
   NUMBER_3: '3',
   NUMBER_4: '4',
   NUMBER_5: '5',
+} as const;
+
+export type ListAdminAnnouncementsParams = {
+search?: string;
+kind?: ListAdminAnnouncementsKind;
+sort?: ListAdminAnnouncementsSort;
+};
+
+export type ListAdminAnnouncementsKind = typeof ListAdminAnnouncementsKind[keyof typeof ListAdminAnnouncementsKind];
+
+
+export const ListAdminAnnouncementsKind = {
+  all: 'all',
+  announcement: 'announcement',
+  release: 'release',
+} as const;
+
+export type ListAdminAnnouncementsSort = typeof ListAdminAnnouncementsSort[keyof typeof ListAdminAnnouncementsSort];
+
+
+export const ListAdminAnnouncementsSort = {
+  newest: 'newest',
+  oldest: 'oldest',
+  title: 'title',
 } as const;
 
 export type ListAdminUsersParams = {

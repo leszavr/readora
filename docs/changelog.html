@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Readora — хронология обновлений для читателей</title>
+  <style>
+    :root {
+      --bg: #F5F2ED;
+      --card: #FFFFFF;
+      --text: #3D2B1F;
+      --muted: #5C4033;
+      --primary: #5C4033;
+      --accent: #8B5A2B;
+      --border: #E8DFD5;
+      --soft: #F7F3ED;
+      --milestone: #B3261E;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 40px 16px;
+    }
+    .wrap { max-width: 840px; margin: 0 auto; }
+    header { margin-bottom: 32px; }
+    header h1 {
+      font-family: "Playfair Display", Georgia, serif;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--primary);
+      margin: 0 0 8px;
+    }
+    header p { color: var(--muted); font-size: 14px; margin: 0; }
+    .timeline { position: relative; padding-left: 26px; }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    .entry { position: relative; margin-bottom: 22px; }
+    .entry::before {
+      content: "";
+      position: absolute;
+      left: -25px;
+      top: 7px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--card);
+      box-shadow: 0 0 0 2px var(--border);
+    }
+    .entry.milestone::before { background: var(--milestone); box-shadow: 0 0 0 2px #F2C4BD; }
+    .entry .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(92, 64, 51, 0.08);
+      padding: 16px 22px;
+    }
+    .entry.milestone .card { border-color: #E8B4AC; background: #FFFDFC; }
+    .date {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 4px;
+    }
+    .entry.milestone .date { color: var(--milestone); }
+    .title { font-size: 16px; font-weight: 700; color: var(--primary); margin: 0 0 8px; }
+    ul.feat { margin: 0; padding-left: 20px; font-size: 14.5px; }
+    ul.feat li { margin: 4px 0; }
+    ul.feat li::marker { color: var(--accent); }
+    .note {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-top: 14px;
+      padding: 12px 16px;
+      background: var(--soft);
+      border-radius: 8px;
+      border-left: 4px solid var(--accent);
+    }
+    footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 12px; }
+    @media (max-width: 640px) {
+      body { padding: 20px 8px; }
+      .entry .card { padding: 14px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Хронология обновлений Readora</h1>
+      <p>Что и когда добавлялось для читателей · по истории git с 02.06.2026 · только пользовательский опыт
+        (админские и серверные обновления не включены)</p>
+    </header>
+
+    <div class="timeline">
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">2 июня 2026</p>
+          <p class="title">Запуск платформы</p>
+          <ul class="feat">
+            <li>Личная библиотека с загрузкой книг FB2 и EPUB (до 50 МБ) — метаданные, обложка и оглавление извлекаются автоматически.</li>
+            <li>Ридер в браузере: шрифт, размер, темы, ширина колонки, автосохранение прогресса чтения.</li>
+            <li>Фильтры по жанру и статусу чтения, полнотекстовый поиск по библиотеке.</li>
+            <li>Циклы и серии с порядковыми номерами.</li>
+            <li>Регистрация и вход по email: подтверждение почты, сброс пароля.</li>
+            <li>Установка сайта как приложения (PWA).</li>
+            <li>В тот же день: смена пароля с подтверждением по email; показ/скрытие пароля при входе; точная синхронизация позиции чтения между устройствами.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">3 июня 2026</p>
+          <p class="title">Навигация и установка</p>
+          <ul class="feat">
+            <li>Умная навигация по главам: запоминание позиции прокрутки, листание стрелками, кнопки «предыдущая/следующая».</li>
+            <li>Улучшение установки приложения и превью-ссылки для соцсетей (Open Graph).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">4 июня 2026</p>
+          <p class="title">Стабильность</p>
+          <ul class="feat">
+            <li>Корректное отображение старых FB2-книг в кодировке Windows-1251.</li>
+            <li>Понятный экран технических работ для посетителей на время обслуживания.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">7 июня 2026</p>
+          <p class="title">Настройки чтения</p>
+          <ul class="feat">
+            <li>Настройки ридера сохраняются на устройстве и синхронизируются с сервером.</li>
+            <li>«Семантическая» позиция чтения — точное сравнение прогресса между устройствами.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">22 июня 2026</p>
+          <p class="title">Правовая база и связь</p>
+          <ul class="feat">
+            <li>Правовые документы в футере: правила пользования, политика конфиденциальности, информация для правообладателей.</li>
+            <li>Форма обратной связи — писать в поддержку можно прямо с сайта.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">12 июля 2026</p>
+          <p class="title">Книжная полка</p>
+          <ul class="feat">
+            <li>Отдельная полка прочитанных книг.</li>
+            <li>Циклы на полке показываются «стопками» обложек; выравнивание карточек книг.</li>
+            <li>Аккуратная страница «не найдено» (404).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">4 августа 2026</p>
+          <p class="title">Удобство и скорость</p>
+          <ul class="feat">
+            <li>«Запомнить меня» — автоматический вход при возвращении.</li>
+            <li>Массовое удаление книг.</li>
+            <li>Ускорение загрузки интерфейса библиотеки.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">8–9 августа 2026</p>
+          <p class="title">Публичный сайт</p>
+          <ul class="feat">
+            <li>Публичный лендинг с подборкой популярных книг.</li>
+            <li>Страница «О проекте» и SEO-разметка для поисковиков.</li>
+            <li>Первый самостоятельный сценарий удаления аккаунта.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">10 сентября 2026</p>
+          <p class="title">Лендинг и FB2</p>
+          <ul class="feat">
+            <li>Кураторская подборка книг на главной странице.</li>
+            <li>Корректное разбиение FB2-книг со «смешанным» оглавлением.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">16–17 сентября 2026</p>
+          <p class="title">Доверие и открытость</p>
+          <ul class="feat">
+            <li>Переписанная политика конфиденциальности и обязательное согласие при регистрации.</li>
+            <li>Честное уведомление, если регистрация временно отключена.</li>
+            <li>FAQ о самостоятельном развёртывании на «О проекте».</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">18–19 сентября 2026</p>
+          <p class="title">Вход через соцсети</p>
+          <ul class="feat">
+            <li>Вход через Яндекс ID.</li>
+            <li>Вход через VK ID — кнопки VK, Одноклассники и Почта.</li>
+            <li>Квоты библиотеки: прозрачный лимит места с индикатором занятого объёма.</li>
+            <li>Приватная аналитика — только по согласию, отключается в профиле.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">21 сентября 2026</p>
+          <p class="title">Заметки и закладки</p>
+          <ul class="feat">
+            <li>Выделение текста в книге → заметка или закладка.</li>
+            <li>Заметки с цветами подсветки, закладки с сохранением фрагмента.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">1 октября 2026</p>
+          <p class="title">Подарочные издания</p>
+          <ul class="feat">
+            <li>Классика из общественного достояния — в подарок каждому новому читателю при регистрации.</li>
+            <li>Подарки не занимают место в квоте; баннер с авто-скрытием (3 октября).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">12 октября 2026</p>
+          <p class="title">Голос читателя</p>
+          <ul class="feat">
+            <li>Оценка сервиса по звёздам с выбором причин и пожеланиями прямо в интерфейсе.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">20–27 октября 2026</p>
+          <p class="title">Мобильный опыт и мелочи</p>
+          <ul class="feat">
+            <li>Улучшенный мобильный интерфейс читателя и библиотеки; плавающая кнопка «Оцените Readora».</li>
+            <li>Письмо-напоминание, если email так и не подтверждён (25 октября).</li>
+            <li>Ссылки на Telegram-канал в футере и на «О сервисе»; корректное перечитывание книг и короткие главы.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">29 октября 2026</p>
+          <p class="title">Шесть новых форматов</p>
+          <ul class="feat">
+            <li>Добавлены MOBI (и AZW3), CBZ, TXT, Markdown и HTML — вдобавок к FB2 и EPUB.</li>
+            <li>Понятная сводка ошибок при пакетной загрузке: «добавлено X из Y» с причиной по каждой книге.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">31 октября 2026</p>
+          <p class="title">Заметки 2.0</p>
+          <ul class="feat">
+            <li>Единый редактор заметок: форматирование, эмодзи, пять цветов.</li>
+            <li>Сквозные заметки и закладки по всему циклу книг — с переходом в нужную книгу на нужное место.</li>
+            <li>Вкладка «Заметки и закладки» в библиотеке: всё сразу, с поиском.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">1–3 ноября 2026</p>
+          <p class="title">Чтение из облака</p>
+          <ul class="feat">
+            <li>Внешние хранилища: библиотека читается напрямую из Яндекс.Диска и Облака Mail.ru — файлы остаются в облаке и не занимают место на сервере.</li>
+            <li>Синхронизация с прогрессом, паузой и детализацией ошибок по каждому файлу.</li>
+            <li>Поддержка fb2.zip и .fbz; «перенести в облако» — освободить место, сохранив прогресс.</li>
+            <li>Иконка «облако» на карточках облачных книг; интуитивный выбор книг и массовые действия (удалить, назначить в цикл).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">5 ноября 2026</p>
+          <p class="title">Безопасное удаление аккаунта</p>
+          <ul class="feat">
+            <li>Удаление аккаунта «как на GitHub»: полное описание последствий, 8-значный код подтверждения, 30 дней на восстановление через поддержку.</li>
+            <li>Экран блокировки входа с отсчётом до удаления, кнопкой формы обратной связи и адресом поддержки.</li>
+            <li>Лендинг начал показывать подарочные издания вместо ручной подборки.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry milestone">
+        <div class="card">
+          <p class="date">7 ноября 2026</p>
+          <p class="title">Оповещения и Changelog</p>
+          <ul class="feat">
+            <li>Колокольчик рядом с аватаром на всех страницах: оповещения от платформы — новости, важная информация и анонсы обновлений; бейдж показывает число непрочитанных.</li>
+            <li>Страница «Changelog» — полная история обновлений платформы; ссылка «Весь Changelog» внизу списка оповещений.</li>
+            <li>Оповещения подкрашиваются цветом, чтобы их было легче различать.</li>
+            <li>Защита от дублей: повторная загрузка той же книги больше не создаёт копию — сервер сообщает, что она уже в библиотеке, а прогресс и закладки остаются на месте.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="note">
+      Хронология составлена по датам коммитов git (сцена запуска — 2 июня 2026 года, всего в истории 126 коммитов).
+      Включены только изменения, затрагивающие опыт читателей; обновления админ-панели, аналитики, инфраструктуры и
+      внутренних сервисов в документ не вошли. Даты сгруппированы, когда несколько небольших правок шли подряд.
+    </div>
+
+    <footer>Readora — хронология пользовательских обновлений · см. также features-overview.html и permissions-matrix.html</footer>
+  </div>
+</body>
+</html>

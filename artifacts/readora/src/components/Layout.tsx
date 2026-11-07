@@ -15,6 +15,7 @@ import { Library, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
 import { useMaintenanceStatus } from "@/hooks/use-maintenance-status";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { SiteFooter } from "@/components/SiteFooter";
+import { AnnouncementBell } from "@/components/AnnouncementBell";
 
 function BrandWordmark({ className }: Readonly<{ className?: string }>) {
   return (
@@ -84,7 +85,9 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
 
           <div className="flex items-center gap-2 ml-auto">
             {isAuthenticated ? (
-              <DropdownMenu>
+              <>
+                <AnnouncementBell />
+                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full">
                     <Avatar className="w-8 h-8">
@@ -121,6 +124,7 @@ export function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </>
             ) : (
               <>
                 <Link href="/login">

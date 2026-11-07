@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { eq, and, ilike, inArray, desc, asc, sql, notInArray, type SQL } from "drizzle-orm";
+import { eq, and, ilike, inArray, desc, asc, sql, notInArray, isNull, type SQL } from "drizzle-orm";
 import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
@@ -317,8 +317,35 @@ async function processBookUploadJob(jobId: number): Promise<void> {
     const filePath = resolveUploadPath(storageKey);
 
     await updateUploadJob(jobId, { stage: "parsing", progress: 35 });
+
+    // Дедупликация: тот же файл у того же владельца уже в библиотеке —
+    // новую книгу не создаём, прогресс и закладки остаются у существующей.
+    const [existing] = await db
+      .select({ id: booksTable.id })
+      .from(booksTable)
+      .where(and(
+        eq(booksTable.ownerUserId, job.ownerUserId),
+        eq(booksTable.fileHash, fileHash),
+        isNull(booksTable.contentBookId),
+      ))
+      .limit(1);
+    if (existing) {
+      fs.rmSync(tempPath, { force: true });
+      await updateUploadJob(jobId, {
+        status: "failed",
+        stage: "failed",
+        progress: 100,
+        errorMessage: `Эта книга уже в вашей библиотеке (загружена ранее)`,
+        completedAt: new Date(),
+      });
+      await recordServerAnalyticsEvent(owner, {
+        eventName: "book_upload_finished",
+        properties: { format: job.format, durationMs: 0, outcome: "error", reason: "duplicate" },
+      });
+      return;
+    }
+
     // Лимиты парсера синхронизированы с квотой владельца: админ — без лимитов,
-    // обычный пользователь — настраиваемый в админке maxFileSizeMb.
     const quota = await getStorageQuota(owner);
     const parseOptions: ParseBookOptions = quota.isExempt
       ? { sizeLimits: { maxFileBytes: null } }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAllNotes, useAllBookmarks, type AnnotationBookmarkDto, type AnnotationNoteDto } from "@/hooks/use-all-annotations";
-import { NoteText, noteColorClass } from "@/components/reader/NoteEditor";
+import { NoteText, noteColorClass } from "@/components/NoteEditor";
 import { setReaderJumpIntent } from "@/lib/reader-jump";
 
 type AnnotationTab = "notes" | "bookmarks";

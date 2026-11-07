@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, LineChart, Gift, MessageSquareText, HardDrive } from "lucide-react";
+import { Users, BookCopy, BarChart2, Settings, ShieldCheck, Tags, Mail, Inbox, LineChart, Gift, MessageSquareText, HardDrive, Megaphone } from "lucide-react";
 
 const AdminStats = lazy(() => import("@/pages/admin/AdminStats"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -15,12 +15,14 @@ const AdminEmails = lazy(() => import("@/pages/admin/AdminEmails"));
 const AdminGiftEditions = lazy(() => import("@/pages/admin/AdminGiftEditions"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/AdminAnalytics"));
 const AdminFeedback = lazy(() => import("@/pages/admin/AdminFeedback"));
+const AdminAnnouncements = lazy(() => import("@/pages/admin/AdminAnnouncements"));
 const AdminExternalStorage = lazy(() => import("@/pages/admin/AdminExternalStorage"));
 
 const TABS = [
   { id: "stats", label: "Обзор", icon: BarChart2 },
   { id: "analytics", label: "Аналитика", icon: LineChart },
   { id: "feedback", label: "Отзывы", icon: MessageSquareText },
+  { id: "announcements", label: "Оповещения", icon: Megaphone },
   { id: "users", label: "Пользователи", icon: Users },
   { id: "books", label: "Книги", icon: BookCopy },
   { id: "gift-editions", label: "Подарочные издания", icon: Gift },
@@ -82,6 +84,7 @@ export default function AdminPage() {
                 {tab === "stats" && <AdminStats />}
                 {tab === "analytics" && isAdmin && <AdminAnalytics />}
                 {tab === "feedback" && isAdmin && <AdminFeedback />}
+                {tab === "announcements" && <AdminAnnouncements />}
                 {tab === "users" && <AdminUsers />}
                 {tab === "books" && <AdminBooks />}
                 {tab === "gift-editions" && <AdminGiftEditions />}

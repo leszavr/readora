@@ -38,6 +38,7 @@ import {
 import { emailService } from "../lib/email-service";
 import { logger } from "../lib/logger";
 import { deleteStoredFilesIfUnreferenced, normalizeBookIds } from "../lib/book-deletion-service";
+import { findDuplicateGroups, mergeDuplicateBooks } from "../lib/book-duplicates-service";
 import { resolveUploadPath } from "../lib/storage";
 import { downloadExternalBookFile } from "../lib/external-storage/content-cache";
 import { getExternalCacheBudgetBytes, resetExternalContentCache } from "../lib/external-storage/content-cache";
@@ -1028,6 +1029,58 @@ router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
       giftEditionId: r.giftEditionId ?? null,
     })),
   );
+});
+
+// GET /admin/books/duplicates — группы дублей (тот же владелец + тот же файл)
+router.get("/admin/books/duplicates", requireAdmin, async (_req, res): Promise<void> => {
+  const groups = await findDuplicateGroups();
+  res.json({
+    groups: groups.map((g) => ({
+      ownerId: g.ownerId,
+      ownerUsername: g.ownerUsername,
+      fileHash: g.fileHash,
+      title: g.title,
+      author: g.author,
+      keepId: g.keepId,
+      candidates: g.candidates.map((c) => ({
+        id: c.id,
+        title: c.title,
+        author: c.author,
+        uploadedAt: c.uploadedAt,
+        hasProgress: c.hasProgress,
+        progressPercent: c.progressPercent,
+        readingStatus: c.readingStatus,
+        lastReadAt: c.lastReadAt,
+        bookmarkCount: c.bookmarkCount,
+        noteCount: c.noteCount,
+      })),
+    })),
+  });
+});
+
+// POST /admin/books/deduplicate — слить группу дублей, сохранив данные пользователя
+router.post("/admin/books/deduplicate", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = z.object({
+    keepId: z.number().int().positive(),
+    removeIds: z.array(z.number().int().positive()).min(1).max(100),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Передайте keepId и от 1 до 100 removeIds" });
+    return;
+  }
+  const { keepId, removeIds } = parsed.data;
+  if (removeIds.includes(keepId)) {
+    res.status(400).json({ error: "keepId не может входить в removeIds" });
+    return;
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => mergeDuplicateBooks(keepId, removeIds, tx));
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось объединить дубликаты";
+    res.status(409).json({ error: message });
+  }
 });
 
 // GET /admin/books/:id

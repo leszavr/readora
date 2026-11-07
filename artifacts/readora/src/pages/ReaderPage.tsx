@@ -96,7 +96,7 @@ import {
 import { useBookmarks, useCreateBookmark, useDeleteBookmark } from "@/hooks/use-bookmarks";
 import { useNotes, useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/use-notes";
 import { NotesPanel } from "@/components/reader/NotesPanel";
-import { NoteEditor } from "@/components/reader/NoteEditor";
+import { NoteEditor } from "@/components/NoteEditor";
 import { TextSelectionToolbar } from "@/components/reader/TextSelectionToolbar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { setReaderJumpIntent, takeReaderJumpIntent } from "@/lib/reader-jump";

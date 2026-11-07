@@ -16,6 +16,7 @@ const BookPage = lazy(() => import("@/pages/BookPage"));
 const ReaderPage = lazy(() => import("@/pages/ReaderPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const ChangelogPage = lazy(() => import("@/pages/ChangelogPage"));
 const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
@@ -43,6 +44,7 @@ function Router() {
         <Route path="/book/:id" component={BookPage} />
         <Route path="/reader/:id" component={ReaderPage} />
         <Route path="/profile" component={ProfilePage} />
+        <Route path="/changelog" component={ChangelogPage} />
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
       </Switch>
