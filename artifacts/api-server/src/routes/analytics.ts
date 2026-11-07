@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { rateLimit } from "express-rate-limit";
+import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { z } from "zod/v4";
 import { analyticsEventsTable, analyticsReaderSessionsTable, booksTable, db, type usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
@@ -59,7 +59,8 @@ const analyticsLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const user = (req as AuthReq).user;
-    return user ? `user:${user.id}` : `ip:${req.ip}`;
+    // ipKeyGenerator нормализует IPv6-адреса, иначе разные записи одного адреса обходили бы лимит
+    return user ? `user:${user.id}` : `ip:${ipKeyGenerator(req.ip ?? "unknown")}`;
   },
   message: { error: "Слишком много событий аналитики. Попробуйте позже" },
 });
