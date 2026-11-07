@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { emailService } from "../lib/email-service";
+import { touchOnlineUser } from "../lib/online-users";
 
 // Helper function to check maintenance mode
 async function checkMaintenanceMode(
@@ -90,6 +91,7 @@ export async function requireAuth(
   }
 
   (req as Request & { user: typeof user }).user = user;
+  touchOnlineUser(user);
   next();
 }
 

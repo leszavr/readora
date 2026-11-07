@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAnnouncementsQueryKey,
   useGetAnnouncements,
   useMarkAnnouncementRead,
+  useMarkAllAnnouncementsRead,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { AlertTriangle, Bell, History, Megaphone, Sparkles } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, History, Megaphone, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NoteText } from "@/components/NoteEditor";
 
@@ -37,13 +37,21 @@ export function AnnouncementBell() {
     query: { queryKey: getGetAnnouncementsQueryKey(), staleTime: 60_000, retry: false },
   });
   const markRead = useMarkAnnouncementRead();
+  const markAllRead = useMarkAllAnnouncementsRead();
 
   const items = data?.items ?? [];
+  const unreadItems = items.filter((i) => i.readAt === null);
   const unreadCount = data?.unreadCount ?? 0;
 
   async function handleOpenItem(id: number, isUnread: boolean) {
     if (!isUnread) return;
     await markRead.mutateAsync({ id });
+    await qc.invalidateQueries({ queryKey: getGetAnnouncementsQueryKey() });
+  }
+
+  async function handleMarkAllRead() {
+    if (unreadItems.length === 0) return;
+    await markAllRead.mutateAsync();
     await qc.invalidateQueries({ queryKey: getGetAnnouncementsQueryKey() });
   }
 
@@ -73,16 +81,30 @@ export function AnnouncementBell() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
           <p className="text-sm font-semibold">Оповещения</p>
+          {unreadItems.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+              onClick={() => void handleMarkAllRead()}
+              disabled={markAllRead.isPending}
+              aria-label="Отметить все прочитанными"
+              title="Отметить все прочитанными"
+            >
+              <CheckCheck className="h-4 w-4" />
+              Отметить все
+            </Button>
+          )}
         </div>
-        {items.length === 0 ? (
+        {unreadItems.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            Нет оповещений
+            Нет непрочитанных оповещений
           </div>
         ) : (
           <div className="max-h-96 overflow-y-auto">
-            {items.map((item) => {
+            {unreadItems.map((item) => {
               const isUnread = item.readAt === null;
               const Icon =
                 item.kind === "release" ? Sparkles : item.severity === "warning" ? AlertTriangle : Megaphone;
@@ -129,14 +151,14 @@ export function AnnouncementBell() {
           </div>
         )}
         <div className="border-t border-border px-4 py-2">
-          <Link
+          <a
             href="/changelog"
             className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setOpen(false)}
           >
             <History className="h-4 w-4" />
             Весь Changelog
-          </Link>
+          </a>
         </div>
       </PopoverContent>
     </Popover>

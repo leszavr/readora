@@ -101,6 +101,12 @@ router.post("/admin/gift-editions", requireSystemAdmin, async (req, res): Promis
   if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
   if (book.contentBookId !== null) { res.status(400).json({ error: "Подарочную копию нельзя сделать подарочным изданием" }); return; }
   if (book.status !== "active") { res.status(400).json({ error: "Заблокированную книгу нельзя сделать подарочным изданием" }); return; }
+  // Подарочное издание можно создать только из собственной книги администратора:
+  // публикация чужих книг запрещена (приватность и авторские права).
+  if (book.ownerUserId !== user.id) {
+    res.status(403).json({ error: "Подарочным изданием можно сделать только книгу из своей библиотеки. Загрузите файл в свою библиотеку и повторите." });
+    return;
+  }
 
   const source = await resolveGiftSourceBook(book, user.id);
 

@@ -83,7 +83,26 @@ router.get("/announcements/changelog", requireAuth, async (_req, res): Promise<v
   res.json({ items });
 });
 
-// POST /announcements/:id/read — отметить прочитанным
+// POST /announcements/read-all — отметить все активные оповещения прочитанными
+router.post("/announcements/read-all", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+
+  const activeIds = await db
+    .select({ id: adminAnnouncementsTable.id })
+    .from(adminAnnouncementsTable)
+    .where(isNull(adminAnnouncementsTable.archivedAt));
+
+  if (activeIds.length > 0) {
+    await db
+      .insert(userAnnouncementReadsTable)
+      .values(activeIds.map(({ id }) => ({ userId: user.id, announcementId: id })))
+      .onConflictDoNothing();
+  }
+
+  res.json({ success: true });
+});
+
+// GET /announcements/:id/read — отметить прочитанным
 router.post("/announcements/:id/read", requireAuth, async (req, res): Promise<void> => {
   const user = (req as AuthReq).user;
   const id = parseId(req.params.id);

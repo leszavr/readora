@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useListAdminBooks,
   useDeleteAdminBook,
@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -32,15 +33,169 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download, CopyX, ChevronDown, ChevronRight, Check, RefreshCw } from "lucide-react";
+import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download, CopyX, ChevronDown, ChevronRight, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Layers, UserRound, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
+
+type BookSortField = "title" | "format" | "owner" | "status" | "size" | "uploadedAt" | "gift";
+type BookFilterField = "format" | "owner" | "status" | "gift";
+type BookGroupField = "none" | "format" | "owner" | "status" | "gift";
+
+interface AdminBookRow {
+  id: number;
+  title: string;
+  author?: string | null;
+  format: string;
+  status: string;
+  ownerUsername?: string | null;
+  ownerId?: number | null;
+  fileSize?: number | null;
+  uploadedAt: string;
+  giftEditionId?: number | null;
+}
+
+const SORT_LABELS: Record<BookSortField, string> = {
+  title: "Название",
+  format: "Формат",
+  owner: "Владелец",
+  status: "Статус",
+  size: "Размер",
+  uploadedAt: "Загружена",
+  gift: "Подарочное",
+};
+
+const FILTER_LABELS: Record<BookFilterField, string> = {
+  format: "Формат",
+  owner: "Владелец",
+  status: "Статус",
+  gift: "Подарочное",
+};
+
+const GROUP_LABELS: Record<BookGroupField, string> = {
+  none: "Без группировки",
+  format: "Формат",
+  owner: "Владелец",
+  status: "Статус",
+  gift: "Подарочное",
+};
+
+function bookFieldValue(book: AdminBookRow, field: BookSortField | BookGroupField | BookFilterField): string {
+  switch (field) {
+    case "title":
+      return book.title.toLowerCase();
+    case "format":
+      return book.format.toUpperCase();
+    case "owner":
+      return (book.ownerUsername ?? "").toLowerCase();
+    case "status":
+      return book.status;
+    case "size":
+      return String(book.fileSize ?? 0);
+    case "uploadedAt":
+      return book.uploadedAt;
+    case "gift":
+      return book.giftEditionId ? "1" : "0";
+    default:
+      return "";
+  }
+}
+
+function compareBooks(a: AdminBookRow, b: AdminBookRow, field: BookSortField): number {
+  if (field === "size") {
+    return (a.fileSize ?? 0) - (b.fileSize ?? 0);
+  }
+  const av = bookFieldValue(a, field);
+  const bv = bookFieldValue(b, field);
+  return av < bv ? -1 : av > bv ? 1 : a.id - b.id;
+}
+
+function OwnerFilterCombobox({
+  value,
+  options,
+  onChange,
+}: {
+  value: string | undefined;
+  options: string[];
+  onChange: (value: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex items-center gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-9 w-44 justify-start gap-1.5 font-normal",
+              !value && "text-muted-foreground",
+            )}
+            aria-label="Фильтр: Владелец"
+          >
+            <UserRound className="w-3.5 h-3.5 text-muted-foreground" />
+            {value ? value : "Владелец: все"}
+            <ChevronDown className="ml-auto w-3.5 h-3.5 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Поиск владельца..." />
+            <CommandList>
+              <CommandEmpty>Владелец не найден</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="__all__"
+                  onSelect={() => {
+                    onChange(null);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("mr-1 h-3.5 w-3.5", !value ? "opacity-100" : "opacity-0")} />
+                  Все владельцы
+                </CommandItem>
+                {options.map((owner) => (
+                  <CommandItem
+                    key={owner}
+                    value={owner}
+                    onSelect={() => {
+                      onChange(owner);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("mr-1 h-3.5 w-3.5", value === owner ? "opacity-100" : "opacity-0")} />
+                    {owner}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground"
+          onClick={() => onChange(null)}
+          aria-label="Сбросить фильтр по владельцу"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export default function AdminBooks() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [selectedBookIds, setSelectedBookIds] = useState<Set<number>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -48,13 +203,81 @@ export default function AdminBooks() {
   const [keepOverrides, setKeepOverrides] = useState<Record<string, number>>({});
   const [mergingGroup, setMergingGroup] = useState<string | null>(null);
 
+  const [sortField, setSortField] = useState<BookSortField>("uploadedAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [groupField, setGroupField] = useState<BookGroupField>("none");
+  const [filters, setFilters] = useState<Partial<Record<BookFilterField, string>>>({});
+
   const { data: books = [], isLoading } = useListAdminBooks({ search: search || undefined });
   const { data: duplicatesData, isLoading: duplicatesLoading, refetch: refetchDuplicates } = useListAdminBookDuplicates({
     query: { queryKey: getListAdminBookDuplicatesQueryKey(), retry: false },
   });
   const deduplicateMutation = useDeduplicateAdminBooks();
   const duplicateGroups = duplicatesData?.groups ?? [];
-  const pagination = useAdminListPagination(books, "readora.admin.books.pageSize", search);
+
+  const filterOptions = useMemo(() => {
+    const options: Record<BookFilterField, string[]> = { format: [], owner: [], status: [], gift: [] };
+    const formats = new Set<string>();
+    const owners = new Set<string>();
+    const statuses = new Set<string>();
+    const gifts = new Set<string>();
+    for (const book of books as AdminBookRow[]) {
+      formats.add(book.format.toUpperCase());
+      if (book.ownerUsername) owners.add(book.ownerUsername);
+      statuses.add(book.status);
+      gifts.add(book.giftEditionId ? "Подарочное" : "Обычная");
+    }
+    options.format = [...formats].sort();
+    options.owner = [...owners].sort((a, b) => a.localeCompare(b, "ru"));
+    options.status = [...statuses].sort();
+    options.gift = [...gifts].sort();
+    return options;
+  }, [books]);
+
+  const filteredBooks = useMemo(() => {
+    let result = books as AdminBookRow[];
+    for (const field of ["format", "owner", "status", "gift"] as const) {
+      const value = filters[field];
+      if (!value) continue;
+      if (field === "gift") {
+        const isGift = value === "Подарочное";
+        result = result.filter((b) => Boolean(b.giftEditionId) === isGift);
+      } else if (field === "format") {
+        result = result.filter((b) => b.format.toUpperCase() === value);
+      } else if (field === "owner") {
+        result = result.filter((b) => b.ownerUsername === value);
+      } else {
+        result = result.filter((b) => b.status === value);
+      }
+    }
+    return result;
+  }, [books, filters]);
+
+  const sortedBooks = useMemo(() => {
+    const result = [...filteredBooks].sort((a, b) => compareBooks(a, b, sortField));
+    if (sortDir === "desc") result.reverse();
+    return result;
+  }, [filteredBooks, sortField, sortDir]);
+
+  const groupedBooks = useMemo(() => {
+    if (groupField === "none") return [{ key: null as string | null, label: null as string | null, items: sortedBooks }];
+    const groups = new Map<string, AdminBookRow[]>();
+    for (const book of sortedBooks) {
+      let key: string;
+      if (groupField === "gift") key = book.giftEditionId ? "Подарочное" : "Обычная";
+      else if (groupField === "format") key = book.format.toUpperCase();
+      else if (groupField === "owner") key = book.ownerUsername ?? "—";
+      else key = book.status === "active" ? "Активна" : "Заблокирована";
+      const list = groups.get(key) ?? [];
+      list.push(book);
+      groups.set(key, list);
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+      .map(([key, items]) => ({ key, label: key, items }));
+  }, [sortedBooks, groupField]);
+
+  const pagination = useAdminListPagination(sortedBooks, "readora.admin.books.pageSize", `${search}|${JSON.stringify(filters)}|${groupField}`);
   const visibleBooks = pagination.visibleItems;
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminBooksQueryKey() });
 
@@ -87,7 +310,22 @@ export default function AdminBooks() {
 
   useEffect(() => {
     setSelectedBookIds(new Set());
-  }, [search]);
+  }, [search, filters]);
+
+  const toggleSort = (field: BookSortField) => {
+    if (sortField === field) {
+      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "uploadedAt" || field === "size" ? "desc" : "asc");
+    }
+  };
+
+  const setFilter = (field: BookFilterField, value: string) => {
+    setFilters((prev) => ({ ...prev, [field]: value === "all" ? undefined : value }));
+  };
+
+  const activeFiltersCount = Object.values(filters).filter(Boolean).length;
 
   const allVisibleSelected = visibleBooks.length > 0 && visibleBooks.every((book) => selectedBookIds.has(book.id));
   const someVisibleSelected = visibleBooks.some((book) => selectedBookIds.has(book.id));
@@ -133,6 +371,78 @@ export default function AdminBooks() {
     return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
   };
 
+  const renderBookRow = (b: AdminBookRow) => (
+    <TableRow key={b.id}>
+      <TableCell>
+        <Checkbox
+          checked={selectedBookIds.has(b.id)}
+          onCheckedChange={() => toggleBookSelection(b.id)}
+          aria-label={`Выбрать книгу ${b.title}`}
+        />
+      </TableCell>
+      <TableCell>
+        <div>
+          <p className="font-medium text-sm">{b.title}</p>
+          {b.author && <p className="text-xs text-muted-foreground">{b.author}</p>}
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className="text-xs font-mono font-bold uppercase text-muted-foreground">{b.format}</span>
+      </TableCell>
+      <TableCell className="text-sm">{b.ownerUsername ?? "—"}</TableCell>
+      <TableCell>
+        <Badge variant={b.status === "active" ? "default" : "destructive"} className="text-xs">
+          {b.status === "active" ? "Активна" : "Заблокирована"}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">{formatSize(b.fileSize ?? null)}</TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {new Date(b.uploadedAt).toLocaleDateString("ru-RU")}
+      </TableCell>
+      <TableCell>
+        {b.ownerId === user?.id ? (
+          <Switch
+            checked={Boolean(b.giftEditionId)}
+            disabled={pendingGiftBookId === b.id || b.status !== "active"}
+            onCheckedChange={(checked) => void toggleGiftEdition(b, checked)}
+            aria-label={`Подарочное издание: ${b.title}`}
+          />
+        ) : (
+          <span className="text-xs text-muted-foreground" title="Подарочным изданием можно сделать только книгу из библиотеки администратора">
+            {b.giftEditionId ? "Да" : "—"}
+          </span>
+        )}
+      </TableCell>
+      <TableCell>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="w-8 h-8">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <a className="gap-2" href={`/api/admin/books/${b.id}/download`} download>
+                <Download className="w-4 h-4" /> Скачать файл
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: b.id })}>
+              {b.status === "active"
+                ? <><Ban className="w-4 h-4" /> Заблокировать</>
+                : <><Unlock className="w-4 h-4" /> Разблокировать</>}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
+              if (confirm(`Удалить книгу "${b.title}"?`)) deleteBook({ id: b.id });
+            }}>
+              <Trash2 className="w-4 h-4" /> Удалить
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+
   const mergeGroup = async (group: (typeof duplicateGroups)[number]) => {
     const keepId = keepOverrides[`${group.ownerId}/${group.fileHash}`] ?? group.keepId;
     const removeIds = group.candidates.filter((c) => c.id !== keepId).map((c) => c.id);
@@ -171,6 +481,52 @@ export default function AdminBooks() {
           <Button variant="destructive" size="sm" className="gap-2" onClick={() => setShowDeleteDialog(true)}>
             <Trash2 className="w-4 h-4" />
             Удалить ({selectedBookIds.size})
+          </Button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={groupField} onValueChange={(v) => setGroupField(v as BookGroupField)}>
+          <SelectTrigger className="w-44 h-9" aria-label="Группировка">
+            <Layers className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(GROUP_LABELS) as BookGroupField[]).map((field) => (
+              <SelectItem key={field} value={field}>{GROUP_LABELS[field]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(["format", "status", "gift"] as BookFilterField[]).map((field) => (
+          <Select
+            key={field}
+            value={filters[field] ?? "all"}
+            onValueChange={(v) => setFilter(field, v)}
+          >
+            <SelectTrigger className="w-40 h-9" aria-label={`Фильтр: ${FILTER_LABELS[field]}`}>
+              <SelectValue placeholder={FILTER_LABELS[field]} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{FILTER_LABELS[field]}: все</SelectItem>
+              {filterOptions[field].map((option) => (
+                <SelectItem key={option} value={option}>{option}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ))}
+        <OwnerFilterCombobox
+          value={filters.owner}
+          options={filterOptions.owner}
+          onChange={(value) => setFilter("owner", value ?? "all")}
+        />
+        {activeFiltersCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-muted-foreground"
+            onClick={() => setFilters({})}
+          >
+            Сбросить фильтры ({activeFiltersCount})
           </Button>
         )}
       </div>
@@ -288,13 +644,27 @@ export default function AdminBooks() {
                     aria-label="Выбрать все книги"
                   />
                 </TableHead>
-                <TableHead>Название</TableHead>
-                <TableHead>Формат</TableHead>
-                <TableHead>Владелец</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead>Размер</TableHead>
-                <TableHead>Загружена</TableHead>
-                <TableHead title="Подарочное издание («Мировое достояние»)">Подарочное</TableHead>
+                {(["title", "format", "owner", "status", "size", "uploadedAt", "gift"] as BookSortField[]).map((field) => {
+                  const isActive = sortField === field;
+                  const Icon = isActive ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                  return (
+                    <TableHead key={field} className={field === "gift" ? "" : undefined}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(field)}
+                        className={cn(
+                          "inline-flex items-center gap-1 text-left hover:text-foreground transition-colors",
+                          isActive && "text-foreground font-semibold",
+                        )}
+                        title={field === "gift" ? "Подарочное издание («Мировое достояние»)" : undefined}
+                        aria-label={`Сортировать: ${SORT_LABELS[field]}`}
+                      >
+                        {field === "gift" ? "Подарочное" : SORT_LABELS[field]}
+                        <Icon className={cn("w-3.5 h-3.5", !isActive && "opacity-40")} />
+                      </button>
+                    </TableHead>
+                  );
+                })}
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -303,76 +673,28 @@ export default function AdminBooks() {
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">Книги не найдены</TableCell>
                 </TableRow>
+              ) : sortedBooks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">Нет книг, подходящих под фильтры</TableCell>
+                </TableRow>
+              ) : groupField === "none" ? (
+                visibleBooks.map(renderBookRow)
               ) : (
-                visibleBooks.map((b: {
-                  id: number; title: string; author?: string | null;
-                  format: string; status: string; ownerUsername?: string | null;
-                  fileSize?: number | null; uploadedAt: string; giftEditionId?: number | null;
-                  }) => (
-                    <TableRow key={b.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedBookIds.has(b.id)}
-                          onCheckedChange={() => toggleBookSelection(b.id)}
-                          aria-label={`Выбрать книгу ${b.title}`}
-                        />
+                groupedBooks.map((group) => {
+                  const groupVisible = group.items.filter((b) => visibleBooks.some((v) => v.id === b.id));
+                  if (groupVisible.length === 0) return null;
+                  return [
+                    <TableRow key={`group-${group.key}`} className="bg-muted/50 hover:bg-muted/50">
+                      <TableCell colSpan={9} className="py-2">
+                        <span className="flex items-center gap-2 text-xs font-semibold">
+                          {group.label}
+                          <Badge variant="secondary" className="text-[11px]">{group.items.length}</Badge>
+                        </span>
                       </TableCell>
-                      <TableCell>
-                      <div>
-                        <p className="font-medium text-sm">{b.title}</p>
-                        {b.author && <p className="text-xs text-muted-foreground">{b.author}</p>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs font-mono font-bold uppercase text-muted-foreground">{b.format}</span>
-                    </TableCell>
-                    <TableCell className="text-sm">{b.ownerUsername ?? "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={b.status === "active" ? "default" : "destructive"} className="text-xs">
-                        {b.status === "active" ? "Активна" : "Заблокирована"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatSize(b.fileSize ?? null)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(b.uploadedAt).toLocaleDateString("ru-RU")}
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={Boolean(b.giftEditionId)}
-                        disabled={pendingGiftBookId === b.id || b.status !== "active"}
-                        onCheckedChange={(checked) => void toggleGiftEdition(b, checked)}
-                        aria-label={`Подарочное издание: ${b.title}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="w-8 h-8">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <a className="gap-2" href={`/api/admin/books/${b.id}/download`} download>
-                              <Download className="w-4 h-4" /> Скачать файл
-                            </a>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: b.id })}>
-                            {b.status === "active"
-                              ? <><Ban className="w-4 h-4" /> Заблокировать</>
-                              : <><Unlock className="w-4 h-4" /> Разблокировать</>}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
-                            if (confirm(`Удалить книгу "${b.title}"?`)) deleteBook({ id: b.id });
-                          }}>
-                            <Trash2 className="w-4 h-4" /> Удалить
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                    </TableRow>,
+                    ...groupVisible.map(renderBookRow),
+                  ];
+                })
               )}
             </TableBody>
            </Table>

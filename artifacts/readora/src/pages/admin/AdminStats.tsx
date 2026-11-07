@@ -1,11 +1,11 @@
-import { useGetAdminStats, useGetAdminFeedback, getGetAdminFeedbackQueryKey } from "@workspace/api-client-react";
+import { useGetAdminStats, useGetAdminFeedback, useGetAdminOnlineUsers, getGetAdminFeedbackQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Users, BookCopy, BookOpen, Activity, Loader2, Server, Cpu, MemoryStick, HardDrive, RefreshCcw, MessageSquareText, Star } from "lucide-react";
+import { Users, BookCopy, BookOpen, Activity, Loader2, Server, Cpu, MemoryStick, HardDrive, RefreshCcw, MessageSquareText, Star, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
@@ -113,6 +113,14 @@ export default function AdminStats() {
       return response.json() as Promise<{ acceptedCount: number }>;
     },
     staleTime: 60_000,
+  });
+
+  const { data: onlineUsers } = useGetAdminOnlineUsers({
+    query: {
+      queryKey: ["getAdminOnlineUsers"],
+      refetchInterval: 15_000,
+      staleTime: 10_000,
+    },
   });
 
   const { data: metrics, refetch: refetchMetrics, isFetching: isFetchingMetrics } = useQuery({
@@ -266,6 +274,46 @@ export default function AdminStats() {
           </Card>
         ))}
       </div>
+
+      {/* Online users (real-time) */}
+      {onlineUsers && (
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-muted text-emerald-500">
+                  <Wifi className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold">{onlineUsers.count}</p>
+                    <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Пользователей онлайн</p>
+                </div>
+              </div>
+              {onlineUsers.users.length > 0 && (
+                <div className="hidden md:flex flex-wrap justify-end gap-1.5 max-w-[55%]">
+                  {onlineUsers.users.slice(0, 8).map((u) => (
+                    <Badge key={u.id} variant="secondary" className="text-[11px] max-w-40 truncate">
+                      {u.username}
+                    </Badge>
+                  ))}
+                  {onlineUsers.users.length > 8 && (
+                    <Badge variant="outline" className="text-[11px]">
+                      +{onlineUsers.users.length - 8}
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">Автообновление: 15с</p>
+          </CardContent>
+        </Card>
+      )}
 
       {isAdmin && feedbackSummary && (
         <Card>

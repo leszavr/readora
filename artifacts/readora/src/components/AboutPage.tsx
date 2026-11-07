@@ -40,6 +40,10 @@ export const aboutFaqItems = [
         >
           @readora_club
         </a>
+        . История обновлений платформы доступна в разделе{" "}
+        <a href="/changelog" className="text-primary hover:underline">
+          Changelog
+        </a>
         .
       </>
     ),

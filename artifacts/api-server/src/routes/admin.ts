@@ -46,6 +46,7 @@ import { applySyncJobControl } from "../lib/external-storage/sync";
 import { GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
 import { restoreAccountDeletion, purgeUserAccount } from "../lib/account-deletion-service";
 import { getMaintenanceStatus } from "../lib/maintenance-status";
+import { getOnlineUsers } from "../lib/online-users";
 import { isRegistrationEnabled } from "../lib/registration-status";
 import {
   DEFAULT_LIBRARY_STORAGE_MB,
@@ -164,6 +165,20 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
     progressSaves7d,
     recentBooks,
     recentUsers,
+  });
+});
+
+// GET /admin/online-users — пользователи онлайн (in-memory presence)
+router.get("/admin/online-users", requireAdmin, async (_req, res): Promise<void> => {
+  const users = getOnlineUsers();
+  res.json({
+    count: users.length,
+    users: users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      role: u.role,
+      lastSeenAt: new Date(u.lastSeenAt).toISOString(),
+    })),
   });
 });
 
@@ -994,10 +1009,15 @@ router.post(
 // GET /admin/books
 router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
   const { search } = req.query as Record<string, string>;
+  const adminUserId = (req as Request & { user: { id: number } }).user.id;
   // Подарочные копии пользователей не показываем: это не загрузки, а ссылки на эталон.
+  // giftEditionId вычисляем только для собственных книг администратора (включая
+  // file-hash матчинг с эталоном), чтобы чужие книги с тем же файлом не выглядели
+  // источником подарочного издания.
   const giftEditionId = sql<number | null>`(
     select ge.id from ${giftEditionsTable} ge join ${booksTable} src on src.id = ge.book_id
-    where src.id = ${booksTable.id} or (src.file_hash is not null and src.file_hash = ${booksTable.fileHash})
+    where ${booksTable.ownerUserId} = ${adminUserId}
+      and (src.id = ${booksTable.id} or (src.file_hash is not null and src.file_hash = ${booksTable.fileHash}))
     order by (src.id = ${booksTable.id}) desc limit 1
   )`;
   const books = await db

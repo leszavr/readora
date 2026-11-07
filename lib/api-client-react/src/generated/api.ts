@@ -108,6 +108,7 @@ import type {
   LoginInput,
   MailRuConnectRequest,
   MaintenanceStatus,
+  OnlineUsersResponse,
   ProfileUpdate,
   ProgressInput,
   PublicBook,
@@ -3413,6 +3414,83 @@ export function useGetAdminStats<TData = Awaited<ReturnType<typeof getAdminStats
 
 
 
+export const getGetAdminOnlineUsersUrl = () => {
+
+
+
+
+  return `/api/admin/online-users`
+}
+
+/**
+ * @summary Currently online users (in-memory presence)
+ */
+export const getAdminOnlineUsers = async ( options?: RequestInit): Promise<OnlineUsersResponse> => {
+
+  return customFetch<OnlineUsersResponse>(getGetAdminOnlineUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminOnlineUsersQueryKey = () => {
+    return [
+    `/api/admin/online-users`
+    ] as const;
+    }
+
+
+export const getGetAdminOnlineUsersQueryOptions = <TData = Awaited<ReturnType<typeof getAdminOnlineUsers>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminOnlineUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminOnlineUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminOnlineUsers>>> = ({ signal }) => getAdminOnlineUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminOnlineUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminOnlineUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminOnlineUsers>>>
+export type GetAdminOnlineUsersQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Currently online users (in-memory presence)
+ */
+
+export function useGetAdminOnlineUsers<TData = Awaited<ReturnType<typeof getAdminOnlineUsers>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminOnlineUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminOnlineUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getGetAdminAnalyticsUrl = (params?: GetAdminAnalyticsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -3965,6 +4043,76 @@ export function useGetAnnouncementsChangelog<TData = Awaited<ReturnType<typeof g
 
 
 
+
+export const getMarkAllAnnouncementsReadUrl = () => {
+
+
+
+
+  return `/api/announcements/read-all`
+}
+
+/**
+ * @summary Mark all active announcements as read for the current user
+ */
+export const markAllAnnouncementsRead = async ( options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getMarkAllAnnouncementsReadUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMarkAllAnnouncementsReadMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllAnnouncementsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAllAnnouncementsRead>>, TError,void, TContext> => {
+
+const mutationKey = ['markAllAnnouncementsRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAllAnnouncementsRead>>, void> = () => {
+
+
+          return  markAllAnnouncementsRead(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAllAnnouncementsReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAllAnnouncementsRead>>>
+
+    export type MarkAllAnnouncementsReadMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Mark all active announcements as read for the current user
+ */
+export const useMarkAllAnnouncementsRead = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllAnnouncementsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAllAnnouncementsRead>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMarkAllAnnouncementsReadMutationOptions(options));
+    }
 
 export const getMarkAnnouncementReadUrl = (id: number,) => {
 

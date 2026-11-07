@@ -535,6 +535,18 @@ export interface AnnouncementsResponse {
   items: AnnouncementItem[];
 }
 
+export interface OnlineUser {
+  id: number;
+  username: string;
+  role: string;
+  lastSeenAt: string;
+}
+
+export interface OnlineUsersResponse {
+  count: number;
+  users: OnlineUser[];
+}
+
 export type AdminAnnouncementKind = typeof AdminAnnouncementKind[keyof typeof AdminAnnouncementKind];
 
 
@@ -1148,7 +1160,8 @@ export interface AdminBook {
   fileSize?: number;
   uploadedAt: string;
   /**
-     * Gift edition created from this book (or from the same file)
+     * Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users' books.
+
      * @nullable
      */
   giftEditionId?: number | null;

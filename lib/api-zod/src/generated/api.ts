@@ -762,7 +762,7 @@ export const GetAdminStatsResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
 })),
   "recentUsers": zod.array(zod.object({
   "id": zod.number(),
@@ -776,6 +776,20 @@ export const GetAdminStatsResponse = zod.object({
   "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+}))
+})
+
+
+/**
+ * @summary Currently online users (in-memory presence)
+ */
+export const GetAdminOnlineUsersResponse = zod.object({
+  "count": zod.number(),
+  "users": zod.array(zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "role": zod.string(),
+  "lastSeenAt": zod.coerce.date()
 }))
 })
 
@@ -1057,6 +1071,14 @@ export const GetAnnouncementsChangelogResponse = zod.object({
   "body": zod.string(),
   "publishedAt": zod.coerce.date()
 }))
+})
+
+
+/**
+ * @summary Mark all active announcements as read for the current user
+ */
+export const MarkAllAnnouncementsReadResponse = zod.object({
+  "success": zod.boolean()
 })
 
 
@@ -1407,7 +1429,7 @@ export const ListAdminBooksResponseItem = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
 })
 export const ListAdminBooksResponse = zod.array(ListAdminBooksResponseItem)
 
@@ -1474,7 +1496,7 @@ export const GetAdminBookResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
 })
 
 
@@ -1523,7 +1545,7 @@ export const ToggleBlockBookResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition created from this book (or from the same file)')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
 })
 
 
