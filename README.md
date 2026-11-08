@@ -49,9 +49,12 @@ readora/
 │   ├── api-zod/             # Сгенерированные Zod схемы
 │   └── db/                  # Схема и миграции (Drizzle)
 ├── scripts/                 # Вспомогательные скрипты
+├── docs/                    # Пакет документации: архитектура, API, БД, security, changelog
 ├── docker-compose.yml       # PostgreSQL для локальной разработки
 └── pnpm-workspace.yaml
 ```
+
+Полная документация платформы — [docs/README.md](./docs/README.md).
 
 ## Быстрый старт
 
