@@ -3,11 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAnnouncementsQueryKey,
   useGetAnnouncements,
+  type AnnouncementItem,
   useMarkAnnouncementRead,
   useMarkAllAnnouncementsRead,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertTriangle, Bell, CheckCheck, History, Megaphone, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NoteText } from "@/components/NoteEditor";
@@ -26,12 +28,22 @@ const COLOR_STRIP_CLASSES: Record<string, string> = {
   purple: "bg-purple-500",
 };
 
+// Фон диалога — как у цветных заметок в Changelog
+const COLOR_BACKDROP_CLASSES: Record<string, string> = {
+  yellow: "bg-yellow-200/60 dark:bg-yellow-900/25",
+  green: "bg-green-200/60 dark:bg-green-900/25",
+  blue: "bg-blue-200/60 dark:bg-blue-900/25",
+  pink: "bg-pink-200/60 dark:bg-pink-900/25",
+  purple: "bg-purple-200/60 dark:bg-purple-900/25",
+};
+
 export function formatDate(value: string): string {
   return DATE_FORMAT.format(new Date(value));
 }
 
 export function AnnouncementBell() {
   const [open, setOpen] = useState(false);
+  const [activeItem, setActiveItem] = useState<AnnouncementItem | null>(null);
   const qc = useQueryClient();
   const { data } = useGetAnnouncements({
     query: { queryKey: getGetAnnouncementsQueryKey(), staleTime: 60_000, retry: false },
@@ -43,10 +55,14 @@ export function AnnouncementBell() {
   const unreadItems = items.filter((i) => i.readAt === null);
   const unreadCount = data?.unreadCount ?? 0;
 
-  async function handleOpenItem(id: number, isUnread: boolean) {
-    if (!isUnread) return;
-    await markRead.mutateAsync({ id });
-    await qc.invalidateQueries({ queryKey: getGetAnnouncementsQueryKey() });
+  // Открытие оповещения: показываем полный текст в диалоге и сразу
+  // помечаем прочитанным (не ждём ручного действия).
+  async function handleOpenItem(item: AnnouncementItem) {
+    setActiveItem(item);
+    if (item.readAt === null) {
+      await markRead.mutateAsync({ id: item.id });
+      await qc.invalidateQueries({ queryKey: getGetAnnouncementsQueryKey() });
+    }
   }
 
   async function handleMarkAllRead() {
@@ -56,6 +72,7 @@ export function AnnouncementBell() {
   }
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
@@ -112,7 +129,7 @@ export function AnnouncementBell() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => void handleOpenItem(item.id, isUnread)}
+                  onClick={() => void handleOpenItem(item)}
                   className={cn(
                     "relative block w-full px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors hover:bg-muted/60",
                     isUnread && "bg-primary/5",
@@ -161,6 +178,37 @@ export function AnnouncementBell() {
           </a>
         </div>
       </PopoverContent>
-    </Popover>
+      </Popover>
+
+      <Dialog open={activeItem !== null} onOpenChange={(isOpen) => !isOpen && setActiveItem(null)}>
+        <DialogContent className="max-w-lg">
+          {activeItem && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 pr-6">
+                  {activeItem.kind === "release" ? (
+                    <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+                  ) : activeItem.severity === "warning" ? (
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+                  ) : (
+                    <Megaphone className="h-5 w-5 shrink-0 text-primary" />
+                  )}
+                  <span className="min-w-0 break-words">{activeItem.title}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div
+                className={cn(
+                  "max-h-[60vh] overflow-y-auto rounded-lg p-4 text-sm leading-relaxed text-foreground/90",
+                  COLOR_BACKDROP_CLASSES[activeItem.color] ?? COLOR_BACKDROP_CLASSES.blue,
+                )}
+              >
+                <NoteText text={activeItem.body} />
+              </div>
+              <p className="text-xs text-muted-foreground">{formatDate(activeItem.publishedAt)}</p>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
