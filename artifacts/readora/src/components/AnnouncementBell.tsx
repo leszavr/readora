@@ -92,7 +92,7 @@ export function AnnouncementBell() {
                   : "bg-primary text-primary-foreground",
               )}
             >
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
         </Button>

@@ -43,7 +43,7 @@ import {
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useLocalStorageState } from "@/hooks/use-local-storage-state";
+import { useLocalStorageState, useSectionLocalStorageState } from "@/hooks/use-local-storage-state";
 import { ShelfView } from "@/components/ShelfView";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
 import { AnnotationsView } from "@/components/AnnotationsView";
@@ -87,14 +87,21 @@ function filterGroupedBySection(groupedSource: Record<string, any[]>, section: L
 export default function LibraryPage() {
   const [location] = useLocation();
   const [uploadOpen, setUploadOpen] = useState(location.includes("upload=1"));
-  const [search, setSearch] = useLocalStorageState("readora.library.search", "");
-  const [statusFilter, setStatusFilter] = useLocalStorageState<ListBooksStatus | "all">("readora.library.statusFilter", "all");
-  const [genreFilter, setGenreFilter] = useLocalStorageState("readora.library.genreFilter", "all");
-  const [sortBy, setSortBy] = useLocalStorageState<SortOption>("readora.library.sortBy", "uploadedAt");
-  const [sortDir, setSortDir] = useLocalStorageState<"asc" | "desc">("readora.library.sortDir", "desc");
-  const [groupBy, setGroupBy] = useLocalStorageState<GroupOption>("readora.library.groupBy", "none");
   const [librarySection, setLibrarySection] = useLocalStorageState<LibrarySection>("readora.library.section", "library");
-  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>("readora.library.viewMode", "grid");
+
+  // Настройки отображения независимы для каждой секции (библиотека,
+  // подарочные, полка): ключи хранения изолированы по секции.
+  const [search, setSearch] = useSectionLocalStorageState(librarySection, "search", "");
+  const [statusFilter, setStatusFilter] = useSectionLocalStorageState<ListBooksStatus | "all">(
+    librarySection,
+    "statusFilter",
+    librarySection === "shelf" ? "finished" : "all",
+  );
+  const [genreFilter, setGenreFilter] = useSectionLocalStorageState(librarySection, "genreFilter", "all");
+  const [sortBy, setSortBy] = useSectionLocalStorageState<SortOption>(librarySection, "sortBy", "uploadedAt");
+  const [sortDir, setSortDir] = useSectionLocalStorageState<"asc" | "desc">(librarySection, "sortDir", "desc");
+  const [groupBy, setGroupBy] = useSectionLocalStorageState<GroupOption>(librarySection, "groupBy", "none");
+  const [viewMode, setViewMode] = useSectionLocalStorageState<ViewMode>(librarySection, "viewMode", "grid");
   const [selectedBooks, setSelectedBooks] = useState<Set<number>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -199,16 +206,10 @@ export default function LibraryPage() {
   }, [librarySection, viewMode, search, statusFilter, genreFilter, sortBy, groupBy]);
 
   useEffect(() => {
+    // Сброс выделения при смене секции; фильтры у секций независимы.
     setSelectedBooks(new Set());
     setIsSelectionMode(false);
-    if (librarySection === "shelf" && statusFilter !== "finished") {
-      setStatusFilter("finished");
-      return;
-    }
-    if (librarySection !== "shelf" && statusFilter === "finished") {
-      setStatusFilter("all");
-    }
-  }, [librarySection, statusFilter]);
+  }, [librarySection]);
 
   const toggleBookSelection = (bookId: number) => {
     const newSelection = new Set(selectedBooks);
@@ -817,7 +818,9 @@ function LibraryFiltersBar({
   }, []);
 
   const activeFilterCount = [
+    // На полке фильтр статуса не считается активным (полка всегда «прочитанные» по умолчанию)
     librarySection !== "shelf" && statusFilter !== "all",
+    librarySection === "shelf" && statusFilter !== "finished",
     genreFilter !== "all",
     sortBy !== "uploadedAt",
     sortDir !== "desc",
@@ -825,7 +828,7 @@ function LibraryFiltersBar({
   ].filter(Boolean).length;
 
   const resetFilters = () => {
-    if (librarySection !== "shelf") setStatusFilter("all");
+    setStatusFilter(librarySection === "shelf" ? "finished" : "all");
     setGenreFilter("all");
     setSortBy("uploadedAt");
     setSortDir("desc");

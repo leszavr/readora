@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMemo } from "react";
 import {
   useListAdminUsers,
   useCreateAdminUser,
@@ -23,18 +24,71 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle, RotateCcw } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, Layers } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
 const STATUS_LABELS: Record<string, string> = { active: "Активен", blocked: "Заблокирован" };
+
+type UserSortField = "username" | "role" | "status" | "email" | "bookCount" | "createdAt";
+type UserGroupField = "none" | "role" | "status";
+
+const SORT_LABELS: Record<UserSortField, string> = {
+  username: "Пользователь",
+  role: "Роль",
+  status: "Статус",
+  email: "Email",
+  bookCount: "Книг",
+  createdAt: "Регистрация",
+};
+
+const GROUP_LABELS: Record<UserGroupField, string> = {
+  none: "Без группировки",
+  role: "Роль",
+  status: "Статус",
+};
+
+interface AdminUserRow {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  status: string;
+  emailVerified: boolean;
+  bookCount?: number;
+  scheduledDeletionAt?: string | null;
+  createdAt: string;
+}
+
+function userStatusKey(u: AdminUserRow): string {
+  if (u.scheduledDeletionAt) return "pending_deletion";
+  return u.status;
+}
+
+function compareUsers(a: AdminUserRow, b: AdminUserRow, field: UserSortField): number {
+  switch (field) {
+    case "bookCount":
+      return (a.bookCount ?? 0) - (b.bookCount ?? 0) || a.id - b.id;
+    case "createdAt":
+      return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id - b.id;
+    default: {
+      const av = String(a[field] ?? "").toLowerCase();
+      const bv = String(b[field] ?? "").toLowerCase();
+      return av < bv ? -1 : av > bv ? 1 : a.id - b.id;
+    }
+  }
+}
 
 export default function AdminUsers() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortField, setSortField] = useState<UserSortField>("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [groupField, setGroupField] = useState<UserGroupField>("none");
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<null | { id: number; username: string; email: string; role: AdminUserUpdateRole }>(null);
   const [editPassword, setEditPassword] = useState("");
@@ -54,7 +108,40 @@ export default function AdminUsers() {
     status: statusFilter === "all" ? undefined : statusFilter,
   });
 
-  const pagination = useAdminListPagination(users, "readora.admin.users.pageSize", `${search}|${roleFilter}|${statusFilter}`);
+  const sortedUsers = useMemo(() => {
+    const result = [...(users as AdminUserRow[])].sort((a, b) => compareUsers(a, b, sortField));
+    if (sortDir === "desc") result.reverse();
+    return result;
+  }, [users, sortField, sortDir]);
+
+  const groupedUsers = useMemo(() => {
+    if (groupField === "none") return [{ key: null as string | null, items: sortedUsers }];
+    const groups = new Map<string, AdminUserRow[]>();
+    for (const user of sortedUsers) {
+      const key = groupField === "role"
+        ? ROLE_LABELS[user.role] ?? user.role
+        : userStatusKey(user) === "pending_deletion"
+          ? "На удалении"
+          : STATUS_LABELS[user.status] ?? user.status;
+      const list = groups.get(key) ?? [];
+      list.push(user);
+      groups.set(key, list);
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+      .map(([key, items]) => ({ key, items }));
+  }, [sortedUsers, groupField]);
+
+  const pagination = useAdminListPagination(sortedUsers, "readora.admin.users.pageSize", `${search}|${roleFilter}|${statusFilter}|${groupField}`);
+
+  const toggleSort = (field: UserSortField) => {
+    if (sortField === field) {
+      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "createdAt" || field === "bookCount" ? "desc" : "asc");
+    }
+  };
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
 
@@ -126,6 +213,111 @@ export default function AdminUsers() {
     }
   }
 
+  const renderUserRow = (u: AdminUserRow) => (
+    <TableRow key={u.id}>
+      <TableCell>
+        <div>
+          <p className="font-medium text-sm">{u.username}</p>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</Badge>
+      </TableCell>
+      <TableCell>
+        {u.scheduledDeletionAt ? (
+          <div className="space-y-1">
+            <Badge variant="destructive" className="text-xs">На удалении</Badge>
+            <p className="text-xs text-muted-foreground">
+              очистка {new Date(u.scheduledDeletionAt).toLocaleDateString("ru-RU")}
+            </p>
+          </div>
+        ) : (
+          <Badge
+            variant={u.status === "active" ? "default" : "destructive"}
+            className="text-xs"
+          >
+            {STATUS_LABELS[u.status] ?? u.status}
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm">{u.email}</p>
+          {u.emailVerified ? (
+            <Badge variant="default" className="text-xs gap-1 w-fit">
+              <CheckCircle className="w-3 h-3" />
+              Подтверждён
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 w-fit">
+              Не подтверждён
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-sm">{u.bookCount ?? 0}</TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {new Date(u.createdAt).toLocaleDateString("ru-RU")}
+      </TableCell>
+      <TableCell>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="w-8 h-8">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="gap-2" onClick={() => {
+              setEditUser({ id: u.id, username: u.username, email: u.email, role: u.role as AdminUserUpdateRole });
+              setEditPassword("");
+              setEditPasswordVisible(false);
+              setEditError(null);
+            }}>
+              <Pencil className="w-4 h-4" /> Изменить
+            </DropdownMenuItem>
+            {u.scheduledDeletionAt ? (
+              <>
+                <DropdownMenuItem className="gap-2" disabled={restoring} onClick={() => restoreUser({ id: u.id })}>
+                  <RotateCcw className="w-4 h-4" /> Восстановить
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 text-destructive focus:text-destructive"
+                  disabled={purging}
+                  onClick={() => {
+                    if (confirm(`Окончательно удалить пользователя ${u.username} вместе с книгами и файлами? Это действие необратимо.`)) {
+                      purgeUser({ id: u.id });
+                    }
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" /> Удалить окончательно
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: u.id })}>
+                  {u.status === "active"
+                    ? <><Ban className="w-4 h-4" /> Заблокировать</>
+                    : <><Unlock className="w-4 h-4" /> Разблокировать</>}
+                </DropdownMenuItem>
+                {!u.emailVerified && (
+                  <DropdownMenuItem className="gap-2" onClick={() => verifyEmail({ id: u.id })}>
+                    <CheckCircle className="w-4 h-4" /> Подтвердить email
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
+                  if (confirm(`Удалить пользователя ${u.username}?`)) deleteUser({ id: u.id });
+                }}>
+                  <Trash2 className="w-4 h-4" /> Удалить
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -157,6 +349,17 @@ export default function AdminUsers() {
               <SelectItem value="pending_deletion">Удаленные</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={groupField} onValueChange={(v) => setGroupField(v as UserGroupField)}>
+            <SelectTrigger className="w-full sm:w-44" aria-label="Группировка">
+              <Layers className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(GROUP_LABELS) as UserGroupField[]).map((field) => (
+                <SelectItem key={field} value={field}>{GROUP_LABELS[field]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button size="sm" className="gap-2 w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
           <Plus className="w-4 h-4" /> Добавить
@@ -171,12 +374,26 @@ export default function AdminUsers() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Пользователь</TableHead>
-                <TableHead>Роль</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Книг</TableHead>
-                <TableHead>Регистрация</TableHead>
+                {(["username", "role", "status", "email", "bookCount", "createdAt"] as UserSortField[]).map((field) => {
+                  const isActive = sortField === field;
+                  const Icon = isActive ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                  return (
+                    <TableHead key={field}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(field)}
+                        className={cn(
+                          "inline-flex items-center gap-1 text-left hover:text-foreground transition-colors",
+                          isActive && "text-foreground font-semibold",
+                        )}
+                        aria-label={`Сортировать: ${SORT_LABELS[field]}`}
+                      >
+                        {SORT_LABELS[field]}
+                        <Icon className={cn("w-3.5 h-3.5", !isActive && "opacity-40")} />
+                      </button>
+                    </TableHead>
+                  );
+                })}
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -185,118 +402,29 @@ export default function AdminUsers() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Пользователи не найдены</TableCell>
                 </TableRow>
+              ) : groupField === "none" ? (
+                pagination.visibleItems.map(renderUserRow)
               ) : (
-                pagination.visibleItems.map((u: {
-                  id: number; username: string; email: string; role: string;
-                  status: string; emailVerified: boolean; bookCount?: number; createdAt: string;
-                  scheduledDeletionAt?: string | null;
-                }) => (
-                  <TableRow key={u.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-sm">{u.username}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {u.scheduledDeletionAt ? (
-                        <div className="space-y-1">
-                          <Badge variant="destructive" className="text-xs">На удалении</Badge>
-                          <p className="text-xs text-muted-foreground">
-                            очистка {new Date(u.scheduledDeletionAt).toLocaleDateString("ru-RU")}
-                          </p>
-                        </div>
-                      ) : (
-                        <Badge
-                          variant={u.status === "active" ? "default" : "destructive"}
-                          className="text-xs"
-                        >
-                          {STATUS_LABELS[u.status] ?? u.status}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {u.emailVerified ? (
-                        <Badge variant="default" className="text-xs gap-1">
-                          <CheckCircle className="w-3 h-3" />
-                          Подтверждён
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
-                          Не подтверждён
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">{u.bookCount ?? 0}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(u.createdAt).toLocaleDateString("ru-RU")}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="w-8 h-8">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2" onClick={() => {
-                            setEditUser({ id: u.id, username: u.username, email: u.email, role: u.role as AdminUserUpdateRole });
-                            setEditPassword("");
-                            setEditPasswordVisible(false);
-                            setEditError(null);
-                          }}>
-                            <Pencil className="w-4 h-4" /> Изменить
-                          </DropdownMenuItem>
-                          {u.scheduledDeletionAt ? (
-                            <>
-                              <DropdownMenuItem className="gap-2" disabled={restoring} onClick={() => restoreUser({ id: u.id })}>
-                                <RotateCcw className="w-4 h-4" /> Восстановить
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="gap-2 text-destructive focus:text-destructive"
-                                disabled={purging}
-                                onClick={() => {
-                                  if (confirm(`Окончательно удалить пользователя ${u.username} вместе с книгами и файлами? Это действие необратимо.`)) {
-                                    purgeUser({ id: u.id });
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" /> Удалить окончательно
-                              </DropdownMenuItem>
-                            </>
-                          ) : (
-                            <>
-                              <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: u.id })}>
-                                {u.status === "active"
-                                  ? <><Ban className="w-4 h-4" /> Заблокировать</>
-                                  : <><Unlock className="w-4 h-4" /> Разблокировать</>}
-                              </DropdownMenuItem>
-                              {!u.emailVerified && (
-                                <DropdownMenuItem className="gap-2" onClick={() => verifyEmail({ id: u.id })}>
-                                  <CheckCircle className="w-4 h-4" /> Подтвердить email
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => {
-                                if (confirm(`Удалить пользователя ${u.username}?`)) deleteUser({ id: u.id });
-                              }}>
-                                <Trash2 className="w-4 h-4" /> Удалить
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                groupedUsers.map((group) => {
+                  const groupVisible = group.items.filter((u) => pagination.visibleItems.some((v) => v.id === u.id));
+                  if (groupVisible.length === 0) return null;
+                  return [
+                    <TableRow key={`group-${group.key}`} className="bg-muted/50 hover:bg-muted/50">
+                      <TableCell colSpan={7} className="py-2">
+                        <span className="flex items-center gap-2 text-xs font-semibold">
+                          {group.key}
+                          <Badge variant="secondary" className="text-[11px]">{group.items.length}</Badge>
+                        </span>
+                      </TableCell>
+                    </TableRow>,
+                    ...groupVisible.map(renderUserRow),
+                  ];
+                })
               )}
             </TableBody>
-           </Table>
-         )}
-       </div>
+          </Table>
+        )}
+      </div>
 
       <AdminPaginationControls pagination={pagination} />
 
