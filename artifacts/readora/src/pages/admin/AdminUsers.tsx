@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<string, string> = { admin: "Администратор
 const STATUS_LABELS: Record<string, string> = { active: "Активен", blocked: "Заблокирован" };
 
 type UserSortField = "username" | "role" | "status" | "email" | "bookCount" | "createdAt";
-type UserGroupField = "none" | "role" | "status";
+type UserGroupField = "none" | "role" | "status" | "emailVerified";
 
 const SORT_LABELS: Record<UserSortField, string> = {
   username: "Пользователь",
@@ -48,6 +48,7 @@ const GROUP_LABELS: Record<UserGroupField, string> = {
   none: "Без группировки",
   role: "Роль",
   status: "Статус",
+  emailVerified: "Статус email",
 };
 
 interface AdminUserRow {
@@ -118,11 +119,10 @@ export default function AdminUsers() {
     if (groupField === "none") return [{ key: null as string | null, items: sortedUsers }];
     const groups = new Map<string, AdminUserRow[]>();
     for (const user of sortedUsers) {
-      const key = groupField === "role"
-        ? ROLE_LABELS[user.role] ?? user.role
-        : userStatusKey(user) === "pending_deletion"
-          ? "На удалении"
-          : STATUS_LABELS[user.status] ?? user.status;
+      let key: string;
+      if (groupField === "role") key = ROLE_LABELS[user.role] ?? user.role;
+      else if (groupField === "emailVerified") key = user.emailVerified ? "Email подтверждён" : "Email не подтверждён";
+      else key = userStatusKey(user) === "pending_deletion" ? "На удалении" : STATUS_LABELS[user.status] ?? user.status;
       const list = groups.get(key) ?? [];
       list.push(user);
       groups.set(key, list);
@@ -346,7 +346,7 @@ export default function AdminUsers() {
               <SelectItem value="all">Все статусы</SelectItem>
               <SelectItem value="active">Активен</SelectItem>
               <SelectItem value="blocked">Заблокирован</SelectItem>
-              <SelectItem value="pending_deletion">Удаленные</SelectItem>
+              <SelectItem value="pending_deletion">На удалении</SelectItem>
             </SelectContent>
           </Select>
           <Select value={groupField} onValueChange={(v) => setGroupField(v as UserGroupField)}>
