@@ -12,7 +12,7 @@ import { LegalOverlay } from "@/components/LegalOverlay";
 import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
-import { captureReferralSource } from "@/lib/referral-source";
+import { captureReferralSource, clearStoredReferralCode, getStoredReferralCode } from "@/lib/referral-source";
 import { suggestEmailTypo } from "@/lib/email-typo";
 import { VkIdOAuthList } from "@/components/VkIdOAuthList";
 
@@ -43,6 +43,7 @@ export default function RegisterPage() {
   const { mutate: doRegister, isPending, error } = useRegister({
     mutation: {
       onSuccess: (data) => {
+        clearStoredReferralCode();
         // If email verification required, don't set user and redirect to login
         if (data.message?.includes("Проверьте email")) {
           navigate("/login?registered=true");
@@ -60,7 +61,7 @@ export default function RegisterPage() {
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!consent) return;
-    doRegister({ data: { email, username, password, referralSource: captureReferralSource() } });
+    doRegister({ data: { email, username, password, referralSource: captureReferralSource(), referralCode: getStoredReferralCode() } });
   }
 
   const errorMsg = error

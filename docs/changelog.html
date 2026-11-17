@@ -112,6 +112,18 @@
       <div class="entry">
         <div class="card">
           <p class="date">17 ноября 2026</p>
+          <p class="title">Порекомендовать Readora <span class="tag server">сервер</span></p>
+          <ul class="feat">
+            <li>После оценки сервиса в 5 звёзд появляется карточка «Порекомендуйте Readora» с кнопками Telegram, MAX, VK, копирования ссылки и отправки письмом.</li>
+            <li>Ссылка персональная: регистрации по ней атрибутируются источником «referral» в админ-аналитике; события шаринга по каналам фиксируются в приватной аналитике (с согласия пользователя).</li>
+            <li><span class="tag server">сервер</span> Миграция 0033: колонка users.referral_code (случайный код, выдаётся при первом шаринге) и значение «referral» для referral_source.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="card">
+          <p class="date">17 ноября 2026</p>
           <p class="title">Проверка email при регистрации <span class="tag server">сервер</span></p>
           <ul class="feat">
             <li>Регистрация с доменом, не принимающим почту (нет MX-записи, Null MX RFC 7505, зарезервированные домены вроде example.com), отклоняется с понятной ошибкой.</li>

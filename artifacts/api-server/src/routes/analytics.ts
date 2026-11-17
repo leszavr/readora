@@ -42,6 +42,7 @@ const clientEventSchema = z.discriminatedUnion("eventName", [
   readerSessionEventBaseSchema.extend({ eventName: z.literal("reading_progressed"), properties: z.object({ chapterIndex: z.number().int().min(0).max(100000), progressPct: percentage, intervalActiveMs: durationMs }).strict() }).strict(),
   analyticsEventBaseSchema.extend({ eventName: z.literal("chapter_opened"), properties: z.object({ chapterIndex: z.number().int().min(0).max(100000), navigationSource: z.enum(["toc", "next_chapter", "prev_chapter", "restore"]) }).strict() }).strict(),
   analyticsEventBaseSchema.extend({ eventName: z.literal("progress_sync_finished"), properties: z.object({ outcome: z.enum(["success", "error"]), durationMs }).strict() }).strict(),
+  analyticsEventBaseSchema.extend({ eventName: z.literal("referral_shared"), properties: z.object({ channel: z.enum(["telegram", "vk", "max", "copy", "email", "native"]), origin: z.enum(["five_star_feedback"]) }).strict() }).strict(),
 ]);
 
 const batchSchema = z.object({

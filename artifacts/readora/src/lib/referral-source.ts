@@ -8,11 +8,13 @@ export const REFERRAL_SOURCES = [
   "vk",
   "seo",
   "other",
+  "referral",
 ] as const;
 
 export type ReferralSource = typeof REFERRAL_SOURCES[number];
 
 const STORAGE_KEY = "readora.referral-source";
+const REFERRAL_CODE_KEY = "readora.referral-code";
 const SEARCH_HOSTS = ["google.", "yandex.", "bing.com", "duckduckgo.com", "search.brave.com"];
 
 function normalizeSource(value: string | null): ReferralSource | null {
@@ -51,6 +53,7 @@ function sourceFromReferrer(referrer: string): ReferralSource {
 
 export function captureReferralSource(): ReferralSource {
   const params = new URLSearchParams(location.search);
+  captureReferralCode(params.get("ref"));
   const campaignSource = normalizeSource(params.get("source") ?? params.get("utm_source"));
   const detectedSource = campaignSource ?? sourceFromReferrer(document.referrer);
   const storedSource = sessionStorage.getItem(STORAGE_KEY) as ReferralSource | null;
@@ -63,4 +66,32 @@ export function captureReferralSource(): ReferralSource {
   if (storedSource && REFERRAL_SOURCES.includes(storedSource)) return storedSource;
   sessionStorage.setItem(STORAGE_KEY, detectedSource);
   return detectedSource;
+}
+
+// Персональный код рекомендации из ссылки /?ref=<code>: живёт до регистрации.
+export function captureReferralCode(ref: string | null): void {
+  try {
+    if (ref && /^[a-zA-Z0-9]{6}$/.test(ref)) {
+      localStorage.setItem(REFERRAL_CODE_KEY, ref);
+    }
+  } catch {
+    // Игнорируем ошибки приватного режима/квоты.
+  }
+}
+
+export function getStoredReferralCode(): string | undefined {
+  try {
+    const code = localStorage.getItem(REFERRAL_CODE_KEY);
+    return code && /^[a-zA-Z0-9]{6}$/.test(code) ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearStoredReferralCode(): void {
+  try {
+    localStorage.removeItem(REFERRAL_CODE_KEY);
+  } catch {
+    // Игнорируем ошибки приватного режима/квоты.
+  }
 }

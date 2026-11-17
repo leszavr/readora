@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { FEEDBACK_PROMPT_OPEN_EVENT } from "@/lib/feedback-prompt";
+import { ReferralShareCard, REFERRAL_SHARE_SHOWN_KEY } from "@/components/ReferralShareCard";
 import { CheckCircle2, Loader2, MessageSquareText, Star, X } from "lucide-react";
 
 function isHiddenPath(pathname: string): boolean {
@@ -38,6 +39,7 @@ export function FeedbackPrompt() {
   const [contactInfo, setContactInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showReferral, setShowReferral] = useState(false);
 
   const { data: options } = useGetFeedbackSurveyOptions();
   const { data: eligibility } = useGetFeedbackSurveyEligibility({
@@ -105,6 +107,15 @@ export function FeedbackPrompt() {
           },
         });
         setSubmitted(true);
+        if (nextRating === 5 && isAuthenticated && !localStorage.getItem(REFERRAL_SHARE_SHOWN_KEY)) {
+          try {
+            localStorage.setItem(REFERRAL_SHARE_SHOWN_KEY, "1");
+          } catch {
+            // Игнорируем ошибки приватного режима/квоты.
+          }
+          setShowReferral(true);
+          return;
+        }
         window.setTimeout(() => setOpen(false), 4000);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Не удалось отправить отзыв");
@@ -112,7 +123,7 @@ export function FeedbackPrompt() {
         setSubmitting(false);
       }
     },
-    [submitMutation],
+    [isAuthenticated, submitMutation],
   );
 
   function handleRate(value: number) {
@@ -200,10 +211,13 @@ export function FeedbackPrompt() {
           </div>
 
           {submitted ? (
-            <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              Мы учтем ваш ответ.
-            </div>
+            <>
+              <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                Мы учтем ваш ответ.
+              </div>
+              {showReferral && <ReferralShareCard />}
+            </>
           ) : (
             <div className="mt-5 space-y-5">
               <div className="flex items-center gap-1.5">

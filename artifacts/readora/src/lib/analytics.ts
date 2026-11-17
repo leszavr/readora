@@ -6,7 +6,7 @@ type UploadFormat = "fb2" | "epub" | "mobi" | "cbz" | "txt" | "md" | "html";
 
 type AnalyticsEvent = {
   eventId: string;
-  eventName: "app_opened" | "library_viewed" | "book_upload_started" | "reader_session_started" | "reader_session_heartbeat" | "reader_session_ended" | "reading_progressed" | "chapter_opened" | "progress_sync_finished";
+  eventName: "app_opened" | "library_viewed" | "book_upload_started" | "reader_session_started" | "reader_session_heartbeat" | "reader_session_ended" | "reading_progressed" | "chapter_opened" | "progress_sync_finished" | "referral_shared";
   occurredAt: string;
   localDate: string;
   sessionId: string;
@@ -254,4 +254,8 @@ export function trackChapterOpened(bookId: number, chapterIndex: number, navigat
 
 export function trackProgressSyncFinished(outcome: "success" | "error", durationMs: number): void {
   queue("progress_sync_finished", { outcome, durationMs });
+}
+
+export function trackReferralShared(channel: "telegram" | "vk" | "max" | "copy" | "email" | "native"): void {
+  queue("referral_shared", { channel, origin: "five_star_feedback" });
 }

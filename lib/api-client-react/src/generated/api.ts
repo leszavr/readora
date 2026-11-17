@@ -115,6 +115,7 @@ import type {
   ReaderSettings,
   ReaderSettingsInput,
   ReadingProgress,
+  ReferralCode,
   RegisterInput,
   RegistrationStatus,
   ResendVerification200,
@@ -566,6 +567,84 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMyReferralCodeUrl = () => {
+
+
+
+
+  return `/api/auth/me/referral-code`
+}
+
+/**
+ * Возвращает персональный код рекомендации; при первом обращении генерирует случайный код и сохраняет его в профиле.
+ * @summary Get the current user's referral code for sharing
+ */
+export const getMyReferralCode = async ( options?: RequestInit): Promise<ReferralCode> => {
+
+  return customFetch<ReferralCode>(getGetMyReferralCodeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyReferralCodeQueryKey = () => {
+    return [
+    `/api/auth/me/referral-code`
+    ] as const;
+    }
+
+
+export const getGetMyReferralCodeQueryOptions = <TData = Awaited<ReturnType<typeof getMyReferralCode>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReferralCode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyReferralCodeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReferralCode>>> = ({ signal }) => getMyReferralCode({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyReferralCode>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyReferralCodeQueryResult = NonNullable<Awaited<ReturnType<typeof getMyReferralCode>>>
+export type GetMyReferralCodeQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get the current user's referral code for sharing
+ */
+
+export function useGetMyReferralCode<TData = Awaited<ReturnType<typeof getMyReferralCode>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReferralCode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyReferralCodeQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

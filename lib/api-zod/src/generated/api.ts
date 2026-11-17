@@ -23,13 +23,15 @@ export const registerBodyPasswordMin = 6;
 
 export const registerBodyUsernameMin = 2;
 
+export const registerBodyReferralCodeRegExp = new RegExp('^[a-zA-Z0-9]{6}$');
 
 
 export const RegisterBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(registerBodyPasswordMin),
   "username": zod.string().min(registerBodyUsernameMin),
-  "referralSource": zod.enum(['direct', 'telegram', 'habr', 'productradar', 'show_hn', 'reddit', 'vk', 'seo', 'other']).optional()
+  "referralSource": zod.enum(['direct', 'telegram', 'habr', 'productradar', 'show_hn', 'reddit', 'vk', 'seo', 'other', 'referral']).optional(),
+  "referralCode": zod.string().regex(registerBodyReferralCodeRegExp).optional().describe('Персональный код рекомендации (параметр ref ссылки), перекрывает referralSource при валидном коде')
 })
 
 
@@ -87,6 +89,18 @@ export const GetMeResponse = zod.object({
   "scheduledDeletionAt": zod.coerce.date().nullish().describe('Дата окончательной очистки (не NULL = аккаунт помечен на удаление)'),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * Возвращает персональный код рекомендации; при первом обращении генерирует случайный код и сохраняет его в профиле.
+ * @summary Get the current user's referral code for sharing
+ */
+export const getMyReferralCodeResponseReferralCodeRegExp = new RegExp('^[a-z0-9]{8}$');
+
+
+export const GetMyReferralCodeResponse = zod.object({
+  "referralCode": zod.string().regex(getMyReferralCodeResponseReferralCodeRegExp)
 })
 
 

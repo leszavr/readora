@@ -175,6 +175,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me/referral-code:
+    get:
+      operationId: getMyReferralCode
+      tags: [auth]
+      summary: Get the current user's referral code for sharing
+      description: >-
+        Возвращает персональный код рекомендации; при первом обращении
+        генерирует случайный код и сохраняет его в профиле.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralCode"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to generate a code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/me/delete/preview:
     get:
       operationId: getAccountDeletionPreview
@@ -3451,7 +3479,11 @@ components:
           minLength: 2
         referralSource:
           type: string
-          enum: [direct, telegram, habr, productradar, show_hn, reddit, vk, seo, other]
+          enum: [direct, telegram, habr, productradar, show_hn, reddit, vk, seo, other, referral]
+        referralCode:
+          type: string
+          description: Персональный код рекомендации (параметр ref ссылки), перекрывает referralSource при валидном коде
+          pattern: '^[a-zA-Z0-9]{6}$'
 
     LoginInput:
       type: object
@@ -3473,6 +3505,14 @@ components:
           $ref: "#/components/schemas/User"
         message:
           type: string
+
+    ReferralCode:
+      type: object
+      required: [referralCode]
+      properties:
+        referralCode:
+          type: string
+          pattern: '^[a-z0-9]{8}$'
 
     ProfileUpdate:
       type: object

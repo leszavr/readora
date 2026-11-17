@@ -608,6 +608,7 @@ export const RegisterInputReferralSource = {
   vk: 'vk',
   seo: 'seo',
   other: 'other',
+  referral: 'referral',
 } as const;
 
 export interface RegisterInput {
@@ -617,6 +618,11 @@ export interface RegisterInput {
   /** @minLength 2 */
   username: string;
   referralSource?: RegisterInputReferralSource;
+  /**
+     * Персональный код рекомендации (параметр ref ссылки), перекрывает referralSource при валидном коде
+     * @pattern ^[a-zA-Z0-9]{6}$
+     */
+  referralCode?: string;
 }
 
 export interface LoginInput {
@@ -664,6 +670,11 @@ export interface User {
 export interface AuthResult {
   user: User;
   message?: string;
+}
+
+export interface ReferralCode {
+  /** @pattern ^[a-z0-9]{8}$ */
+  referralCode: string;
 }
 
 export interface ProfileUpdate {

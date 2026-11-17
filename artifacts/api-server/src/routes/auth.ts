@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, gt, sql } from "drizzle-orm";
+import { eq, and, gt, sql, isNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod/v4";
@@ -42,11 +42,13 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Слишком много попыток. Попробуйте позже" },
 });
+const REFERRAL_SOURCES = ["direct", "telegram", "habr", "productradar", "show_hn", "reddit", "vk", "seo", "other", "referral"] as const;
 const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
   username: z.string().trim().min(2).max(80),
-  referralSource: z.enum(["direct", "telegram", "habr", "productradar", "show_hn", "reddit", "vk", "seo", "other"]).optional().default("direct"),
+  referralSource: z.enum(REFERRAL_SOURCES).optional().default("direct"),
+  referralCode: z.string().trim().regex(/^[a-z0-9]{6}$/i).optional(),
 });
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -89,7 +91,17 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     });
     return;
   }
-  const { email, password, username, referralSource } = parsed.data;
+  const { email, password, username, referralCode } = parsed.data;
+  // Персональная рекомендация приоритетнее автоматически определенного источника
+  let referralSource = parsed.data.referralSource;
+  if (referralCode) {
+    const [referrer] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.referralCode, referralCode.toLowerCase()))
+      .limit(1);
+    if (referrer) referralSource = "referral";
+  }
 
   if (emailService.isEnabled()) {
     const emailCheck = await checkRegistrationEmail(email);
@@ -264,6 +276,42 @@ router.post("/auth/logout", (req, res): void => {
 router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   const user = (req as Request & { user: typeof usersTable.$inferSelect }).user;
   res.json(formatUser(user));
+});
+
+// GET /auth/me/referral-code — код для персональной рекомендации; генерируется при первом обращении.
+router.get("/auth/me/referral-code", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as Request & { user: typeof usersTable.$inferSelect }).user;
+  if (user.referralCode) {
+    res.json({ referralCode: user.referralCode });
+    return;
+  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = crypto.randomBytes(4).toString("hex");
+    try {
+      const [updated] = await db
+        .update(usersTable)
+        .set({ referralCode: code })
+        .where(and(eq(usersTable.id, user.id), isNull(usersTable.referralCode)))
+        .returning({ referralCode: usersTable.referralCode });
+      if (updated) {
+        res.json({ referralCode: updated.referralCode });
+        return;
+      }
+      // Код уже появился параллельно (или коллизия update вернула 0 строк — читаем заново)
+      const [existing] = await db
+        .select({ referralCode: usersTable.referralCode })
+        .from(usersTable)
+        .where(eq(usersTable.id, user.id));
+      if (existing?.referralCode) {
+        res.json({ referralCode: existing.referralCode });
+        return;
+      }
+    } catch (error) {
+      // Коллизия уникального индекса — генерируем новый код
+      if (!(error as { code?: string }).code?.startsWith("23")) throw error;
+    }
+  }
+  res.status(500).json({ error: "Не удалось создать код рекомендации" });
 });
 
 router.patch(
