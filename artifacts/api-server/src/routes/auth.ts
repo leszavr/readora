@@ -22,6 +22,7 @@ import { logger } from "../lib/logger";
 import { completeYandexDiskConnect } from "../lib/external-storage/yandex-connect";
 import { isExternalStorageEnabled, externalStorageDisabledMessage } from "../lib/external-storage/feature";
 import { grantGiftEditionsOnSignup, userOwnsGiftSourcesInUse } from "../lib/gift-editions-service";
+import { checkRegistrationEmail } from "../lib/email-validation";
 import {
   consumeVkOAuthState,
   createVkPkceChallenge,
@@ -89,6 +90,14 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     return;
   }
   const { email, password, username, referralSource } = parsed.data;
+
+  if (emailService.isEnabled()) {
+    const emailCheck = await checkRegistrationEmail(email);
+    if (!emailCheck.ok) {
+      res.status(400).json({ error: emailCheck.message });
+      return;
+    }
+  }
 
   const [existing] = await db
     .select()

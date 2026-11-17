@@ -13,6 +13,7 @@ import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRegistrationStatus } from "@/hooks/use-registration-status";
 import { captureReferralSource } from "@/lib/referral-source";
+import { suggestEmailTypo } from "@/lib/email-typo";
 import { VkIdOAuthList } from "@/components/VkIdOAuthList";
 
 export default function RegisterPage() {
@@ -30,6 +31,10 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [consent, setConsent] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [emailBlurred, setEmailBlurred] = useState(false);
+
+  const emailTypoSuggestion =
+    emailBlurred && email.includes("@") ? suggestEmailTypo(email.trim().toLowerCase()) : null;
 
   useEffect(() => {
     if (isAuthenticated) navigate("/library");
@@ -115,9 +120,26 @@ export default function RegisterPage() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => setEmailBlurred(true)}
                     required
                     autoComplete="email"
                   />
+                  {emailTypoSuggestion && emailTypoSuggestion !== email.trim().toLowerCase() && (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      Возможно, вы имели в виду{" "}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => {
+                          setEmail(emailTypoSuggestion);
+                          setEmailBlurred(false);
+                        }}
+                      >
+                        {emailTypoSuggestion}
+                      </button>
+                      ?
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Пароль</Label>
