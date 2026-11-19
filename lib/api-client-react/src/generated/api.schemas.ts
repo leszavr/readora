@@ -1176,6 +1176,18 @@ export interface AdminBook {
      * @nullable
      */
   giftEditionId?: number | null;
+  /**
+     * External storage provider of the book (yandex_disk or mail_ru_cloud); null for books stored on the server.
+
+     * @nullable
+     */
+  externalProvider?: string | null;
+  /**
+     * Whether the external storage connection of the book exists. null for books stored on the server (download is always available).
+
+     * @nullable
+     */
+  externalStorageLinked?: boolean | null;
 }
 
 export type AdminUserRole = typeof AdminUserRole[keyof typeof AdminUserRole];

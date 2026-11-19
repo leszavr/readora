@@ -776,7 +776,9 @@ export const GetAdminStatsResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n'),
+  "externalProvider": zod.string().nullish().describe('External storage provider of the book (yandex_disk or mail_ru_cloud); null for books stored on the server.\n'),
+  "externalStorageLinked": zod.boolean().nullish().describe('Whether the external storage connection of the book exists. null for books stored on the server (download is always available).\n')
 })),
   "recentUsers": zod.array(zod.object({
   "id": zod.number(),
@@ -1443,7 +1445,9 @@ export const ListAdminBooksResponseItem = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n'),
+  "externalProvider": zod.string().nullish().describe('External storage provider of the book (yandex_disk or mail_ru_cloud); null for books stored on the server.\n'),
+  "externalStorageLinked": zod.boolean().nullish().describe('Whether the external storage connection of the book exists. null for books stored on the server (download is always available).\n')
 })
 export const ListAdminBooksResponse = zod.array(ListAdminBooksResponseItem)
 
@@ -1510,7 +1514,9 @@ export const GetAdminBookResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n'),
+  "externalProvider": zod.string().nullish().describe('External storage provider of the book (yandex_disk or mail_ru_cloud); null for books stored on the server.\n'),
+  "externalStorageLinked": zod.boolean().nullish().describe('Whether the external storage connection of the book exists. null for books stored on the server (download is always available).\n')
 })
 
 
@@ -1559,7 +1565,9 @@ export const ToggleBlockBookResponse = zod.object({
   "ownerId": zod.number().optional(),
   "fileSize": zod.number().optional(),
   "uploadedAt": zod.coerce.date(),
-  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n')
+  "giftEditionId": zod.number().nullish().describe('Gift edition linked to this book. Computed only for books owned by the requesting admin (including same-file-hash match against the edition source); always null for other users\' books.\n'),
+  "externalProvider": zod.string().nullish().describe('External storage provider of the book (yandex_disk or mail_ru_cloud); null for books stored on the server.\n'),
+  "externalStorageLinked": zod.boolean().nullish().describe('Whether the external storage connection of the book exists. null for books stored on the server (download is always available).\n')
 })
 
 

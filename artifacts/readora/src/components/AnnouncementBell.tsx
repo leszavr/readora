@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertTriangle, Bell, CheckCheck, History, Megaphone, Sparkles } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, Megaphone, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NoteText } from "@/components/NoteEditor";
 
@@ -58,6 +58,7 @@ export function AnnouncementBell() {
   // Открытие оповещения: показываем полный текст в диалоге и сразу
   // помечаем прочитанным (не ждём ручного действия).
   async function handleOpenItem(item: AnnouncementItem) {
+    setOpen(false);
     setActiveItem(item);
     if (item.readAt === null) {
       await markRead.mutateAsync({ id: item.id });
@@ -167,16 +168,6 @@ export function AnnouncementBell() {
             })}
           </div>
         )}
-        <div className="border-t border-border px-4 py-2">
-          <a
-            href="/changelog"
-            className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => setOpen(false)}
-          >
-            <History className="h-4 w-4" />
-            Весь Changelog
-          </a>
-        </div>
       </PopoverContent>
       </Popover>
 

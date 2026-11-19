@@ -1020,8 +1020,14 @@ router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
       and (src.id = ${booksTable.id} or (src.file_hash is not null and src.file_hash = ${booksTable.fileHash}))
     order by (src.id = ${booksTable.id}) desc limit 1
   )`;
+  const externalStorageLinked = sql<boolean | null>`(
+    case when ${booksTable.externalProvider} is null then null
+      else exists (select 1 from ${externalStorageConnectionsTable} esc
+        where esc.id = ${booksTable.externalConnectionId})
+    end
+  )`;
   const books = await db
-    .select({ book: booksTable, username: usersTable.username, giftEditionId })
+    .select({ book: booksTable, username: usersTable.username, giftEditionId, externalStorageLinked })
     .from(booksTable)
     .leftJoin(usersTable, eq(booksTable.ownerUserId, usersTable.id))
     .where(isNull(booksTable.contentBookId))
@@ -1047,6 +1053,8 @@ router.get("/admin/books", requireAdmin, async (req, res): Promise<void> => {
       fileSize: r.book.fileSize,
       uploadedAt: r.book.uploadedAt,
       giftEditionId: r.giftEditionId ?? null,
+      externalProvider: r.book.externalProvider ?? null,
+      externalStorageLinked: r.externalStorageLinked === null ? null : Boolean(r.externalStorageLinked),
     })),
   );
 });

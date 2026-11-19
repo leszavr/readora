@@ -4498,6 +4498,16 @@ components:
             Gift edition linked to this book. Computed only for books owned by the
             requesting admin (including same-file-hash match against the edition source);
             always null for other users' books.
+        externalProvider:
+          type: ["string", "null"]
+          description: >
+            External storage provider of the book (yandex_disk or mail_ru_cloud);
+            null for books stored on the server.
+        externalStorageLinked:
+          type: ["boolean", "null"]
+          description: >
+            Whether the external storage connection of the book exists. null for
+            books stored on the server (download is always available).
 
     GiftEditionsAvailability:
       type: object

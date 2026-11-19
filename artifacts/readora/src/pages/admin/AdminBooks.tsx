@@ -33,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download, CopyX, ChevronDown, ChevronRight, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Layers, UserRound, X } from "lucide-react";
+import { Search, MoreHorizontal, Ban, Unlock, Trash2, Loader2, Download, CopyX, ChevronDown, ChevronRight, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Layers, UserRound, X, Cloud, CloudOff } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,8 @@ interface AdminBookRow {
   fileSize?: number | null;
   uploadedAt: string;
   giftEditionId?: number | null;
+  externalProvider?: string | null;
+  externalStorageLinked?: boolean | null;
 }
 
 const SORT_LABELS: Record<BookSortField, string> = {
@@ -381,9 +383,18 @@ export default function AdminBooks() {
         />
       </TableCell>
       <TableCell>
-        <div>
-          <p className="font-medium text-sm">{b.title}</p>
-          {b.author && <p className="text-xs text-muted-foreground">{b.author}</p>}
+        <div className="flex items-start gap-1.5">
+          {b.externalProvider && (
+            b.externalStorageLinked ? (
+              <Cloud className="mt-0.5 w-3.5 h-3.5 shrink-0 text-green-600" aria-label="Внешнее хранилище подключено" />
+            ) : (
+              <CloudOff className="mt-0.5 w-3.5 h-3.5 shrink-0 text-destructive" aria-label="Связь с внешним хранилищем разорвана" />
+            )
+          )}
+          <div>
+            <p className="font-medium text-sm">{b.title}</p>
+            {b.author && <p className="text-xs text-muted-foreground">{b.author}</p>}
+          </div>
         </div>
       </TableCell>
       <TableCell>
@@ -421,11 +432,17 @@ export default function AdminBooks() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <a className="gap-2" href={`/api/admin/books/${b.id}/download`} download>
+            {b.externalStorageLinked === false ? (
+              <DropdownMenuItem disabled className="gap-2 opacity-50" title="Связь с внешним хранилищем разорвана — файл недоступен">
                 <Download className="w-4 h-4" /> Скачать файл
-              </a>
-            </DropdownMenuItem>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem asChild>
+                <a className="gap-2" href={`/api/admin/books/${b.id}/download`} download>
+                  <Download className="w-4 h-4" /> Скачать файл
+                </a>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem className="gap-2" onClick={() => toggleBlock({ id: b.id })}>
               {b.status === "active"
                 ? <><Ban className="w-4 h-4" /> Заблокировать</>

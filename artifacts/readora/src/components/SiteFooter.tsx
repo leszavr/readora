@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Library, Settings, MessageSquare, Send } from "lucide-react";
+import { BookOpen, Library, History, MessageSquare, Send } from "lucide-react";
 import { LegalOverlay } from "@/components/LegalOverlay";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
@@ -62,9 +62,9 @@ export function SiteFooter() {
                   </a>
                 </li>
                 <li>
-                  <a href="/profile" className="hover:text-foreground transition-colors flex items-center gap-2">
-                    <Settings className="w-3 h-3" />
-                    Профиль
+                  <a href="/changelog" className="hover:text-foreground transition-colors flex items-center gap-2">
+                    <History className="w-3 h-3" />
+                    Changelog
                   </a>
                 </li>
                 <li>
