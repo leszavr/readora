@@ -279,12 +279,6 @@ function scheduleReaderScrollRestore({
     if (isSemantic) {
       const semanticPosition = position as SemanticReadingPosition;
       
-      console.log('[ReaderRestore] Using semantic position (v2):', {
-        elementPath: semanticPosition.elementPath,
-        elementTag: semanticPosition.elementTag,
-        charOffset: semanticPosition.charOffset,
-        chapterPercent: semanticPosition.chapterPercent,
-      });
 
       onProgrammaticScroll?.(Math.max(400, retryDelayMs + 120));
       
@@ -296,7 +290,6 @@ function scheduleReaderScrollRestore({
         smooth: false,
       });
 
-      console.log('[ReaderRestore] Semantic restore result:', result);
 
       // Если семантическое восстановление не удалось и есть попытки — пробуем снова
       if (!result.success && attemptsLeft > 0) {
@@ -312,9 +305,7 @@ function scheduleReaderScrollRestore({
 
     // Сначала пробуем textOffset (если есть)
     if (typeof legacyPosition.textOffset === "number") {
-      console.log('[ReaderRestore] Trying legacy textOffset:', legacyPosition.textOffset);
       if (restoreByTextOffset(container, contentArea, legacyPosition.textOffset)) {
-        console.log('[ReaderRestore] Legacy textOffset restore successful');
         return;
       }
     }
@@ -329,11 +320,6 @@ function scheduleReaderScrollRestore({
       );
     }
 
-    console.log('[ReaderRestore] Using legacy scrollTop fallback:', {
-      targetScrollTop,
-      savedScrollable,
-      currentScrollable: Math.max(1, container.scrollHeight - container.clientHeight),
-    });
 
     onProgrammaticScroll?.(Math.max(400, retryDelayMs + 120));
     container.scrollTop = targetScrollTop;
@@ -401,18 +387,9 @@ export function useDebouncedReaderProgressSave({
     }
 
     if (isSaveHeld?.(chapterId)) {
-      console.log('[DebouncedSave] saveNow suppressed: jump hold active for chapter', chapterId);
       return false;
     }
 
-    console.log('[DebouncedSave] saveNow called:', {
-      chapterId,
-      chapterIdx,
-      useSemanticPosition,
-      scrollTop: container.scrollTop,
-      scrollHeight: container.scrollHeight,
-      clientHeight: container.clientHeight,
-    });
 
     let payload: ReaderProgressPayload;
 
@@ -426,12 +403,6 @@ export function useDebouncedReaderProgressSave({
       });
 
       if (semanticPosition) {
-        console.log('[DebouncedSave] Captured semantic position:', {
-          elementPath: semanticPosition.elementPath,
-          elementTag: semanticPosition.elementTag,
-          charOffset: semanticPosition.charOffset,
-          textPreview: semanticPosition.textPreview.slice(0, 30) + '...',
-        });
 
         payload = createSemanticProgressPayload({
           chapterId,
@@ -469,11 +440,6 @@ export function useDebouncedReaderProgressSave({
       });
     }
 
-    console.log('[DebouncedSave] Created payload:', {
-      chapterId: payload.currentChapterId,
-      progressPercent: payload.progressPercent,
-      positionVersion: useSemanticPosition ? 'v2 (semantic)' : 'v1 (legacy)',
-    });
 
     onSave(payload, {
       onSuccess: options?.onSuccess,
@@ -492,11 +458,9 @@ export function useDebouncedReaderProgressSave({
       return;
     }
 
-    console.log('[DebouncedSave] Scroll detected, scheduling save. Current scrollTop:', container.scrollTop);
     cancelPendingSave();
     timeoutRef.current = setTimeout(() => {
       if (isProgrammaticScroll?.()) return;
-      console.log('[DebouncedSave] Debounce timeout reached, saving now');
       saveNow();
     }, debounceMs);
   }, [enabled, debounceMs, cancelPendingSave, isProgrammaticScroll, saveNow, scrollContainerRef]);
@@ -626,15 +590,12 @@ export function usePeriodicProgressSave({
   useEffect(() => {
     if (!enabled) return;
 
-    console.log('[PeriodicSave] Starting periodic save with interval:', intervalMs);
     
     const interval = setInterval(() => {
-      console.log('[PeriodicSave] Triggering periodic save');
       saveNow();
     }, intervalMs);
 
     return () => {
-      console.log('[PeriodicSave] Stopping periodic save');
       clearInterval(interval);
     };
   }, [saveNow, intervalMs, enabled]);

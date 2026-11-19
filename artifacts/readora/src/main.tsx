@@ -3,6 +3,7 @@ import { Router as WouterRouter } from "wouter";
 import App from "./App";
 import { AboutPage } from "@/components/AboutPage";
 import { AppProviders } from "@/components/AppProviders";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { LandingPage } from "@/components/LandingPage";
 import type { LandingData } from "@/landing-data";
@@ -42,29 +43,37 @@ const landingData = location.pathname === "/" ? readLandingData() : null;
 if (landingData) {
   hydrateRoot(
     root,
-    <AppProviders>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <FeedbackPrompt />
-        <LandingPage
-          popularBooks={landingData.popularBooks}
-          maintenanceStatus={landingData.maintenanceStatus}
-          registrationStatus={landingData.registrationStatus}
-        />
-      </WouterRouter>
-    </AppProviders>,
+    <ErrorBoundary>
+      <AppProviders>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <FeedbackPrompt />
+          <LandingPage
+            popularBooks={landingData.popularBooks}
+            maintenanceStatus={landingData.maintenanceStatus}
+            registrationStatus={landingData.registrationStatus}
+          />
+        </WouterRouter>
+      </AppProviders>
+    </ErrorBoundary>,
   );
 } else if (location.pathname === "/about") {
   hydrateRoot(
     root,
-    <AppProviders>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <FeedbackPrompt />
-        <AboutPage />
-      </WouterRouter>
-    </AppProviders>,
+    <ErrorBoundary>
+      <AppProviders>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <FeedbackPrompt />
+          <AboutPage />
+        </WouterRouter>
+      </AppProviders>
+    </ErrorBoundary>,
   );
 } else {
-  createRoot(root).render(<App />);
+  createRoot(root).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>,
+  );
 }
 
 if ("serviceWorker" in navigator) {

@@ -265,18 +265,6 @@ export default function ReaderPage() {
   const [isAtChapterStart, setIsAtChapterStart] = useState(true);
   const [isAtChapterEnd, setIsAtChapterEnd] = useState(false);
 
-  // Debug: log button states
-  useEffect(() => {
-    console.log('[Reader] Button states:', {
-      currentChapterIdx,
-      totalChapters: chapters.length,
-      isAtChapterStart,
-      isAtChapterEnd,
-      prevDisabled: currentChapterIdx === null || currentChapterIdx <= 0 || !isAtChapterStart,
-      nextDisabled: currentChapterIdx === null || currentChapterIdx >= chapters.length - 1 || !isAtChapterEnd,
-    });
-  }, [currentChapterIdx, chapters.length, isAtChapterStart, isAtChapterEnd]);
-
   // Local reader settings (initialised from server settings below)
   const [fontSize, setFontSize] = useState(18);
   const [fontFamily, setFontFamily] = useState("Georgia");
@@ -465,16 +453,6 @@ export default function ReaderPage() {
         onError?: (error: unknown) => void;
       }
     ) => {
-      // Определяем версию позиции для логирования
-      const isSemantic = payload.currentPosition.includes('"version":2');
-      
-      console.log('[ReaderPage] Saving progress:', {
-        chapterId: payload.currentChapterId,
-        progressPercent: payload.progressPercent,
-        positionVersion: isSemantic ? 'v2 (semantic)' : 'v1 (legacy)',
-        positionLength: payload.currentPosition.length,
-      });
-      
       // Save to localStorage immediately for fast restore on next visit
       saveReaderProgressToStorage(
         { bookId },
@@ -499,10 +477,6 @@ export default function ReaderPage() {
         },
         {
           onSuccess: (saved) => {
-            console.log('[ReaderPage] Progress saved successfully:', {
-              chapterId: saved?.currentChapterId,
-              progressPercent: saved?.progressPercent,
-            });
             if (saved) {
               qc.setQueryData(getGetProgressQueryKey(bookId), saved);
               const now = Date.now();
@@ -955,18 +929,6 @@ export default function ReaderPage() {
       // This prevents accidental navigation from the middle of the chapter
       const isStart = fitsWithoutScroll || (atStart && !atEnd);
       const isEnd = fitsWithoutScroll || (atEnd && !atStart);
-
-      console.log('[Reader] Scroll position:', {
-        scrollTop,
-        scrollHeight,
-        clientHeight,
-        scrollBottom,
-        atStart,
-        atEnd,
-        isStart,
-        isEnd,
-        currentChapterId,
-      });
 
       setIsAtChapterStart(isStart);
       setIsAtChapterEnd(isEnd);
