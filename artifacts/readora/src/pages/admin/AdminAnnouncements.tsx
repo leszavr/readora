@@ -50,6 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NoteEditor } from "@/components/NoteEditor";
 import { formatDate } from "@/components/AnnouncementBell";
+import { useToast } from "@/hooks/use-toast";
 import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
 
 const CARD_COLOR_CLASSES: Record<string, string> = {
@@ -89,6 +90,7 @@ const EMPTY_FORM: FormState = { kind: "announcement", severity: "info", color: "
 
 export default function AdminAnnouncements() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | Kind>("all");
   const [sort, setSort] = useState<SortValue>("newest");
@@ -99,6 +101,8 @@ export default function AdminAnnouncements() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const titleMissing = !form.title.trim();
 
   const params = useMemo(
     () => ({
@@ -133,21 +137,32 @@ export default function AdminAnnouncements() {
   function openCreate() {
     setForm(EMPTY_FORM);
     setEditingId(null);
+    setTitleTouched(false);
     setFormOpen(true);
   }
 
   function openEdit(item: (typeof items)[number]) {
     setForm({ kind: item.kind, severity: item.severity, color: item.color, title: item.title, body: item.body });
     setEditingId(item.id);
+    setTitleTouched(false);
     setFormOpen(true);
   }
 
 type ColorValue = FormState["color"];
 
   async function handleSave(body: string, color: string) {
+    if (titleMissing) {
+      setTitleTouched(true);
+      toast({
+        title: "Не заполнен заголовок",
+        description: "Укажите заголовок оповещения перед публикацией.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
-      const payload = { ...form, body, color: color as ColorValue };
+      const payload = { ...form, title: form.title.trim(), body, color: color as ColorValue };
       if (editingId !== null) {
         await updateMutation.mutateAsync({ id: editingId, data: payload });
       } else {
@@ -155,6 +170,11 @@ type ColorValue = FormState["color"];
       }
       setFormOpen(false);
       await invalidate();
+    } catch (error) {
+      const message = error && typeof error === "object" && "message" in error && typeof error.message === "string"
+        ? error.message
+        : "Повторите попытку.";
+      toast({ title: "Не удалось сохранить оповещение", description: message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -290,16 +310,26 @@ type ColorValue = FormState["color"];
               </div>
             </div>
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Заголовок</p>
+              <p className={cn("text-xs font-medium", titleTouched && titleMissing ? "text-destructive" : "text-muted-foreground")}>
+                Заголовок <span className="text-destructive">*</span>
+              </p>
               <Input
                 value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, title: e.target.value }));
+                  setTitleTouched(true);
+                }}
                 maxLength={200}
                 placeholder={form.kind === "release" ? "Обновление от 07.11.2026" : "Заголовок оповещения"}
+                aria-invalid={titleTouched && titleMissing}
+                className={cn(titleTouched && titleMissing && "border-destructive focus-visible:ring-destructive")}
               />
+              {titleTouched && titleMissing && (
+                <p className="text-xs text-destructive">Заголовок обязателен</p>
+              )}
             </div>
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Текст</p>
+              <p className="text-xs font-medium text-muted-foreground">Текст <span className="text-destructive">*</span></p>
               <NoteEditor
                 initialText={form.body}
                 initialColor={form.color}
