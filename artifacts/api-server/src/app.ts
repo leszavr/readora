@@ -17,6 +17,7 @@ import { getPopularBooks } from "./lib/popular-books-service";
 import { getPublicBaseUrl } from "./lib/public-url";
 import { isRegistrationEnabled } from "./lib/registration-status";
 import seoRouter from "./routes/seo";
+import { getChangelogEntries } from "./lib/changelog-service";
 
 declare module "express-session" {
   interface SessionData {
@@ -61,6 +62,18 @@ type HomeRenderer = {
     template: string;
     publicBaseUrl: string;
     kind: "terms" | "privacy";
+  }): string;
+  renderChangelogDocument(input: {
+    template: string;
+    publicBaseUrl: string;
+    items: {
+      id: number;
+      severity: "info" | "warning";
+      color: "yellow" | "green" | "blue" | "pink" | "purple";
+      title: string;
+      body: string;
+      publishedAt: string;
+    }[];
   }): string;
   renderPrivateSpaDocument(input: {
     template: string;
@@ -214,6 +227,18 @@ if (hasClientDist && homeRenderer) {
         template: indexHtml,
         publicBaseUrl: getPublicBaseUrl(),
         kind: "privacy",
+      }));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/changelog", async (_req, res, next) => {
+    try {
+      const rows = await getChangelogEntries();
+      res.type("html").send(homeRenderer.renderChangelogDocument({
+        template: indexHtml,
+        publicBaseUrl: getPublicBaseUrl(),
+        items: rows.map((row) => ({ ...row, publishedAt: row.publishedAt.toISOString() })),
       }));
     } catch (error) {
       next(error);

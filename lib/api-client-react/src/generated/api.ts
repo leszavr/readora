@@ -4055,7 +4055,7 @@ export const getGetAnnouncementsChangelogUrl = () => {
 }
 
 /**
- * @summary Full platform changelog (all release entries, archived included)
+ * @summary Full platform changelog (all release entries, archived included; public)
  */
 export const getAnnouncementsChangelog = async ( options?: RequestInit): Promise<ChangelogResponse> => {
 
@@ -4079,7 +4079,7 @@ export const getGetAnnouncementsChangelogQueryKey = () => {
     }
 
 
-export const getGetAnnouncementsChangelogQueryOptions = <TData = Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetAnnouncementsChangelogQueryOptions = <TData = Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -4098,14 +4098,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetAnnouncementsChangelogQueryResult = NonNullable<Awaited<ReturnType<typeof getAnnouncementsChangelog>>>
-export type GetAnnouncementsChangelogQueryError = ErrorType<ErrorResponse>
+export type GetAnnouncementsChangelogQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Full platform changelog (all release entries, archived included)
+ * @summary Full platform changelog (all release entries, archived included; public)
  */
 
-export function useGetAnnouncementsChangelog<TData = Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError = ErrorType<ErrorResponse>>(
+export function useGetAnnouncementsChangelog<TData = Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError = ErrorType<unknown>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnnouncementsChangelog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

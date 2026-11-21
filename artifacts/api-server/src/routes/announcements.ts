@@ -8,6 +8,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../middlewares/auth";
+import { getChangelogEntries } from "../lib/changelog-service";
 
 const router = Router();
 
@@ -65,22 +66,9 @@ router.get("/announcements", requireAuth, async (req, res): Promise<void> => {
 });
 
 // GET /announcements/changelog — полный Changelog платформы (все release-записи,
-// включая архивные; per-user отметки прочтения не важны для истории)
-router.get("/announcements/changelog", requireAuth, async (_req, res): Promise<void> => {
-  const items = await db
-    .select({
-      id: adminAnnouncementsTable.id,
-      severity: adminAnnouncementsTable.severity,
-      color: adminAnnouncementsTable.color,
-      title: adminAnnouncementsTable.title,
-      body: adminAnnouncementsTable.body,
-      publishedAt: adminAnnouncementsTable.publishedAt,
-    })
-    .from(adminAnnouncementsTable)
-    .where(eq(adminAnnouncementsTable.kind, "release"))
-    .orderBy(desc(adminAnnouncementsTable.publishedAt));
-
-  res.json({ items });
+// включая архивные; публичный, используется страницей /changelog)
+router.get("/announcements/changelog", async (_req, res): Promise<void> => {
+  res.json({ items: await getChangelogEntries() });
 });
 
 // POST /announcements/read-all — отметить все активные оповещения прочитанными

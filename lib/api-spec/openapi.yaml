@@ -1288,7 +1288,8 @@ paths:
     get:
       operationId: getAnnouncementsChangelog
       tags: [announcements]
-      summary: Full platform changelog (all release entries, archived included)
+      summary: Full platform changelog (all release entries, archived included; public)
+      security: []
       responses:
         "200":
           description: OK
@@ -1296,12 +1297,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChangelogResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /announcements/read-all:
     post:

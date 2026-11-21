@@ -5,6 +5,8 @@ import { AppProviders } from "@/components/AppProviders";
 import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { LandingPage } from "@/components/LandingPage";
 import { LegalDocumentPage, type LegalDocumentKind } from "@/components/LegalDocumentPage";
+import { PublicDocumentShell } from "@/components/PublicDocumentShell";
+import { ChangelogSsrContent } from "@/components/ChangelogContent";
 import type { LandingData } from "@/landing-data";
 
 const homePageMetadata = {
@@ -32,6 +34,21 @@ const legalPageMetadata = {
   },
 } as const;
 
+const changelogPageMetadata = {
+  title: "Changelog Readora — история обновлений платформы",
+  description: "История обновлений Readora: новые функции, улучшения читалки и библиотеки, исправления.",
+  path: "/changelog",
+};
+
+export type ChangelogEntry = {
+  id: number;
+  severity: "info" | "warning";
+  color: "yellow" | "green" | "blue" | "pink" | "purple";
+  title: string;
+  body: string;
+  publishedAt: string;
+};
+
 type HomeDocumentInput = {
   template: string;
   publicBaseUrl: string;
@@ -40,7 +57,7 @@ type HomeDocumentInput = {
   registrationStatus: LandingData["registrationStatus"];
 };
 
-type PageMetadata = typeof homePageMetadata | typeof aboutPageMetadata | (typeof legalPageMetadata)[LegalDocumentKind];
+type PageMetadata = typeof homePageMetadata | typeof aboutPageMetadata | typeof changelogPageMetadata | (typeof legalPageMetadata)[LegalDocumentKind];
 
 function serializeJson(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
@@ -96,6 +113,19 @@ export function renderAboutDocument({ template, publicBaseUrl }: Omit<HomeDocume
 
 export function renderLegalDocument({ template, publicBaseUrl, kind }: Omit<HomeDocumentInput, "popularBooks"> & { kind: LegalDocumentKind }): string {
   return renderDocument(template, publicBaseUrl, legalPageMetadata[kind], <LegalDocumentPage kind={kind} />);
+}
+
+export function renderChangelogDocument({ template, publicBaseUrl, items }: Omit<HomeDocumentInput, "popularBooks"> & { items: ChangelogEntry[] }): string {
+  const data = { items };
+  return renderDocument(
+    template,
+    publicBaseUrl,
+    changelogPageMetadata,
+    <PublicDocumentShell>
+      <ChangelogSsrContent items={items} />
+    </PublicDocumentShell>,
+    `<script id="changelog-data" type="application/json">${serializeJson(data)}</script>`,
+  );
 }
 
 export function renderPrivateSpaDocument({ template, publicBaseUrl }: Omit<HomeDocumentInput, "popularBooks">): string {

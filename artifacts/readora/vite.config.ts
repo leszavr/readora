@@ -39,7 +39,7 @@ function landingSsrPlugin(): Plugin {
         }
 
         const pathname = new URL(req.url, "http://localhost").pathname;
-        if (pathname !== "/" && pathname !== "/about" && pathname !== "/terms" && pathname !== "/privacy" && !spaRoutes.some((route) => route.test(pathname))) {
+        if (pathname !== "/" && pathname !== "/about" && pathname !== "/changelog" && pathname !== "/terms" && pathname !== "/privacy" && !spaRoutes.some((route) => route.test(pathname))) {
           next();
           return;
         }
@@ -47,12 +47,20 @@ function landingSsrPlugin(): Plugin {
         try {
           const template = await readFile(path.resolve(import.meta.dirname, "index.html"), "utf8");
           const transformedTemplate = await server.transformIndexHtml(pathname, template);
-          const { renderAboutDocument, renderHomeDocument, renderLegalDocument, renderPrivateSpaDocument } = await server.ssrLoadModule("/src/entry-server.tsx");
+          const { renderAboutDocument, renderChangelogDocument, renderHomeDocument, renderLegalDocument, renderPrivateSpaDocument } = await server.ssrLoadModule("/src/entry-server.tsx");
           const publicBaseUrl = (process.env.PUBLIC_BASE_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           if (pathname === "/about") {
             res.end(renderAboutDocument({ template: transformedTemplate, publicBaseUrl }));
+            return;
+          }
+
+          if (pathname === "/changelog") {
+            const items = await fetch(`${process.env.API_PROXY_TARGET ?? "http://localhost:5000"}/api/announcements/changelog`)
+              .then(async (response) => response.ok ? response.json() : { items: [] })
+              .catch(() => ({ items: [] }));
+            res.end(renderChangelogDocument({ template: transformedTemplate, publicBaseUrl, items: items.items ?? [] }));
             return;
           }
 

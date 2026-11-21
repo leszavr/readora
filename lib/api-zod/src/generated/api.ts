@@ -1076,7 +1076,7 @@ export const GetAnnouncementsResponse = zod.object({
 
 
 /**
- * @summary Full platform changelog (all release entries, archived included)
+ * @summary Full platform changelog (all release entries, archived included; public)
  */
 export const GetAnnouncementsChangelogResponse = zod.object({
   "items": zod.array(zod.object({
