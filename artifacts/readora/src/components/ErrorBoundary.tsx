@@ -9,17 +9,41 @@ interface State {
   error: Error | null;
 }
 
+/** После деплоя старые чанки пропадают с сервера, и ленивая загрузка страницы
+ * падает с "Failed to fetch dynamically imported module". Единственный выход —
+ * перезагрузить страницу, чтобы браузер получил свежий index.html с новыми
+ * хэшами чанков. Флаг в sessionStorage защищает от цикла перезагрузок. */
+const STALE_CHUNK_RELOAD_KEY = "readora:stale-chunk-reloaded";
+
+function isStaleChunkError(error: Error): boolean {
+  const message = error.message ?? "";
+  return (
+    message.includes("Failed to fetch dynamically imported module") ||
+    message.includes("Importing a module script failed") ||
+    message.includes("error loading dynamically imported module")
+  );
+}
+
 /** Ловит ошибки рендера дерева приложения: вместо белого экрана —
  * понятная страница с деталями ошибки и кнопкой перезагрузки.
  * Ошибка логируется в консоль для диагностики по факту инцидента. */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
+  componentDidMount(): void {
+    sessionStorage.removeItem(STALE_CHUNK_RELOAD_KEY);
+  }
+
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    if (isStaleChunkError(error) && !sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY)) {
+      sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, "1");
+      window.location.reload();
+      return;
+    }
     console.error("[ErrorBoundary]", error, info.componentStack);
   }
 
