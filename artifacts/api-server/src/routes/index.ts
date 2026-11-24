@@ -14,6 +14,7 @@ import giftEditionsRouter from "./gift-editions";
 import annotationsRouter from "./annotations";
 import externalStorageRouter from "./external-storage";
 import announcementsRouter from "./announcements";
+import readingHistoryRouter from "./reading-history";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(giftEditionsRouter);
 router.use(annotationsRouter);
 router.use(externalStorageRouter);
 router.use(announcementsRouter);
+router.use(readingHistoryRouter);
 
 export default router;

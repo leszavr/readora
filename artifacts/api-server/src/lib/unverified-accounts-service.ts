@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { emailService } from "./email-service";
 import { deleteStoredFilesIfUnreferenced } from "./book-deletion-service";
+import { collectUserHistoryCoverPaths, deleteUnreferencedHistoryCovers } from "./cover-storage";
 import { resolveUploadPath } from "./storage";
 import { hashAuthToken } from "./token-hash";
 import { logger } from "./logger";
@@ -125,9 +126,10 @@ async function deleteUnverifiedAccounts(): Promise<number> {
   let deleted = 0;
   for (const user of candidates) {
     try {
-      const [books, uploadJobs] = await Promise.all([
+      const [books, uploadJobs, historyCovers] = await Promise.all([
         db.select().from(booksTable).where(eq(booksTable.ownerUserId, user.id)),
         db.select().from(bookUploadJobsTable).where(eq(bookUploadJobsTable.ownerUserId, user.id)),
+        collectUserHistoryCoverPaths(user.id),
       ]);
 
       await db.transaction(async (tx) => {
@@ -148,6 +150,7 @@ async function deleteUnverifiedAccounts(): Promise<number> {
           logger.error({ bookId: book.id }, "Failed to delete an unverified account book file");
         }
       }
+      await deleteUnreferencedHistoryCovers(historyCovers);
 
       for (const job of uploadJobs) {
         try {

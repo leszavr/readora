@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db, booksTable, chaptersTable, notesTable, bookmarksTable, readingProgressTable, usersTable } from "@workspace/db";
+import { db, booksTable, chaptersTable, notesTable, bookmarksTable, readingProgressTable, readingHistoryTable, usersTable } from "@workspace/db";
 import { deleteStoredFilesIfUnreferenced } from "./book-deletion-service";
 
 // Дубликат: тот же владелец + тот же fileHash, две и более записи
@@ -193,6 +193,12 @@ export async function mergeDuplicateBooks(
           where rp.user_id = ${readingProgressTable.userId} and rp.book_id = ${keepId}
         )`,
       ));
+
+    // Записи истории не уникальны по книге — переносятся все.
+    await tx
+      .update(readingHistoryTable)
+      .set({ bookId: keepId })
+      .where(eq(readingHistoryTable.bookId, dup.id));
 
     // Закладки без конфликта PK — просто переносим с ремапом глав.
     const dupBookmarks = await tx.select().from(bookmarksTable).where(eq(bookmarksTable.bookId, dup.id));

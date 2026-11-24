@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
+import { AdminPaginationControls, useAdminListPagination } from "@/components/ListPagination";
 
 type BookSortField = "title" | "format" | "owner" | "status" | "size" | "uploadedAt" | "gift";
 type BookFilterField = "format" | "owner" | "status" | "gift";

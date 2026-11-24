@@ -2210,3 +2210,96 @@ export const AdminResetExternalStorageCacheResponse = zod.object({
 })
 
 
+/**
+ * @summary Reading history of the authenticated user (one entry per finished book)
+ */
+export const ListReadingHistoryQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "sortBy": zod.enum(['completedAt', 'title', 'author']).optional(),
+  "sortDir": zod.enum(['asc', 'desc']).optional(),
+  "groupBy": zod.enum(['none', 'date', 'author', 'genre', 'cycle']).optional()
+})
+
+export const listReadingHistoryResponseCommentMax = 255;
+
+
+
+export const ListReadingHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "bookId": zod.number().nullable().describe('Null when the book was deleted from the library'),
+  "title": zod.string(),
+  "author": zod.string().nullable(),
+  "coverUrl": zod.string().nullable(),
+  "cycleName": zod.string().nullable(),
+  "genreName": zod.string().nullable(),
+  "completedAt": zod.coerce.date(),
+  "comment": zod.string().max(listReadingHistoryResponseCommentMax).nullable()
+})
+export const ListReadingHistoryResponse = zod.array(ListReadingHistoryResponseItem)
+
+
+/**
+ * @summary Delete selected reading history entries (1-500)
+ */
+export const deleteBulkReadingHistoryBodyIdsMax = 500;
+
+
+
+export const DeleteBulkReadingHistoryBody = zod.object({
+  "ids": zod.array(zod.number()).min(1).max(deleteBulkReadingHistoryBodyIdsMax)
+})
+
+export const DeleteBulkReadingHistoryResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
+ * @summary Delete the whole reading history of the authenticated user
+ */
+export const ClearReadingHistoryResponse = zod.object({
+  "deleted": zod.number()
+})
+
+
+/**
+ * @summary Set or remove the comment of a reading history entry
+ */
+export const UpdateReadingHistoryCommentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateReadingHistoryCommentBodyCommentMax = 255;
+
+
+
+export const UpdateReadingHistoryCommentBody = zod.object({
+  "comment": zod.string().max(updateReadingHistoryCommentBodyCommentMax).nullable()
+})
+
+export const updateReadingHistoryCommentResponseCommentMax = 255;
+
+
+
+export const UpdateReadingHistoryCommentResponse = zod.object({
+  "id": zod.number(),
+  "bookId": zod.number().nullable().describe('Null when the book was deleted from the library'),
+  "title": zod.string(),
+  "author": zod.string().nullable(),
+  "coverUrl": zod.string().nullable(),
+  "cycleName": zod.string().nullable(),
+  "genreName": zod.string().nullable(),
+  "completedAt": zod.coerce.date(),
+  "comment": zod.string().max(updateReadingHistoryCommentResponseCommentMax).nullable()
+})
+
+
+/**
+ * Used for entries whose book was deleted from the library.
+ * @summary Cover image of a reading history entry
+ */
+export const GetReadingHistoryCoverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+

@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { UploadBookDialog } from "@/components/UploadBookDialog";
 import { useAuth } from "@/hooks/use-auth";
-import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
+import { AdminPaginationControls, useAdminListPagination } from "@/components/ListPagination";
 import { EditGiftEditionDialog } from "./EditGiftEditionDialog";
 
 function getErrorMessage(error: unknown, fallback: string): string {

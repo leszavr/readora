@@ -28,6 +28,8 @@ tags:
     description: External book storage connections
   - name: announcements
     description: Admin announcements and changelog for users
+  - name: reading-history
+    description: Reading history of finished books
 
 paths:
   /healthz:
@@ -2713,6 +2715,146 @@ paths:
                     type: integer
                 required: [booksCleared, bytesFreed]
 
+  # READING HISTORY
+  /reading-history:
+    get:
+      operationId: listReadingHistory
+      tags: [reading-history]
+      summary: Reading history of the authenticated user (one entry per finished book)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [completedAt, title, author]
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [none, date, author, genre, cycle]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReadingHistoryEntry"
+        "400":
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reading-history/delete-bulk:
+    post:
+      operationId: deleteBulkReadingHistory
+      tags: [reading-history]
+      summary: Delete selected reading history entries (1-500)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadingHistoryDeleteBulkInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingHistoryDeleteResult"
+        "400":
+          description: Invalid ids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reading-history/clear:
+    post:
+      operationId: clearReadingHistory
+      tags: [reading-history]
+      summary: Delete the whole reading history of the authenticated user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingHistoryDeleteResult"
+
+  /reading-history/{id}:
+    patch:
+      operationId: updateReadingHistoryComment
+      tags: [reading-history]
+      summary: Set or remove the comment of a reading history entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadingHistoryCommentInput"
+      responses:
+        "200":
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingHistoryEntry"
+        "400":
+          description: Invalid comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reading-history/{id}/cover:
+    get:
+      operationId: getReadingHistoryCover
+      tags: [reading-history]
+      summary: Cover image of a reading history entry
+      description: Used for entries whose book was deleted from the library.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cover image
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Cover not found
+
 components:
   schemas:
     ExternalStorageConnection:
@@ -4710,3 +4852,57 @@ components:
           type: string
         timestamp:
           type: number
+
+    # READING HISTORY SCHEMAS
+    ReadingHistoryEntry:
+      type: object
+      required: [id, bookId, title, author, coverUrl, cycleName, genreName, completedAt, comment]
+      properties:
+        id:
+          type: integer
+        bookId:
+          type: ["integer", "null"]
+          description: Null when the book was deleted from the library
+        title:
+          type: string
+        author:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+        cycleName:
+          type: ["string", "null"]
+        genreName:
+          type: ["string", "null"]
+        completedAt:
+          type: string
+          format: date-time
+        comment:
+          type: ["string", "null"]
+          maxLength: 255
+
+    ReadingHistoryCommentInput:
+      type: object
+      additionalProperties: false
+      required: [comment]
+      properties:
+        comment:
+          type: ["string", "null"]
+          maxLength: 255
+
+    ReadingHistoryDeleteBulkInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: integer
+
+    ReadingHistoryDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer

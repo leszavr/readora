@@ -27,7 +27,7 @@ import {
 import { Search, Plus, MoreHorizontal, Ban, Unlock, Trash2, Pencil, Loader2, Eye, EyeOff, CheckCircle, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, Layers } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
+import { AdminPaginationControls, useAdminListPagination } from "@/components/ListPagination";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Администратор", moderator: "Модератор", user: "Пользователь" };
 const STATUS_LABELS: Record<string, string> = { active: "Активен", blocked: "Заблокирован" };

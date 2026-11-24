@@ -104,6 +104,7 @@ import type {
   ListAdminUsersParams,
   ListBooksParams,
   ListExternalStorageFoldersParams,
+  ListReadingHistoryParams,
   Login403,
   LoginInput,
   MailRuConnectRequest,
@@ -114,6 +115,10 @@ import type {
   PublicBook,
   ReaderSettings,
   ReaderSettingsInput,
+  ReadingHistoryCommentInput,
+  ReadingHistoryDeleteBulkInput,
+  ReadingHistoryDeleteResult,
+  ReadingHistoryEntry,
   ReadingProgress,
   ReferralCode,
   RegisterInput,
@@ -8474,4 +8479,379 @@ export const useAdminResetExternalStorageCache = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getAdminResetExternalStorageCacheMutationOptions(options));
     }
+
+export const getListReadingHistoryUrl = (params?: ListReadingHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reading-history?${stringifiedParams}` : `/api/reading-history`
+}
+
+/**
+ * @summary Reading history of the authenticated user (one entry per finished book)
+ */
+export const listReadingHistory = async (params?: ListReadingHistoryParams, options?: RequestInit): Promise<ReadingHistoryEntry[]> => {
+
+  return customFetch<ReadingHistoryEntry[]>(getListReadingHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListReadingHistoryQueryKey = (params?: ListReadingHistoryParams,) => {
+    return [
+    `/api/reading-history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListReadingHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listReadingHistory>>, TError = ErrorType<ErrorResponse>>(params?: ListReadingHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReadingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListReadingHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReadingHistory>>> = ({ signal }) => listReadingHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listReadingHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListReadingHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listReadingHistory>>>
+export type ListReadingHistoryQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Reading history of the authenticated user (one entry per finished book)
+ */
+
+export function useListReadingHistory<TData = Awaited<ReturnType<typeof listReadingHistory>>, TError = ErrorType<ErrorResponse>>(
+ params?: ListReadingHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReadingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListReadingHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteBulkReadingHistoryUrl = () => {
+
+
+
+
+  return `/api/reading-history/delete-bulk`
+}
+
+/**
+ * @summary Delete selected reading history entries (1-500)
+ */
+export const deleteBulkReadingHistory = async (readingHistoryDeleteBulkInput: ReadingHistoryDeleteBulkInput, options?: RequestInit): Promise<ReadingHistoryDeleteResult> => {
+
+  return customFetch<ReadingHistoryDeleteResult>(getDeleteBulkReadingHistoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      readingHistoryDeleteBulkInput,)
+  }
+);}
+
+
+
+
+export const getDeleteBulkReadingHistoryMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBulkReadingHistory>>, TError,{data: BodyType<ReadingHistoryDeleteBulkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBulkReadingHistory>>, TError,{data: BodyType<ReadingHistoryDeleteBulkInput>}, TContext> => {
+
+const mutationKey = ['deleteBulkReadingHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBulkReadingHistory>>, {data: BodyType<ReadingHistoryDeleteBulkInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  deleteBulkReadingHistory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBulkReadingHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBulkReadingHistory>>>
+    export type DeleteBulkReadingHistoryMutationBody = BodyType<ReadingHistoryDeleteBulkInput>
+    export type DeleteBulkReadingHistoryMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete selected reading history entries (1-500)
+ */
+export const useDeleteBulkReadingHistory = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBulkReadingHistory>>, TError,{data: BodyType<ReadingHistoryDeleteBulkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBulkReadingHistory>>,
+        TError,
+        {data: BodyType<ReadingHistoryDeleteBulkInput>},
+        TContext
+      > => {
+      return useMutation(getDeleteBulkReadingHistoryMutationOptions(options));
+    }
+
+export const getClearReadingHistoryUrl = () => {
+
+
+
+
+  return `/api/reading-history/clear`
+}
+
+/**
+ * @summary Delete the whole reading history of the authenticated user
+ */
+export const clearReadingHistory = async ( options?: RequestInit): Promise<ReadingHistoryDeleteResult> => {
+
+  return customFetch<ReadingHistoryDeleteResult>(getClearReadingHistoryUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getClearReadingHistoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearReadingHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearReadingHistory>>, TError,void, TContext> => {
+
+const mutationKey = ['clearReadingHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearReadingHistory>>, void> = () => {
+
+
+          return  clearReadingHistory(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearReadingHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof clearReadingHistory>>>
+
+    export type ClearReadingHistoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete the whole reading history of the authenticated user
+ */
+export const useClearReadingHistory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearReadingHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearReadingHistory>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearReadingHistoryMutationOptions(options));
+    }
+
+export const getUpdateReadingHistoryCommentUrl = (id: number,) => {
+
+
+
+
+  return `/api/reading-history/${id}`
+}
+
+/**
+ * @summary Set or remove the comment of a reading history entry
+ */
+export const updateReadingHistoryComment = async (id: number,
+    readingHistoryCommentInput: ReadingHistoryCommentInput, options?: RequestInit): Promise<ReadingHistoryEntry> => {
+
+  return customFetch<ReadingHistoryEntry>(getUpdateReadingHistoryCommentUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      readingHistoryCommentInput,)
+  }
+);}
+
+
+
+
+export const getUpdateReadingHistoryCommentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateReadingHistoryComment>>, TError,{id: number;data: BodyType<ReadingHistoryCommentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateReadingHistoryComment>>, TError,{id: number;data: BodyType<ReadingHistoryCommentInput>}, TContext> => {
+
+const mutationKey = ['updateReadingHistoryComment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateReadingHistoryComment>>, {id: number;data: BodyType<ReadingHistoryCommentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateReadingHistoryComment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateReadingHistoryCommentMutationResult = NonNullable<Awaited<ReturnType<typeof updateReadingHistoryComment>>>
+    export type UpdateReadingHistoryCommentMutationBody = BodyType<ReadingHistoryCommentInput>
+    export type UpdateReadingHistoryCommentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Set or remove the comment of a reading history entry
+ */
+export const useUpdateReadingHistoryComment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateReadingHistoryComment>>, TError,{id: number;data: BodyType<ReadingHistoryCommentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateReadingHistoryComment>>,
+        TError,
+        {id: number;data: BodyType<ReadingHistoryCommentInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateReadingHistoryCommentMutationOptions(options));
+    }
+
+export const getGetReadingHistoryCoverUrl = (id: number,) => {
+
+
+
+
+  return `/api/reading-history/${id}/cover`
+}
+
+/**
+ * Used for entries whose book was deleted from the library.
+ * @summary Cover image of a reading history entry
+ */
+export const getReadingHistoryCover = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetReadingHistoryCoverUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReadingHistoryCoverQueryKey = (id: number,) => {
+    return [
+    `/api/reading-history/${id}/cover`
+    ] as const;
+    }
+
+
+export const getGetReadingHistoryCoverQueryOptions = <TData = Awaited<ReturnType<typeof getReadingHistoryCover>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadingHistoryCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReadingHistoryCoverQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReadingHistoryCover>>> = ({ signal }) => getReadingHistoryCover(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReadingHistoryCover>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReadingHistoryCoverQueryResult = NonNullable<Awaited<ReturnType<typeof getReadingHistoryCover>>>
+export type GetReadingHistoryCoverQueryError = ErrorType<void>
+
+
+/**
+ * @summary Cover image of a reading history entry
+ */
+
+export function useGetReadingHistoryCover<TData = Awaited<ReturnType<typeof getReadingHistoryCover>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadingHistoryCover>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReadingHistoryCoverQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

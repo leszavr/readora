@@ -12,6 +12,7 @@ import {
 import type { User } from "@workspace/db";
 import { emailService } from "./email-service";
 import { deleteStoredFilesIfUnreferenced } from "./book-deletion-service";
+import { collectUserHistoryCoverPaths, deleteUnreferencedHistoryCovers } from "./cover-storage";
 import { userOwnsGiftSourcesInUse } from "./gift-editions-service";
 import { resolveUploadPath } from "./storage";
 import { logger } from "./logger";
@@ -161,9 +162,10 @@ export async function purgeUserAccount(
   if (options.strictScheduled && !user.scheduledDeletionAt) return "not_scheduled";
   if (await userOwnsGiftSourcesInUse(userId)) return "gift_sources_in_use";
 
-  const [books, uploadJobs] = await Promise.all([
+  const [books, uploadJobs, historyCovers] = await Promise.all([
     db.select().from(booksTable).where(eq(booksTable.ownerUserId, userId)),
     db.select().from(bookUploadJobsTable).where(eq(bookUploadJobsTable.ownerUserId, userId)),
+    collectUserHistoryCoverPaths(userId),
   ]);
 
   const deleteCondition = options.strictScheduled
@@ -200,6 +202,7 @@ export async function purgeUserAccount(
       logger.error({ bookId: book.id }, "Failed to delete an account book file");
     }
   }
+  await deleteUnreferencedHistoryCovers(historyCovers);
 
   for (const job of uploadJobs) {
     try {

@@ -47,13 +47,14 @@ import { useLocalStorageState, useSectionLocalStorageState } from "@/hooks/use-l
 import { ShelfView } from "@/components/ShelfView";
 import { CARD_GRID_CLASS, CARD_ITEM_HEIGHT_CLASS } from "@/components/cardGrid";
 import { AnnotationsView } from "@/components/AnnotationsView";
+import { ReadingHistoryView } from "@/components/ReadingHistoryView";
 import { trackLibraryViewed } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 
 type ViewMode = "grid" | "list";
 type SortOption = "uploadedAt" | "title" | "author" | "progress" | "lastReadAt" | "cycleNumber";
 type GroupOption = "none" | "genre" | "author" | "cycle";
-type LibrarySection = "library" | "gift" | "shelf" | "annotations";
+type LibrarySection = "library" | "gift" | "shelf" | "annotations" | "history";
 
 function isFinishedBook(book: any): boolean {
   return book?.readingStatus === "finished";
@@ -201,7 +202,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     const filterCount = [search, statusFilter !== "all", genreFilter !== "all", sortBy !== "uploadedAt", groupBy !== "none"].filter(Boolean).length;
-    const viewedAs = librarySection === "shelf" ? "shelf" : librarySection === "annotations" ? "annotations" : viewMode;
+    const viewedAs = librarySection === "shelf" ? "shelf" : librarySection === "annotations" ? "annotations" : librarySection === "history" ? "history" : viewMode;
     trackLibraryViewed(viewedAs, filterCount, search.trim().length > 0);
   }, [librarySection, viewMode, search, statusFilter, genreFilter, sortBy, groupBy]);
 
@@ -404,7 +405,7 @@ function LibraryPageLayout({
             showGiftSection={isAdmin}
           />
 
-          {librarySection !== "annotations" && (
+          {librarySection !== "annotations" && librarySection !== "history" && (
             <LibraryFiltersBar
               search={search}
               setSearch={setSearch}
@@ -432,6 +433,8 @@ function LibraryPageLayout({
 
           {librarySection === "annotations" ? (
             <AnnotationsView />
+          ) : librarySection === "history" ? (
+            <ReadingHistoryView />
           ) : (
             <LibraryContent
               isLoading={isLoading}
@@ -483,7 +486,7 @@ function LibraryPageLayout({
         />
 
         {/* Плавающая панель массовых действий: всегда в зоне видимости */}
-        {librarySection !== "annotations" && isSelectionMode && (
+        {librarySection !== "annotations" && librarySection !== "history" && isSelectionMode && (
           <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
             <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border bg-card/95 py-2 pl-4 pr-2 shadow-lg backdrop-blur">
               <span className="text-sm text-muted-foreground whitespace-nowrap">
@@ -667,20 +670,24 @@ function LibraryHeader({
   setUploadOpen: (open: boolean) => void;
 }>) {
   const isAnnotations = section === "annotations";
+  const isHistory = section === "history";
+  const managesSelection = !isAnnotations && !isHistory;
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div>
-        <h1 className="text-2xl font-bold">{isAnnotations ? "Заметки и закладки" : "Моя библиотека"}</h1>
+        <h1 className="text-2xl font-bold">{isAnnotations ? "Заметки и закладки" : isHistory ? "История чтения" : "Моя библиотека"}</h1>
         <p className="text-muted-foreground text-sm">
           {isAnnotations
             ? "Все заметки и закладки по вашим книгам"
-            : showGrouped
-              ? `${groupedSectionCount} групп`
-              : `${visibleBookItems.length} книг`}
+            : isHistory
+              ? "Книги, которые вы прочитали"
+              : showGrouped
+                ? `${groupedSectionCount} групп`
+                : `${visibleBookItems.length} книг`}
         </p>
       </div>
       <div className="flex gap-2">
-        {!isAnnotations && isSelectionMode && (
+        {managesSelection && isSelectionMode && (
           <>
             <Button
               variant="outline"
@@ -693,7 +700,7 @@ function LibraryHeader({
             </Button>
           </>
         )}
-        {!isAnnotations && !isSelectionMode && visibleBookItems.length > 0 && (
+        {managesSelection && !isSelectionMode && visibleBookItems.length > 0 && (
           <Button variant="outline" size="sm" onClick={() => setIsSelectionMode(true)}>
             Выбрать
           </Button>
@@ -746,6 +753,15 @@ function LibrarySectionSwitch({
         className="h-8 flex-1 sm:flex-none"
       >
         Книжная полка
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant={librarySection === "history" ? "secondary" : "ghost"}
+        onClick={() => setLibrarySection("history")}
+        className="h-8 flex-1 sm:flex-none"
+      >
+        История чтения
       </Button>
       <Button
         type="button"

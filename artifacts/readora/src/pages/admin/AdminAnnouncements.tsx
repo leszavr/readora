@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils";
 import { NoteEditor } from "@/components/NoteEditor";
 import { formatDate } from "@/components/AnnouncementBell";
 import { useToast } from "@/hooks/use-toast";
-import { AdminPaginationControls, useAdminListPagination } from "./AdminPagination";
+import { AdminPaginationControls, useAdminListPagination } from "@/components/ListPagination";
 
 const CARD_COLOR_CLASSES: Record<string, string> = {
   yellow: "bg-yellow-400",

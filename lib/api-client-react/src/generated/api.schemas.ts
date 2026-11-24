@@ -1638,6 +1638,50 @@ export interface SavedEmailFull {
   timestamp: number;
 }
 
+export interface ReadingHistoryEntry {
+  id: number;
+  /**
+     * Null when the book was deleted from the library
+     * @nullable
+     */
+  bookId: number | null;
+  title: string;
+  /** @nullable */
+  author: string | null;
+  /** @nullable */
+  coverUrl: string | null;
+  /** @nullable */
+  cycleName: string | null;
+  /** @nullable */
+  genreName: string | null;
+  completedAt: string;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  comment: string | null;
+}
+
+export interface ReadingHistoryCommentInput {
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  comment: string | null;
+}
+
+export interface ReadingHistoryDeleteBulkInput {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  ids: number[];
+}
+
+export interface ReadingHistoryDeleteResult {
+  deleted: number;
+}
+
 export type Login403Code = typeof Login403Code[keyof typeof Login403Code];
 
 
@@ -1944,4 +1988,39 @@ export type AdminResetExternalStorageCache200 = {
   booksCleared: number;
   bytesFreed: number;
 };
+
+export type ListReadingHistoryParams = {
+search?: string;
+sortBy?: ListReadingHistorySortBy;
+sortDir?: ListReadingHistorySortDir;
+groupBy?: ListReadingHistoryGroupBy;
+};
+
+export type ListReadingHistorySortBy = typeof ListReadingHistorySortBy[keyof typeof ListReadingHistorySortBy];
+
+
+export const ListReadingHistorySortBy = {
+  completedAt: 'completedAt',
+  title: 'title',
+  author: 'author',
+} as const;
+
+export type ListReadingHistorySortDir = typeof ListReadingHistorySortDir[keyof typeof ListReadingHistorySortDir];
+
+
+export const ListReadingHistorySortDir = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export type ListReadingHistoryGroupBy = typeof ListReadingHistoryGroupBy[keyof typeof ListReadingHistoryGroupBy];
+
+
+export const ListReadingHistoryGroupBy = {
+  none: 'none',
+  date: 'date',
+  author: 'author',
+  genre: 'genre',
+  cycle: 'cycle',
+} as const;
 

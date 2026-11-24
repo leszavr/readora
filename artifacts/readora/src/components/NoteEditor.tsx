@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { clampNoteText } from "@/lib/note-text";
 
 export const NOTE_COLOR_OPTIONS = [
   { value: "yellow", label: "Жёлтый", class: "bg-yellow-200 dark:bg-yellow-900/40" },
@@ -51,23 +52,32 @@ export function NoteText({ text, className }: { text: string; className?: string
 
 interface NoteEditorProps {
   initialText: string;
-  initialColor: string;
+  initialColor?: string;
   saveLabel?: string;
   autoFocus?: boolean;
+  maxLength?: number;
+  placeholder?: string;
+  showColor?: boolean;
+  showCounter?: boolean;
   onSave: (text: string, color: string) => void;
   onCancel: () => void;
 }
 
 export function NoteEditor({
   initialText,
-  initialColor,
+  initialColor = "yellow",
   saveLabel = "Сохранить",
   autoFocus = false,
+  maxLength = 2000,
+  placeholder = "Текст заметки…",
+  showColor = true,
+  showCounter = false,
   onSave,
   onCancel,
 }: NoteEditorProps) {
   const [text, setText] = useState(initialText);
   const [color, setColor] = useState(initialColor);
+  const setTextWithinLimit = (value: string) => setText(clampNoteText(value, maxLength));
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,7 +108,7 @@ export function NoteEditor({
       selEnd = selStart;
     }
 
-    setText(nextValue);
+    setTextWithinLimit(nextValue);
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(selStart, selEnd);
@@ -108,12 +118,12 @@ export function NoteEditor({
   const insertEmoji = (emoji: string) => {
     const el = textareaRef.current;
     if (!el) {
-      setText((prev) => prev + emoji);
+      setText((prev) => clampNoteText(prev + emoji, maxLength));
       return;
     }
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    setText(el.value.slice(0, start) + emoji + el.value.slice(end));
+    setTextWithinLimit(el.value.slice(0, start) + emoji + el.value.slice(end));
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(start + emoji.length, start + emoji.length);
@@ -195,23 +205,25 @@ export function NoteEditor({
         value={text}
         onChange={(e) => setText(e.target.value)}
         className="min-h-[80px] text-sm"
-        maxLength={2000}
-        placeholder="Текст заметки…"
+        maxLength={maxLength}
+        placeholder={placeholder}
         autoFocus={autoFocus}
       />
 
-      <div className="flex gap-1 flex-wrap">
-        {NOTE_COLOR_OPTIONS.map((c) => (
-          <button
-            key={c.value}
-            type="button"
-            onClick={() => setColor(c.value)}
-            className={cn("size-6 rounded-full border-2", c.class, color === c.value && "ring-2 ring-primary ring-offset-1")}
-            title={c.label}
-            aria-label={c.label}
-          />
-        ))}
-      </div>
+      {showColor && (
+        <div className="flex gap-1 flex-wrap">
+          {NOTE_COLOR_OPTIONS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => setColor(c.value)}
+              className={cn("size-6 rounded-full border-2", c.class, color === c.value && "ring-2 ring-primary ring-offset-1")}
+              title={c.label}
+              aria-label={c.label}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-1">
         <Button size="sm" onClick={() => onSave(text.trim(), color)} disabled={!text.trim()}>
@@ -220,6 +232,11 @@ export function NoteEditor({
         <Button size="sm" variant="ghost" onClick={onCancel}>
           Отмена
         </Button>
+        {showCounter && (
+          <span className="ml-auto self-center text-xs tabular-nums text-muted-foreground">
+            {text.length}/{maxLength}
+          </span>
+        )}
       </div>
     </div>
   );

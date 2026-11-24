@@ -34,7 +34,7 @@ const readerSessionEventBaseSchema = analyticsEventBaseSchema.extend({
 
 const clientEventSchema = z.discriminatedUnion("eventName", [
   analyticsEventBaseSchema.extend({ eventName: z.literal("app_opened"), properties: z.object({ entryPoint: z.enum(["library", "reader", "book", "profile"]) }).strict() }).strict(),
-  analyticsEventBaseSchema.extend({ eventName: z.literal("library_viewed"), properties: z.object({ viewMode: z.enum(["grid", "list", "shelf"]), filterCount: z.number().int().min(0).max(20), hasSearch: z.boolean() }).strict() }).strict(),
+  analyticsEventBaseSchema.extend({ eventName: z.literal("library_viewed"), properties: z.object({ viewMode: z.enum(["grid", "list", "shelf", "annotations", "history"]), filterCount: z.number().int().min(0).max(20), hasSearch: z.boolean() }).strict() }).strict(),
   analyticsEventBaseSchema.extend({ eventName: z.literal("book_upload_started"), properties: z.object({ format: z.enum(["fb2", "epub"]), fileSizeBucket: z.enum(["under_1mb", "1_to_5mb", "5_to_20mb", "20_to_50mb"]) }).strict() }).strict(),
   readerSessionEventBaseSchema.extend({ eventName: z.literal("reader_session_started"), properties: z.object({ startProgressPct: percentage }).strict() }).strict(),
   readerSessionEventBaseSchema.extend({ eventName: z.literal("reader_session_heartbeat"), properties: z.object({ activeReadingMs: durationMs }).strict() }).strict(),

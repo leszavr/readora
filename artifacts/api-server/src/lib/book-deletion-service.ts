@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import { db, booksTable } from "@workspace/db";
 import { resolveUploadPath } from "./storage";
+import { deleteCoverIfUnreferenced } from "./cover-storage";
 
 type StoredBook = typeof booksTable.$inferSelect;
 
@@ -28,12 +29,5 @@ export async function deleteStoredFilesIfUnreferenced(
   }
 
   if (!book.coverPath) return;
-
-  const [{ count: sameCoverCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(booksTable)
-    .where(and(eq(booksTable.coverPath, book.coverPath), notInArray(booksTable.id, excludingBookIds)));
-  if (sameCoverCount === 0) {
-    fs.rmSync(resolveUploadPath(book.coverPath), { force: true });
-  }
+  await deleteCoverIfUnreferenced(book.coverPath, excludingBookIds);
 }
