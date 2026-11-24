@@ -46,7 +46,7 @@ export function AnnouncementBell() {
   const [activeItem, setActiveItem] = useState<AnnouncementItem | null>(null);
   const qc = useQueryClient();
   const { data } = useGetAnnouncements({
-    query: { queryKey: getGetAnnouncementsQueryKey(), staleTime: 60_000, retry: false },
+    query: { queryKey: getGetAnnouncementsQueryKey(), staleTime: 15_000, refetchInterval: 15_000, retry: false },
   });
   const markRead = useMarkAnnouncementRead();
   const markAllRead = useMarkAllAnnouncementsRead();
@@ -93,7 +93,7 @@ export function AnnouncementBell() {
                   : "bg-primary text-primary-foreground",
               )}
             >
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </Button>

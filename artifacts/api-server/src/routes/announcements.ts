@@ -12,10 +12,6 @@ import { getChangelogEntries } from "../lib/changelog-service";
 
 const router = Router();
 
-// Сообщения старше этого срока не участвуют в подсчёте непрочитанных и
-// автоматически считаются прочитанными (дедупликация бэклога для новых юзеров).
-const UNREAD_TTL_DAYS = 30;
-
 type AuthReq = Request & { user: typeof usersTable.$inferSelect };
 
 const upsertSchema = z.object({
@@ -57,10 +53,7 @@ router.get("/announcements", requireAuth, async (req, res): Promise<void> => {
     .where(isNull(adminAnnouncementsTable.archivedAt))
     .orderBy(desc(adminAnnouncementsTable.publishedAt));
 
-  const ttlMs = Date.now() - UNREAD_TTL_DAYS * 24 * 60 * 60 * 1000;
-  const unreadCount = rows.filter(
-    (row) => row.readAt === null && row.publishedAt.getTime() >= ttlMs,
-  ).length;
+  const unreadCount = rows.filter((row) => row.readAt === null).length;
 
   res.json({ unreadCount, items: rows });
 });
