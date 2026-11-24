@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
@@ -96,12 +97,27 @@ function landingSsrPlugin(): Plugin {
   };
 }
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, isSsrBuild }) => ({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
     landingSsrPlugin(),
+    // Офлайн app shell (ADR-0002): только client-проход билда; SSR-проход
+    // лендинга SW не генерирует. Регистрация — в main.tsx (injectRegister: false).
+    ...(isSsrBuild ? [] : [VitePWA({
+      strategies: "generateSW",
+      registerType: "autoUpdate",
+      injectRegister: false,
+      manifest: false,
+      workbox: {
+        cleanupOutdatedCaches: true,
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//, /^\/$/, /^\/about$/, /^\/changelog$/, /^\/terms$/, /^\/privacy$/],
+        globPatterns: ["**/*.{js,css,html,svg,png,webp,woff2}"],
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+      },
+    })]),
   ],
   resolve: {
     alias: {

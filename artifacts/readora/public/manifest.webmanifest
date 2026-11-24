@@ -2,7 +2,7 @@
   "name": "Readora",
   "short_name": "Readora",
   "description": "Личная библиотека и ридер для FB2 (включая fb2.zip/fbz), EPUB, MOBI, CBZ, TXT, MD и HTML",
-  "start_url": "/",
+  "start_url": "/library",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
