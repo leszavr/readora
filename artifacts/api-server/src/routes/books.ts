@@ -16,6 +16,7 @@ import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
 import { getContentBookId, GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside } from "../lib/gift-editions-service";
 import { invalidatePopularBooksCache } from "../lib/popular-books-service";
+import { downloadExternalBookFile } from "../lib/external-storage/content-cache";
 import type { Request } from "express";
 
 const router = Router();
@@ -724,6 +725,40 @@ router.get("/books/:id/cover", requireAuth, async (req, res): Promise<void> => {
   res.setHeader("Content-Type", mime);
   res.setHeader("Cache-Control", "private, no-cache");
   fs.createReadStream(coverFilePath).pipe(res);
+});
+
+// GET /books/:id/file — исходный файл книги для офлайн-кэша PWA.
+// Приватный: только владелец. Бинарный ответ, в OpenAPI не добавляется (как /cover).
+router.get("/books/:id/file", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as AuthReq).user;
+  const id = Number.parseInt(String(req.params.id), 10);
+  const [book] = await db.select().from(booksTable).where(and(eq(booksTable.id, id), eq(booksTable.ownerUserId, user.id)));
+  if (!book) { res.status(404).json({ error: "Книга не найдена" }); return; }
+
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Cache-Control", "private, no-cache");
+
+  // Внешняя книга: файл скачивается из облака владельца напрямую.
+  if (book.externalProvider) {
+    try {
+      const buffer = await downloadExternalBookFile(book);
+      res.send(buffer);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Не удалось скачать файл из внешнего хранилища";
+      res.status(502).json({ error: message });
+    }
+    return;
+  }
+
+  let filePath: string;
+  try {
+    filePath = resolveUploadPath(book.storageKey);
+  } catch {
+    res.status(500).json({ error: "Некорректный storage key" });
+    return;
+  }
+  if (!fs.existsSync(filePath)) { res.status(404).json({ error: "Файл книги не найден в хранилище" }); return; }
+  fs.createReadStream(filePath).pipe(res);
 });
 
 // GET /books/:id
