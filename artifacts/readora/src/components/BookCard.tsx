@@ -12,9 +12,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Check, Circle, Cloud, Landmark } from "lucide-react";
+import { BookOpen, Check, Circle, Cloud, Landmark, WifiOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { clearReaderProgressFromStorage } from "@/lib/reader-local-progress";
+import { useOfflineBookIds } from "@/offline/use-offline-cache";
 
 interface Props {
   book: Book;
@@ -97,6 +98,8 @@ function useManualComplete(book: Book) {
 export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
   const [, navigate] = useLocation();
   const { canMarkFinished, markFinished, reopenBook, isPending } = useManualComplete(book);
+  const offlineBookIds = useOfflineBookIds();
+  const isCachedOffline = offlineBookIds.has(book.id);
 
   const status = book.readingStatus ? STATUS_LABELS[book.readingStatus] : STATUS_LABELS.not_started;
   const StatusIcon = STATUS_ICON[book.readingStatus ?? "not_started"] ?? Circle;
@@ -171,6 +174,20 @@ export function BookCard({ book, className, shelf = false }: Readonly<Props>) {
                 title="Книга хранится в вашем облаке и не занимает место на сервере"
               >
                 <Cloud className="size-3.5" aria-hidden="true" />
+              </span>
+            </div>
+          )}
+
+          {/* Доступна офлайн (низ обложки, слева; ADR-0001) */}
+          {isCachedOffline && !book.isGiftEdition && (
+            <div className="absolute bottom-2 left-2">
+              <span
+                className="inline-flex size-6 items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm"
+                role="img"
+                aria-label="Книга доступна офлайн"
+                title="Книга доступна для чтения без интернета"
+              >
+                <WifiOff className="size-3.5" aria-hidden="true" />
               </span>
             </div>
           )}
@@ -261,6 +278,8 @@ export function BookListItem({
 }>) {
   const [, navigate] = useLocation();
   const { canMarkFinished, markFinished, reopenBook, isPending } = useManualComplete(book);
+  const offlineBookIds = useOfflineBookIds();
+  const isCachedOffline = offlineBookIds.has(book.id);
 
   const handleRead = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -315,6 +334,16 @@ export function BookListItem({
                 title="Книга хранится в вашем облаке и не занимает место на сервере"
               >
                 <Cloud className="size-3.5" aria-hidden="true" />
+              </span>
+            )}
+            {isCachedOffline && (
+              <span
+                className="inline-flex shrink-0 items-center"
+                role="img"
+                aria-label="Книга доступна офлайн"
+                title="Книга доступна для чтения без интернета"
+              >
+                <WifiOff className="size-3.5" aria-hidden="true" />
               </span>
             )}
             {book.isGiftEdition && (

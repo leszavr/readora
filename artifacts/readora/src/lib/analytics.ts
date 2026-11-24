@@ -1,3 +1,5 @@
+import { randomId } from "./random-id";
+
 type DeviceMode = "desktop" | "mobile" | "unknown";
 type EntryPoint = "library" | "reader" | "book" | "profile";
 type NavigationSource = "toc" | "next_chapter" | "prev_chapter" | "restore";
@@ -30,7 +32,7 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 let sessionId = "";
 
 function newId(): string {
-  return crypto.randomUUID();
+  return randomId();
 }
 
 function getClientId(): string {

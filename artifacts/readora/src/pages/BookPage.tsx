@@ -99,6 +99,7 @@ export default function BookPage() {
   const { mutate: deleteBook, isPending: deleting } = useDeleteBook({
     mutation: {
       onSuccess: () => {
+        void import("@/offline/book-cache").then(({ invalidateCachedBook }) => invalidateCachedBook(bookId)).catch(() => undefined);
         qc.invalidateQueries({ queryKey: getListBooksQueryKey() });
         navigate("/library");
       },

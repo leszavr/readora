@@ -106,6 +106,8 @@ import {
   trackProgressHoldScroll,
   type ProgressSaveHold,
 } from "@/components/reader/core/reader-progress-hold";
+import { useOfflineBookCache } from "@/offline/use-offline-cache";
+import { randomId } from "@/lib/random-id";
 
 const FONTS = ["Georgia", "Arial", "Times New Roman", "Verdana", "Palatino"];
 const READER_IDLE_TIMEOUT_MS = 5 * 60_000;
@@ -225,6 +227,7 @@ export default function ReaderPage() {
   const qc = useQueryClient();
 
   const { data: book } = useGetBook(bookId);
+  useOfflineBookCache(book);
   const { data: chapters = [] } = useListChapters(bookId);
   const progressQuery = useGetProgress(bookId);
   const { data: remoteProgress } = progressQuery;
@@ -335,7 +338,7 @@ export default function ReaderPage() {
     if (!sessionReady || readerSessionRef.current) return;
     const startProgressPct = remoteProgressRef.current;
     const startedAt = Date.now();
-    const session = { id: crypto.randomUUID(), startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: startedAt, ended: false };
+    const session = { id: randomId(), startProgressPct, maxProgressPct: startProgressPct, activeReadingMs: 0, lastActiveAt: startedAt, ended: false };
     let lastTickAt = startedAt;
     readerSessionRef.current = session;
     trackReaderSessionStarted(session.id, bookId, startProgressPct);
