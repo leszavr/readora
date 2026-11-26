@@ -26,6 +26,7 @@ import {
 import { resolveGenreIds } from "../genre-resolver";
 import { recordServerAnalyticsEvent } from "../analytics-service";
 import { storeOptimizedCover, deleteCoverIfUnreferenced } from "../cover-storage";
+import { logger } from "../logger";
 import {
   downloadExternalFile,
   ExternalStorageError,
@@ -489,7 +490,7 @@ async function syncConnection(
 
       if (existing) {
         const newCoverPath = parsed.coverBase64
-          ? await storeOptimizedCover(Buffer.from(parsed.coverBase64, "base64"), `book-${existing.id}`)
+          ? await tryStoreSyncCover(parsed.coverBase64, `book-${existing.id}`)
           : null;
         const oldCoverPath = newCoverPath && newCoverPath !== existing.coverPath ? existing.coverPath : null;
         const seriesCycle = await resolveCycleFromSeries(connection.ownerUserId, parsed.seriesName ?? null);
@@ -527,7 +528,7 @@ async function syncConnection(
         updated++;
       } else {
         const coverPath = parsed.coverBase64
-          ? await storeOptimizedCover(Buffer.from(parsed.coverBase64, "base64"), fileHash)
+          ? await tryStoreSyncCover(parsed.coverBase64, fileHash)
           : null;
         const seriesCycle = await resolveCycleFromSeries(connection.ownerUserId, parsed.seriesName ?? null);
         const [book] = await db
@@ -609,4 +610,14 @@ function chaptersTableValues(
   bookId: number,
 ) {
   return chapters.map((ch) => ({ bookId, ...ch }));
+}
+
+async function tryStoreSyncCover(coverBase64: string, filePrefix: string): Promise<string | null> {
+  try {
+    return await storeOptimizedCover(Buffer.from(coverBase64, "base64"), filePrefix);
+  } catch (e) {
+    // Битая обложка не должна ронять импорт книги из внешнего хранилища.
+    logger.warn({ err: e, filePrefix }, "Failed to store book cover during external sync");
+    return null;
+  }
 }

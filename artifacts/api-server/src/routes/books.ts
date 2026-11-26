@@ -16,6 +16,7 @@ import { recordServerAnalyticsEvent } from "../lib/analytics-service";
 import { createUploadJobWithinQuota, getStorageQuota, UploadLimitError } from "../lib/storage-quota";
 import { getContentBookId, GIFT_SOURCE_IN_USE_MESSAGE, hasGiftCopiesOutside } from "../lib/gift-editions-service";
 import { invalidatePopularBooksCache } from "../lib/popular-books-service";
+import { logger } from "../lib/logger";
 import type { Request } from "express";
 
 const router = Router();
@@ -374,7 +375,13 @@ async function processBookUploadJob(jobId: number): Promise<void> {
 
     let coverPath: string | null = null;
     if (parsed.coverBase64) {
-      coverPath = await storeOptimizedCover(Buffer.from(parsed.coverBase64, "base64"), fileHash);
+      try {
+        coverPath = await storeOptimizedCover(Buffer.from(parsed.coverBase64, "base64"), fileHash);
+      } catch (e) {
+        // Битая или нестандартная обложка внутри книги не должна ронять
+        // загрузку: книга сохраняется без обложки, ошибка пишется в лог.
+        logger.warn({ err: e, jobId: job.id, title: parsed.title }, "Failed to store book cover during upload");
+      }
     }
 
     const [book] = await db.insert(booksTable).values({

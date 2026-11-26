@@ -646,7 +646,11 @@ export function parseFB2(buffer: Buffer, options: ParseBookOptions = {}): Parsed
   // Cover image
   let coverBase64: string | null = null;
   let coverMime: string | null = null;
-  const coverImageHref = titleInfo?.coverpage?.image?.["@_href"] ?? titleInfo?.coverpage?.image?.["@_l:href"];
+  // image объявлен массивом в isArray конфига парсера, поэтому обращение
+  // как к объекту всегда давало undefined и обложка из coverpage не находилась.
+  const coverImageRaw = titleInfo?.coverpage?.image;
+  const coverImage = Array.isArray(coverImageRaw) ? coverImageRaw[0] : coverImageRaw;
+  const coverImageHref = coverImage?.["@_href"] ?? coverImage?.["@_l:href"];
   const binaries = Array.isArray(fb2?.binary) ? fb2.binary : fb2?.binary ? [fb2.binary] : [];
   if (coverImageHref) {
     const id = String(coverImageHref).replace("#", "");
